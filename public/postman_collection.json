@@ -1,0 +1,521 @@
+{
+	"info": {
+		"_postman_id": "b8a92e10-9b43-4f9e-a841-89793db5f86a",
+		"name": "Bagus Application API Collection",
+		"description": "Koleksi Postman API untuk Aplikasi Bagus (Sistem Presensi & Master Data Maya Graha Kencana).\n\nEnvironment host: http://192.168.5.10:8086/bagus\nDatabase: PostgreSQL (192.168.5.10:5432 / bagus)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "01 - Presensi & Kehadiran (API v1)",
+			"description": "Endpoint RESTful API V1 untuk presensi kehadiran, clock in, clock out, shift, dan riwayat.",
+			"item": [
+				{
+					"name": "Daftar Shift Kerja",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/attendance/shifts",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"attendance",
+								"shifts"
+							]
+						},
+						"description": "Mengambil master data shift kerja aktif (pagi, siang, malam)."
+					},
+					"response": []
+				},
+				{
+					"name": "Presensi Masuk (Clock In)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"employee_id\": {{employeeId}},\n    \"branch_id\": {{branchId}},\n    \"latitude\": {{latitude}},\n    \"longitude\": {{longitude}},\n    \"shift_id\": null,\n    \"is_mock_location\": false,\n    \"notes\": \"Presensi masuk via Postman API\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/attendance/clock-in",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"attendance",
+								"clock-in"
+							]
+						},
+						"description": "Melakukan clock-in dengan validasi geofence radius cabang dan deteksi mock GPS."
+					},
+					"response": []
+				},
+				{
+					"name": "Presensi Pulang (Clock Out)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"employee_id\": {{employeeId}},\n    \"branch_id\": {{branchId}},\n    \"latitude\": {{latitude}},\n    \"longitude\": {{longitude}},\n    \"is_mock_location\": false,\n    \"notes\": \"Presensi pulang via Postman API\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/attendance/clock-out",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"attendance",
+								"clock-out"
+							]
+						},
+						"description": "Melakukan clock-out pada hari kerja aktif."
+					},
+					"response": []
+				},
+				{
+					"name": "Status Presensi Hari Ini",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/attendance/today?employee_id={{employeeId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"attendance",
+								"today"
+							],
+							"query": [
+								{
+									"key": "employee_id",
+									"value": "{{employeeId}}",
+									"description": "ID Karyawan"
+								}
+							]
+						},
+						"description": "Memeriksa apakah karyawan sudah clock-in / clock-out pada hari ini."
+					},
+					"response": []
+				},
+				{
+					"name": "Riwayat Presensi Karyawan",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/attendance/history?employee_id={{employeeId}}&month=10&year=2026",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"attendance",
+								"history"
+							],
+							"query": [
+								{
+									"key": "employee_id",
+									"value": "{{employeeId}}",
+									"description": "ID Karyawan"
+								},
+								{
+									"key": "month",
+									"value": "10",
+									"description": "Bulan (opsional)"
+								},
+								{
+									"key": "year",
+									"value": "2026",
+									"description": "Tahun (opsional)"
+								}
+							]
+						},
+						"description": "Mengambil log riwayat kehadiran karyawan dengan pagination."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "02 - Cuti & Izin (API v1)",
+			"description": "Endpoint RESTful API V1 untuk pengajuan dan riwayat cuti/izin karyawan.",
+			"item": [
+				{
+					"name": "Pengajuan Cuti / Izin (Form URL Encoded / JSON)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"employee_id\": {{employeeId}},\n    \"leave_type\": \"annual\",\n    \"start_date\": \"2026-10-20\",\n    \"end_date\": \"2026-10-21\",\n    \"reason\": \"Keperluan keluarga\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/leave/request",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"leave",
+								"request"
+							]
+						},
+						"description": "Ajukan permohonan cuti (annual, sick, permission, emergency)."
+					},
+					"response": []
+				},
+				{
+					"name": "Riwayat Pengajuan Cuti / Izin",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/leave/history?employee_id={{employeeId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"leave",
+								"history"
+							],
+							"query": [
+								{
+									"key": "employee_id",
+									"value": "{{employeeId}}",
+									"description": "ID Karyawan"
+								}
+							]
+						},
+						"description": "Melihat riwayat status approval cuti atau izin karyawan."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "03 - Master Data Customers",
+			"description": "Endpoint CRUD pelanggan / customer.",
+			"item": [
+				{
+					"name": "List Customers",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/master-data/customers",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"master-data",
+								"customers"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Customer",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"code\": \"CUST-0099\",\n    \"name\": \"PT Sukses Bersama\",\n    \"phone\": \"081234567890\",\n    \"email\": \"info@sukses.test\",\n    \"address\": \"Jl. Kebon Jeruk No. 12, Jakarta\",\n    \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/master-data/customers",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"master-data",
+								"customers"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Detail Customer",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/master-data/customers/1",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"master-data",
+								"customers",
+								"1"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "04 - Master Data Suppliers",
+			"description": "Endpoint Master Data Supplier.",
+			"item": [
+				{
+					"name": "List Suppliers",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/master-data/suppliers",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"master-data",
+								"suppliers"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Supplier",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"code\": \"SUPP-001\",\n    \"name\": \"CV Mitra Utama Sentosa\",\n    \"phone\": \"021-555888\",\n    \"email\": \"sales@mitrautama.test\",\n    \"address\": \"Jl. Pahlawan No. 45, Jakarta\",\n    \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/master-data/suppliers",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"master-data",
+								"suppliers"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "05 - Master Data Pricelists & Variants",
+			"description": "Endpoint Master Data Pricelist, Harga, dan Varian Produk.",
+			"item": [
+				{
+					"name": "List Pricelists",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/master-data/pricelists",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"master-data",
+								"pricelists"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Variants",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/master-data/variants",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"master-data",
+								"variants"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Simulate Pricing Calculation",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"product_variant_id\": 1,\n    \"customer_id\": 1,\n    \"quantity\": 10\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/master-data/simulate-pricing",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"master-data",
+								"simulate-pricing"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://192.168.5.10:8086/bagus",
+			"type": "string"
+		},
+		{
+			"key": "employeeId",
+			"value": "54",
+			"type": "string"
+		},
+		{
+			"key": "branchId",
+			"value": "3",
+			"type": "string"
+		},
+		{
+			"key": "latitude",
+			"value": "-6.1585",
+			"type": "string"
+		},
+		{
+			"key": "longitude",
+			"value": "106.9080",
+			"type": "string"
+		}
+	]
+}

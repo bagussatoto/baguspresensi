@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Navicat>
+    <Connection Name="bagus_pgsql" ServerType="PostgreSQL">
+        <Host>192.168.5.10</Host>
+        <Port>5432</Port>
+        <UserName>bagus</UserName>
+        <InitialCatalog>bagus</InitialCatalog>
+    </Connection>
+</Navicat>

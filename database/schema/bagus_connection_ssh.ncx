@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Navicat>
+    <Connection Name="bagus_pgsql_ssh" ServerType="PostgreSQL">
+        <Host>127.0.0.1</Host>
+        <Port>5432</Port>
+        <UserName>bagus</UserName>
+        <InitialCatalog>bagus</InitialCatalog>
+        <SSH Enable="true">
+            <Host>192.168.5.10</Host>
+            <Port>22</Port>
+            <UserName>bagus</UserName>
+            <AuthType>Password</AuthType>
+        </SSH>
+    </Connection>
+</Navicat>

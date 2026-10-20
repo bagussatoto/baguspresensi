@@ -1,0 +1,17 @@
+{
+  "name": "MGK Presensi Karyawan",
+  "short_name": "MGK Presensi",
+  "description": "Portal Presensi & Cuti Karyawan Mandiri Maya Graha Kencana",
+  "start_url": "/presensi",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1e293b",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}
