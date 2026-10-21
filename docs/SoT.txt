@@ -1,5 +1,5 @@
-SoT dari aplikasi presensi 
-SoT pendaftaran mandiri
+SoT dari aplikasi presensi -> docs/sot_aplikasi_presensi.mc (Selesai 100%)
+SoT pendaftaran mandiri -> docs/percakapan_sod_sot_iso_maker_checker.mc (Selesai 100%)
 
 
 SoD dari aplikasi presensi 
