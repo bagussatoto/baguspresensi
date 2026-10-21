@@ -9,6 +9,7 @@ use App\Domains\Attendance\Actions\ClockOutAction;
 use App\Domains\Attendance\Actions\RespondShiftSwapPeerAction;
 use App\Domains\Attendance\Actions\SubmitAttendanceCorrectionAction;
 use App\Domains\Attendance\Actions\SubmitShiftSwapAction;
+use App\Domains\Attendance\Actions\SyncOfflineAttendanceAction;
 use App\Domains\Attendance\DataTransferObjects\ClockInDTO;
 use App\Domains\Attendance\DataTransferObjects\ClockOutDTO;
 use App\Domains\Attendance\Enums\ApprovalStatus;
@@ -33,6 +34,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\File;
 use Illuminate\View\View;
 use Modules\MasterData\Domain\Models\Branch;
@@ -216,6 +218,8 @@ class AttendanceWebController extends Controller
             'shift_id' => 'nullable|exists:shifts,id',
             'work_type' => 'nullable|string|in:shift,flexible',
             'is_mock' => 'nullable|boolean',
+            'wifi_bssid' => 'nullable|string|max:50',
+            'liveness_score' => 'nullable|numeric|between:0,100',
         ]);
 
         $branch = $employee->branch ?? Branch::first();
@@ -239,7 +243,9 @@ class AttendanceWebController extends Controller
                 ipAddress: $request->ip(),
                 isMockLocation: (bool) $request->input('is_mock', false),
                 notes: 'Clock-in via Portal Web Karyawan',
-                workType: $request->input('work_type')
+                workType: $request->input('work_type'),
+                wifiBssid: (string) $request->input('wifi_bssid') ?: null,
+                livenessScore: $request->filled('liveness_score') ? (float) $request->input('liveness_score') : null
             );
 
             $record = $this->clockInAction->execute($dto);
@@ -781,5 +787,35 @@ class AttendanceWebController extends Controller
         $swap->update(['status' => ShiftSwapStatus::Cancelled]);
 
         return redirect()->route('presensi.tukar-shift')->with('success', 'Permohonan tukar shift berhasil dibatalkan.');
+    }
+
+    /**
+     * Endpoint Sinkronisasi Buffer Presensi Offline PWA Portal Web Karyawan.
+     * POST /presensi/sync-offline
+     */
+    public function syncOffline(
+        Request $request,
+        SyncOfflineAttendanceAction $action
+    ): JsonResponse {
+        $employee = $this->getAuthenticatedEmployee();
+        $payload = $request->all();
+
+        if ($employee) {
+            if (isset($payload['items']) && is_array($payload['items'])) {
+                foreach ($payload['items'] as &$item) {
+                    if (empty($item['employee_id'])) {
+                        $item['employee_id'] = $employee->id;
+                    }
+                }
+                unset($item);
+            } elseif (empty($payload['employee_id'])) {
+                $payload['employee_id'] = $employee->id;
+            }
+        }
+
+        $userId = $employee?->user_id ?? Auth::id();
+        $result = $action->execute($payload, $userId);
+
+        return response()->json($result, $result['success'] ? 200 : 422);
     }
 }

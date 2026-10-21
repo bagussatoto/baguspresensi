@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Domains\Attendance\Enums\AdminRole;
-use App\Domains\Attendance\Models\AuditLog;
+use App\Domains\Employee\Models\Shift;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -66,6 +66,15 @@ class UserAccessLifecycleAndDeprovisioningTest extends TestCase
             'max_discount_approval_percent' => 20.0,
             'password' => Hash::make('spvpass123'),
             'pin' => Hash::make('999888'),
+            'is_active' => true,
+        ]);
+
+        Shift::create([
+            'name' => 'Shift Pagi',
+            'code' => 'PAGI',
+            'start_time' => '07:00:00',
+            'end_time' => '15:00:00',
+            'grace_period_minutes' => 15,
             'is_active' => true,
         ]);
     }

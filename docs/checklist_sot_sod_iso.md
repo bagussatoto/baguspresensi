@@ -23,6 +23,8 @@ Pusat Data: Master Data `employees`, Transaksi `attendance_records`, Aturan `shi
   Foto selfie karyawan saat tap presensi tersimpan permanen di storage server (`clock_in_photo_path` dan `clock_out_photo_path`) untuk bukti verifikasi fisik.
 - [x] **Audit Geofence Akurat:**  
   Koordinat GPS (`lat`, `lng`) serta kalkulasi jarak radius kantor cabang dihitung seragam menggunakan formula geodesi (Haversine).
+- [x] **Multi-Factor Geofencing (Toleransi GPS Drift Indoor):**  
+  Tabel cabang memuat `wifi_bssid` dan `allowed_network_ips`. Karyawan di dalam gedung yang mengalami GPS drift (> radius kantor) tetap tervalidasi sah jika terhubung ke BSSID Access Point resmi atau IP publik outlet (`verification_method = 'wifi_geofence'`).
 - [x] **Deteksi Anti-Fraud (Fake GPS):**  
   Sistem secara otomatis mendeteksi dan menandai jika perangkat pengguna menggunakan aplikasi pemalsu lokasi (`is_mock_location_detected = true`).
 - [x] **Pusat Konfigurasi Shift (`shifts`):**  
@@ -71,6 +73,12 @@ Prinsip: Pemisahan 4 Wewenang Dasar (Maker, Custodian, Record Keeper, Authorizer
   Kasir (*Custodian* uang fisik) wajib menghitung uang fisik nyata per pecahan uang tanpa melihat angka estimasi total sistem terlebih dahulu saat tutup kasir.
 - [x] **Pencatatan Selisih Kas Otomatis:**  
   Sistem menghitung selisih kas fisik vs pembukuan sistem (`cash_difference`) dan otomatis mencatat selisih tersebut ke log audit untuk diinvestigasi manajemen.
+- [x] **Maker-Checker Koreksi Presensi (Lupa Absen / Kendala HP):**  
+  Karyawan bertindak sebagai *Maker* yang mengajukan jam riil dan alasan, dan Admin/HRD bertindak sebagai *Checker*.
+- [x] **Proteksi Anti Self-Approval Koreksi Presensi:**  
+  Admin/Supervisor dilarang keras menyetujui atau memanipulasi permohonan koreksi presensi atas nama dirinya sendiri (*Pelanggaran SoD*).
+- [x] **Penanda Struktural SoT Koreksi (`is_adjusted`):**  
+  Persetujuan koreksi secara atomik memperbarui tabel fakta kehadiran `attendance_records` dengan flag `is_adjusted = true`, `adjusted_by`, `adjusted_at`, serta dicatat ke log audit WORM ISO 27001.
 - [x] **Pemisahan Presensi & Pencairan Gaji:**  
   Petugas pencatat kehadiran harian terpisah dari otorisator pencairan dana gaji (bagian Keuangan/Finance).
 - [x] **Granular Admin RBAC:**  
@@ -140,3 +148,33 @@ Standar Regulasi: ISO/IEC 27001:2022 pada Gerbang Pendaftaran Publik
   Sistem mencatat identitas verifikator, stempel waktu, serta alasan resmi penolakan (`rejection_reason`) ke dalam log audit perusahaan.
 - [x] **Pertahanan Anti-Spam & Flooding (Klausul A.8.20):**  
   Validasi ketat pada nomor telepon dan username serta pembatasan laju submit (*rate limiting*) aktif untuk menangkal bot spam registrasi.
+
+---
+
+## 🚀 7. Checklist Actionable Roadmap Poin 1 & Poin 2 (Peningkatan & Resiliensi)
+
+Status: **100% Selesai & Teruji Otomatis** (34 Unit/Feature Tests Passing)
+
+### Poin 1: Jangka Pendek (Quick Wins)
+- [x] **Poin 1.1 Formulir Koreksi Presensi (Maker-Checker 4-Eyes):**
+  - Maker (Karyawan) mengajukan permohonan koreksi via `/presensi2/koreksi` atau `/presensi/koreksi`.
+  - Checker (Admin/Supervisor) memverifikasi via `/admin/koreksi-presensi` dengan aksi Approve / Reject.
+  - Otorisasi Anti Self-Approval mutlak: Admin tidak dapat menyetujui koreksi atas namanya sendiri.
+  - Sinkronisasi atomik ke SoT utama `attendance_records` dengan flag `is_adjusted = true`, `adjusted_by`, `adjusted_at`, dan WORM log audit (ISO 27001 A.8.15).
+  - *Automated Test:* `AttendanceCorrectionTest.php` (9 tests passed).
+- [x] **Poin 1.2 Multi-Factor Geofencing (Wi-Fi BSSID & IP Whitelist):**
+  - Cabang dilengkapi kolom `wifi_ssid`, `wifi_bssid`, dan `allowed_network_ips`.
+  - Toleransi GPS drift: Jika jarak GPS melebihi radius akibat sinyal satelit terhalang gedung/atap, presensi tetap sah apabila terhubung ke MAC BSSID Access Point resmi atau IP publik outlet (`verification_method = 'wifi_geofence'`).
+  - *Automated Test:* `WifiGeofenceAndNetworkValidationTest.php` (5 tests passed).
+
+### Poin 2: Jangka Menengah (Mid-Term)
+- [x] **Poin 2.1 Liveness Detection Ringan:**
+  - Client-side deteksi keaktifan/kehidupan wajah pada portal presensi untuk menangkal spoofing foto cetak.
+  - Skor `liveness_score` (0.00 - 1.00) dikirim bersama payload presensi dan dicatat ke `attendance_records`.
+- [x] **Poin 2.2 PWA Offline Buffer & Anti-Replay Sync (Store-and-Forward):**
+  - Mekanisme IndexedDB (`AttendanceOfflineDB`) di browser PWA untuk menampung presensi saat internet terputus.
+  - Dilengkapi *cryptographic nonce* sekali pakai dan verifikasi batas waktu (*time-window*) guna menangkal manipulasi jam masa depan dan *Replay Attack*.
+  - Listener otomatis `window.addEventListener('online')` untuk mengirim antrean ke endpoint `POST /presensi2/sync-offline`, `POST /presensi/sync-offline`, dan `POST /api/v1/attendance/sync-offline`.
+  - Data diinsert ke SoT `attendance_records` dengan flag `is_offline_sync = true`, `sync_recorded_at = now()`, dan jejak audit WORM permanen.
+  - *Automated Test:* `OfflineAttendanceSyncAndLivenessTest.php` (6 tests passed).
+

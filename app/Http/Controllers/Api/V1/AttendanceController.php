@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domains\Attendance\Actions\ClockInAction;
 use App\Domains\Attendance\Actions\ClockOutAction;
+use App\Domains\Attendance\Actions\SyncOfflineAttendanceAction;
 use App\Domains\Attendance\DataTransferObjects\ClockInDTO;
 use App\Domains\Attendance\DataTransferObjects\ClockOutDTO;
 use App\Domains\Attendance\Exceptions\AlreadyClockedInException;
@@ -25,6 +26,7 @@ use Carbon\Carbon;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * Controller API RESTful V1: Presensi Kehadiran Karyawan & Operator.
@@ -52,7 +54,9 @@ class AttendanceController extends Controller
                 ipAddress: $request->ip(),
                 isMockLocation: (bool) $request->input('is_mock_location', false),
                 notes: $request->input('notes'),
-                clockInAt: $request->filled('clock_in_at') ? Carbon::parse($request->input('clock_in_at')) : null
+                clockInAt: $request->filled('clock_in_at') ? Carbon::parse($request->input('clock_in_at')) : null,
+                wifiBssid: (string) $request->input('wifi_bssid') ?: null,
+                livenessScore: $request->filled('liveness_score') ? (float) $request->input('liveness_score') : null
             );
 
             $record = $action->execute($dto);
@@ -243,5 +247,18 @@ class AttendanceController extends Controller
             'success' => true,
             'data' => ShiftResource::collection($shifts),
         ]);
+    }
+
+    /**
+     * Endpoint Sinkronisasi Presensi Offline PWA / Mobile (Anti-Replay Nonce & Idempotensi).
+     * POST /api/v1/attendance/sync-offline
+     */
+    public function syncOffline(
+        Request $request,
+        SyncOfflineAttendanceAction $action
+    ): JsonResponse {
+        $result = $action->execute($request->all(), Auth::id());
+
+        return response()->json($result, $result['success'] ? 200 : 422);
     }
 }

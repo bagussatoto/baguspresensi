@@ -6,14 +6,16 @@ namespace App\Http\Controllers;
 
 use App\Domains\Attendance\Actions\ClockInAction;
 use App\Domains\Attendance\Actions\ClockOutAction;
+use App\Domains\Attendance\Actions\SubmitAttendanceCorrectionAction;
+use App\Domains\Attendance\Actions\SyncOfflineAttendanceAction;
 use App\Domains\Attendance\DataTransferObjects\ClockInDTO;
 use App\Domains\Attendance\DataTransferObjects\ClockOutDTO;
 use App\Domains\Attendance\Enums\ApprovalStatus;
 use App\Domains\Attendance\Enums\AttendanceStatus;
 use App\Domains\Attendance\Enums\VerificationMethod;
 use App\Domains\Attendance\Exceptions\AlreadyClockedInException;
-use App\Domains\Attendance\Exceptions\NotClockedInException;
 use App\Domains\Attendance\Models\ActivityAttendance;
+use App\Domains\Attendance\Models\AttendanceCorrection;
 use App\Domains\Attendance\Models\AttendanceRecord;
 use App\Domains\Attendance\Models\AuditLog;
 use App\Domains\Attendance\Services\ShiftResolverService;
@@ -30,6 +32,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
 use Modules\MasterData\Domain\Enums\EmployeeRole;
@@ -672,8 +675,8 @@ class AttendanceWebV2Controller extends Controller
 
         $branch = $employee->branch ?? Branch::first();
         $branchId = (int) ($branch->id ?? 1);
-        $lat = (float) ($branch->latitude ?? -6.1585);
-        $lng = (float) ($branch->longitude ?? 106.9080);
+        $lat = $request->filled('latitude') ? (float) $request->input('latitude') : (float) ($branch->latitude ?? -6.1585);
+        $lng = $request->filled('longitude') ? (float) $request->input('longitude') : (float) ($branch->longitude ?? 106.9080);
 
         try {
             $dto = new ClockInDTO(
@@ -682,15 +685,17 @@ class AttendanceWebV2Controller extends Controller
                 latitude: $lat,
                 longitude: $lng,
                 shiftId: $request->filled('shift_id') ? (int) $request->input('shift_id') : null,
-                photoPath: null,
-                verificationMethod: VerificationMethod::AdminManual,
+                photoPath: $request->input('photo'),
+                verificationMethod: $request->filled('photo') ? VerificationMethod::GpsSelfie : VerificationMethod::AdminManual,
                 deviceInfo: [
                     'user_agent' => $request->userAgent(),
                     'platform' => 'Web Portal Presensi v2',
                 ],
                 ipAddress: $request->ip(),
-                isMockLocation: false,
-                notes: 'Clock-in via Portal Presensi v2 (Konfirmasi Langsung)'
+                isMockLocation: (bool) $request->input('is_mock_location', false),
+                notes: 'Clock-in via Portal Presensi v2 (Konfirmasi Langsung)',
+                wifiBssid: (string) $request->input('wifi_bssid') ?: null,
+                livenessScore: $request->filled('liveness_score') ? (float) $request->input('liveness_score') : null
             );
 
             $record = $this->clockInAction->execute($dto);
@@ -2823,5 +2828,125 @@ class AttendanceWebV2Controller extends Controller
         ]);
 
         return back()->with('success', 'Penerimaan stok distribusi '.$transfer->transfer_code.' ('.$transfer->variant_name.' +'.$transfer->qty.' pcs) berhasil diverifikasi & diterima!');
+    }
+
+    /**
+     * Layar Form & Riwayat Pengajuan Koreksi Presensi Portal v2 (Maker-Checker 4-Eyes).
+     */
+    public function koreksiIndex(Request $request): View|RedirectResponse
+    {
+        $employee = $this->getAuthenticatedEmployee();
+        if (! $employee) {
+            return redirect()->route('presensi2.login');
+        }
+
+        $corrections = AttendanceCorrection::with(['shift', 'approver', 'attendanceRecord'])
+            ->where('employee_id', $employee->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $shifts = Shift::where('is_active', true)->orderBy('start_time')->get();
+
+        return view('presensi2.koreksi', [
+            'currentEmployee' => $employee,
+            'corrections' => $corrections,
+            'shifts' => $shifts,
+        ]);
+    }
+
+    /**
+     * Submit Pengajuan Koreksi Presensi Portal v2.
+     */
+    public function koreksiSubmit(Request $request, SubmitAttendanceCorrectionAction $action): RedirectResponse
+    {
+        $employee = $this->getAuthenticatedEmployee();
+        if (! $employee) {
+            return redirect()->route('presensi2.login');
+        }
+
+        $request->validate([
+            'work_date' => 'required|date|before_or_equal:today',
+            'correction_type' => 'required|in:clock_in,clock_out,both',
+            'clock_in_time' => 'nullable|string',
+            'clock_out_time' => 'nullable|string',
+            'shift_id' => 'required|exists:shifts,id',
+            'reason' => 'required|string|max:500',
+            'attachment' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120',
+        ]);
+
+        $workDate = (string) $request->input('work_date');
+        $correctionType = (string) $request->input('correction_type');
+
+        $proposedClockIn = null;
+        if (in_array($correctionType, ['clock_in', 'both'], true) && $request->filled('clock_in_time')) {
+            $proposedClockIn = $workDate.' '.$request->input('clock_in_time').':00';
+        }
+
+        $proposedClockOut = null;
+        if (in_array($correctionType, ['clock_out', 'both'], true) && $request->filled('clock_out_time')) {
+            $proposedClockOut = $workDate.' '.$request->input('clock_out_time').':00';
+        }
+
+        $attachmentPath = null;
+        if ($request->hasFile('attachment')) {
+            try {
+                $uploadDir = public_path('uploads/corrections');
+                File::ensureDirectoryExists($uploadDir);
+                $file = $request->file('attachment');
+                $fileName = 'corr_'.$employee->id.'_'.time().'.'.$file->getClientOriginalExtension();
+                $file->move($uploadDir, $fileName);
+                $attachmentPath = "uploads/corrections/{$fileName}";
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        try {
+            $action->execute([
+                'employee_id' => $employee->id,
+                'work_date' => $workDate,
+                'shift_id' => (int) $request->input('shift_id'),
+                'correction_type' => $correctionType,
+                'proposed_clock_in_at' => $proposedClockIn,
+                'proposed_clock_out_at' => $proposedClockOut,
+                'reason' => (string) $request->input('reason'),
+                'attachment_path' => $attachmentPath,
+            ]);
+
+            return redirect()->route('presensi2.koreksi')
+                ->with('success', 'Permohonan koreksi presensi berhasil diajukan dan sedang menunggu verifikasi Checker/Admin!');
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Endpoint Sinkronisasi Buffer Presensi Offline PWA Portal Presensi v2 (Anti-Replay Nonce & Idempotensi).
+     * POST /presensi2/sync-offline
+     */
+    public function syncOffline(
+        Request $request,
+        SyncOfflineAttendanceAction $action
+    ): JsonResponse {
+        $employee = $this->getAuthenticatedEmployee();
+        $payload = $request->all();
+
+        if ($employee) {
+            if (isset($payload['items']) && is_array($payload['items'])) {
+                foreach ($payload['items'] as &$item) {
+                    if (empty($item['employee_id'])) {
+                        $item['employee_id'] = $employee->id;
+                    }
+                }
+                unset($item);
+            } elseif (empty($payload['employee_id'])) {
+                $payload['employee_id'] = $employee->id;
+            }
+        }
+
+        $userId = $employee?->user_id ?? Auth::id();
+        $result = $action->execute($payload, $userId);
+
+        return response()->json($result, $result['success'] ? 200 : 422);
     }
 }

@@ -466,11 +466,38 @@ Seluruh skenario pengujian di `tests/Feature/UserAccessLifecycleAndDeprovisionin
 
 ---
 
-## 8. Ringkasan Status Kepatuhan Keseluruhan Sistem
-
 | Fase Pengembangan | Standar Tata Kelola & Regulasi | Status Implementasi | Pengujian Otomatis |
 | :--- | :--- | :---: | :---: |
 | **Fase 1** | Pendaftaran Mandiri Staging, SoD Maker-Checker, Anti Self-Approval | **SELESAI (100%)** | `8 tests passed` |
 | **Fase 2** | Pemisahan Wewenang POS Kasir, Dual-Control Supervisor PIN, Blind Cash Count | **SELESAI (100%)** | `8 tests passed` |
 | **Fase 3** | Siklus Akses Pengguna, Instant De-provisioning, Periodic Access Review ISO 27001 | **SELESAI (100%)** | `8 tests passed` |
+| **Fase 4** | Fondasi Koreksi Presensi Maker-Checker, Anti Self-Approval, Penanda SoT `is_adjusted`, WORM Audit | **SELESAI (100%)** | `9 tests passed` |
+
+---
+
+## 9. Realisasi Fase 4: Fondasi Koreksi Presensi Maker-Checker & Audit Penyesuaian (SELESAI)
+
+### 1. Masalah & Kebutuhan Regulasi
+Jika karyawan mengalami kendala teknis (baterai HP habis, kamera rusak, atau lupa clock-out), perbaikan jam kerja tidak boleh dilakukan sembarangan atau langsung diedit tanpa otorisasi.
+* **Risiko Pelanggaran SoD:** Jika admin yang terlambat bisa menyetujui koreksi jam masuk dirinya sendiri, terjadi konflik kepentingan (*Self-Approval Fraud*).
+* **Risiko Pelanggaran SoT:** Data hasil koreksi harus memperbarui fakta kehadiran resmi `attendance_records` secara atomik dan memiliki kolom penanda struktural agar modul payroll dapat membedakan data tap murni vs penyesuaian.
+* **Risiko Kepatuhan ISO 27001:** Setiap pengajuan, persetujuan, dan penolakan wajib terekam ke tabel WORM `audit_logs`.
+
+### 2. Implementasi Teknis yang Telah Diselesaikan
+* **Migrasi Skema SoT (`database/migrations/2026_10_21_142500_add_adjustment_audit_to_attendance_records_table.php`):**
+  * `is_adjusted` (`boolean`, default: `false`): Menandai fakta kehadiran hasil koreksi resmi.
+  * `adjusted_by` (`unsignedBigInteger`, nullable): ID Admin pelaku otorisasi koreksi.
+  * `adjusted_at` (`timestamp`, nullable): Stempel waktu server saat koreksi disetujui.
+* **Penguatan Action Handler ([ApproveAttendanceCorrectionAction.php](file:///var/www/laravel_apps/bagus/app/Domains/Attendance/Actions/ApproveAttendanceCorrectionAction.php)):**
+  * Proteksi Anti Self-Approval: Otomatis melempar `AuthorizationException` jika admin yang menyetujui terindikasi sama dengan pemohon.
+  * Transaksi atomik `DB::transaction` ke `attendance_records` dan update `attendance_corrections`.
+  * Pencatatan jejak audit forensik ke `audit_logs` (WORM).
+* **Penguatan Action Penolakan ([RejectAttendanceCorrectionAction.php](file:///var/www/laravel_apps/bagus/app/Domains/Attendance/Actions/RejectAttendanceCorrectionAction.php)):**
+  * Mewajibkan justifikasi alasan penolakan dan mencatatnya ke `audit_logs`.
+* **Antarmuka Pengguna & Integrasi Portal v2:**
+  * View portal v1: `resources/views/presensi/koreksi.blade.php`.
+  * View portal v2: `resources/views/presensi2/koreksi.blade.php` lengkap dengan rute `/presensi2/koreksi` dan `/presensi2/koreksi/submit`.
+* **Pengujian Otomatis ([AttendanceCorrectionTest.php](file:///var/www/laravel_apps/bagus/tests/Feature/AttendanceCorrectionTest.php)):**
+  * 9 pengujian otomatis mencakup seluruh alur Maker-Checker, Anti Self-Approval, ISO 27001, dan portal v2 berhasil lolos 100% (50 assertions).
+
 

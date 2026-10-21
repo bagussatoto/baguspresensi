@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Domains\Attendance\Enums\AttendanceStatus;
+use App\Domains\Attendance\Models\AttendanceRecord;
 use App\Domains\Attendance\Models\AuditLog;
 use App\Domains\Employee\Models\Shift;
 use App\Models\ShiftSalesSummary;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Modules\MasterData\Domain\Enums\EmployeeRole;
@@ -132,6 +135,16 @@ class PosDualControlAndBlindCashCountTest extends TestCase
             'warehouse_id' => $this->warehouse->id,
             'qty_on_hand' => 50,
             'qty_reserved' => 0,
+        ]);
+
+        // Kasir wajib terverifikasi clock-in sebelum dapat memproses transaksi kasir POS (Aturan SoT Presensi)
+        AttendanceRecord::create([
+            'employee_id' => $this->cashier->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift->id,
+            'work_date' => Carbon::today()->toDateString(),
+            'clock_in_at' => Carbon::now()->subHours(2),
+            'status' => AttendanceStatus::Present,
         ]);
     }
 

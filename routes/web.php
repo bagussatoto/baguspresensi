@@ -58,6 +58,7 @@ Route::prefix('presensi')->name('presensi.')->group(function () {
     Route::get('/scan', [AttendanceWebController::class, 'scan'])->name('scan');
     Route::post('/clock-in', [AttendanceWebController::class, 'submitClockIn'])->name('clock-in');
     Route::post('/clock-out', [AttendanceWebController::class, 'submitClockOut'])->name('clock-out');
+    Route::post('/sync-offline', [AttendanceWebController::class, 'syncOffline'])->name('sync-offline');
 
     Route::get('/izin', [AttendanceWebController::class, 'izin'])->name('izin');
     Route::post('/izin', [AttendanceWebController::class, 'submitLeave'])->name('izin.submit');
@@ -91,7 +92,10 @@ Route::prefix('presensi2')->name('presensi2.')->group(function () {
     Route::get('/scan', [AttendanceWebV2Controller::class, 'scan'])->name('scan');
     Route::post('/clock-in', [AttendanceWebV2Controller::class, 'submitClockIn'])->middleware('throttle:10,1')->name('clock-in');
     Route::post('/clock-out', [AttendanceWebV2Controller::class, 'submitClockOut'])->middleware('throttle:10,1')->name('clock-out');
+    Route::post('/sync-offline', [AttendanceWebV2Controller::class, 'syncOffline'])->name('sync-offline');
     Route::get('/riwayat', [AttendanceWebV2Controller::class, 'riwayat'])->name('riwayat');
+    Route::get('/koreksi', [AttendanceWebV2Controller::class, 'koreksiIndex'])->name('koreksi');
+    Route::post('/koreksi', [AttendanceWebV2Controller::class, 'koreksiSubmit'])->name('koreksi.submit');
 
     // Halaman Stok Barang (Checklist Serah Terima Shift)
     Route::get('/stok', [AttendanceWebV2Controller::class, 'stokIndex'])->name('stok');

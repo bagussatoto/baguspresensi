@@ -24,6 +24,7 @@ use App\Domains\Leave\Models\LeaveRequest;
 use App\Http\Controllers\Controller;
 use App\Models\ShiftSalesSummary;
 use Carbon\Carbon;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -588,7 +589,11 @@ class AdminAttendanceController extends Controller
         $this->ensureBranchAuthorized($branchId, 'menyetujui koreksi presensi');
 
         $approverId = (int) ($request->user()?->id ?? 1);
-        $action->execute($correction, $approverId);
+        try {
+            $action->execute($correction, $approverId);
+        } catch (AuthorizationException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
 
         return redirect()->back()->with('success', 'Permohonan koreksi presensi berhasil disetujui dan rekaman presensi telah dimutakhirkan.');
     }
@@ -606,7 +611,11 @@ class AdminAttendanceController extends Controller
 
         $note = $request->input('rejection_note', 'Alasan atau bukti permohonan koreksi tidak memenuhi kualifikasi.');
         $approverId = (int) ($request->user()?->id ?? 1);
-        $action->execute($correction, $approverId, $note);
+        try {
+            $action->execute($correction, $approverId, $note);
+        } catch (AuthorizationException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
 
         return redirect()->back()->with('success', 'Permohonan koreksi presensi telah ditolak.');
     }

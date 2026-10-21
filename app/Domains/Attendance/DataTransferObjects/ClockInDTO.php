@@ -26,5 +26,7 @@ readonly class ClockInDTO
         public ?string $notes = null,
         public ?CarbonInterface $clockInAt = null,
         public ?string $workType = null,
+        public ?string $wifiBssid = null,
+        public ?float $livenessScore = null,
     ) {}
 }

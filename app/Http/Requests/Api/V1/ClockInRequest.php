@@ -32,6 +32,8 @@ class ClockInRequest extends FormRequest
             'is_mock_location' => ['nullable', 'boolean'],
             'device_info' => ['nullable', 'array'],
             'notes' => ['nullable', 'string', 'max:500'],
+            'liveness_score' => ['nullable', 'numeric', 'between:0,100'],
+            'wifi_bssid' => ['nullable', 'string', 'max:50'],
         ];
     }
 

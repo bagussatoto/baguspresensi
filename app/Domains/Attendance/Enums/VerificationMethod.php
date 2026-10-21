@@ -13,6 +13,8 @@ enum VerificationMethod: string
     case Biometric = 'biometric';
     case AdminManual = 'admin_manual';
     case WebKiosk = 'web_kiosk';
+    case WifiGeofence = 'wifi_geofence';
+    case OfflineSync = 'offline_sync';
 
     /**
      * Dapatkan label human-readable dalam Bahasa Indonesia.
@@ -24,6 +26,8 @@ enum VerificationMethod: string
             self::Biometric => 'Biometrik / Fingerprint',
             self::AdminManual => 'Manual oleh Admin/Supervisor',
             self::WebKiosk => 'Terminal POS / Web Kiosk',
+            self::WifiGeofence => 'Multi-Factor Wi-Fi / IP Geofence',
+            self::OfflineSync => 'Sinkronisasi Buffer Offline',
         };
     }
 }

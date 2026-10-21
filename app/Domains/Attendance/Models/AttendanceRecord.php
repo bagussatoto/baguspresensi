@@ -64,6 +64,13 @@ class AttendanceRecord extends Model
         'overtime_admin_note',
         'early_leave_approved',
         'early_leave_reason',
+        'is_adjusted',
+        'adjusted_by',
+        'adjusted_at',
+        'liveness_score',
+        'is_offline_sync',
+        'offline_nonce',
+        'sync_recorded_at',
     ];
 
     protected $casts = [
@@ -90,6 +97,11 @@ class AttendanceRecord extends Model
         'overtime_requested_at' => 'datetime',
         'overtime_approved_at' => 'datetime',
         'early_leave_approved' => 'boolean',
+        'is_adjusted' => 'boolean',
+        'adjusted_at' => 'datetime',
+        'liveness_score' => 'float',
+        'is_offline_sync' => 'boolean',
+        'sync_recorded_at' => 'datetime',
     ];
 
     public function employee(): BelongsTo
@@ -125,6 +137,11 @@ class AttendanceRecord extends Model
     public function corrections(): HasMany
     {
         return $this->hasMany(AttendanceCorrection::class, 'attendance_record_id');
+    }
+
+    public function adjustedBy(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'adjusted_by');
     }
 
     public function isFlexible(): bool

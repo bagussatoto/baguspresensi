@@ -20,6 +20,9 @@ class Branch extends Model
         'latitude',
         'longitude',
         'radius_meters',
+        'wifi_ssid',
+        'wifi_bssid',
+        'allowed_network_ips',
         'phone',
         'is_active',
     ];
@@ -30,7 +33,39 @@ class Branch extends Model
         'latitude' => 'float',
         'longitude' => 'float',
         'radius_meters' => 'integer',
+        'allowed_network_ips' => 'array',
     ];
+
+    /**
+     * Cek apakah BSSID (MAC Address Wi-Fi) cocok dengan access point resmi cabang.
+     */
+    public function matchesWifiBssid(?string $bssid): bool
+    {
+        if (empty($bssid) || empty($this->wifi_bssid)) {
+            return false;
+        }
+
+        $cleanTarget = strtolower(str_replace(['-', ':'], '', trim($bssid)));
+        $cleanExpected = strtolower(str_replace(['-', ':'], '', trim($this->wifi_bssid)));
+
+        return $cleanTarget === $cleanExpected;
+    }
+
+    /**
+     * Cek apakah IP Address client terdaftar dalam whitelist jaringan cabang.
+     */
+    public function matchesClientIp(?string $ip): bool
+    {
+        if (empty($ip) || empty($this->allowed_network_ips)) {
+            return false;
+        }
+
+        $allowed = is_array($this->allowed_network_ips)
+            ? $this->allowed_network_ips
+            : (json_decode($this->allowed_network_ips, true) ?? []);
+
+        return in_array(trim($ip), $allowed, true);
+    }
 
     public function warehouses(): HasMany
     {

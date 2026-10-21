@@ -19,6 +19,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function (): void {
     // Presensi Kehadiran
     Route::post('attendance/clock-in', [AttendanceController::class, 'clockIn'])->name('api.v1.attendance.clock-in');
     Route::post('attendance/clock-out', [AttendanceController::class, 'clockOut'])->name('api.v1.attendance.clock-out');
+    Route::post('attendance/sync-offline', [AttendanceController::class, 'syncOffline'])->name('api.v1.attendance.sync-offline');
     Route::get('attendance/today', [AttendanceController::class, 'today'])->name('api.v1.attendance.today');
     Route::get('attendance/history', [AttendanceController::class, 'history'])->name('api.v1.attendance.history');
 

@@ -7,6 +7,7 @@ namespace App\Domains\Attendance\Actions;
 use App\Domains\Attendance\Enums\ApprovalStatus;
 use App\Domains\Attendance\Models\AttendanceCorrection;
 use App\Domains\Attendance\Models\AttendanceRecord;
+use App\Domains\Attendance\Services\AuditLogService;
 use Carbon\Carbon;
 use InvalidArgumentException;
 
@@ -15,6 +16,12 @@ use InvalidArgumentException;
  */
 class SubmitAttendanceCorrectionAction
 {
+    public function __construct(
+        public ?AuditLogService $auditLogService = null
+    ) {
+        $this->auditLogService ??= app(AuditLogService::class);
+    }
+
     /**
      * @param array{
      *     employee_id: int,
@@ -69,7 +76,7 @@ class SubmitAttendanceCorrectionAction
             $shiftId = $record?->shift_id;
         }
 
-        return AttendanceCorrection::create([
+        $correction = AttendanceCorrection::create([
             'employee_id' => $employeeId,
             'attendance_record_id' => $attendanceRecordId,
             'shift_id' => $shiftId,
@@ -81,5 +88,20 @@ class SubmitAttendanceCorrectionAction
             'attachment_path' => $data['attachment_path'] ?? null,
             'status' => ApprovalStatus::Pending,
         ]);
+
+        $this->auditLogService->log(
+            action: 'attendance_correction_submitted',
+            auditable: $correction,
+            oldValues: null,
+            newValues: [
+                'work_date' => $workDate,
+                'correction_type' => $correctionType,
+                'reason' => $data['reason'],
+                'status' => ApprovalStatus::Pending->value,
+            ],
+            userId: $employeeId,
+        );
+
+        return $correction;
     }
 }

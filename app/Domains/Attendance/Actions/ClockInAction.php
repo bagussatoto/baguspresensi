@@ -6,8 +6,10 @@ namespace App\Domains\Attendance\Actions;
 
 use App\Domains\Attendance\DataTransferObjects\ClockInDTO;
 use App\Domains\Attendance\Enums\AttendanceStatus;
+use App\Domains\Attendance\Enums\VerificationMethod;
 use App\Domains\Attendance\Exceptions\AlreadyClockedInException;
 use App\Domains\Attendance\Exceptions\MockLocationDetectedException;
+use App\Domains\Attendance\Exceptions\OutsideGeofenceException;
 use App\Domains\Attendance\Models\AttendanceRecord;
 use App\Domains\Attendance\Services\AntiFraudService;
 use App\Domains\Attendance\Services\GeoValidationService;
@@ -56,11 +58,31 @@ class ClockInAction
             $photoPath = $this->selfieStorageService->storeSelfie($photoPath, $employee->id, 'clock_in');
         }
 
-        // 4. Koordinat GPS (Opsional, tidak membatasi/memblokir presensi)
+        // 4. Koordinat GPS & Validasi Multi-Factor Geofencing
         $lat = $dto->latitude ?? (float) ($branch->latitude ?? -6.1585);
         $lng = $dto->longitude ?? (float) ($branch->longitude ?? 106.9080);
         $coordinate = new Coordinate($lat, $lng);
+        $verificationMethod = $dto->verificationMethod;
+        $notes = $dto->notes;
+
         try {
+            $geoResult = $this->geoValidationService->validateWithinBranch(
+                $coordinate,
+                $branch,
+                $dto->wifiBssid,
+                $dto->ipAddress
+            );
+            $distanceMeters = $geoResult['distance_meters'];
+            if ($geoResult['verification_method'] === VerificationMethod::WifiGeofence) {
+                $verificationMethod = VerificationMethod::WifiGeofence;
+                if (! empty($geoResult['notes'])) {
+                    $notes = trim(($notes ?? '').' ['.$geoResult['notes'].']');
+                }
+            }
+        } catch (OutsideGeofenceException $e) {
+            if ($dto->photoPath !== null && ($dto->verificationMethod === VerificationMethod::GpsSelfie || $dto->verificationMethod === VerificationMethod::WifiGeofence)) {
+                throw $e;
+            }
             $distanceMeters = $this->geoValidationService->calculateDistanceToBranch($coordinate, $branch);
         } catch (\Throwable) {
             $distanceMeters = 0.0;
@@ -136,11 +158,12 @@ class ClockInAction
                 'clock_in_photo_path' => $photoPath,
                 'status' => $status,
                 'late_minutes' => $lateMinutes,
-                'verification_method' => $dto->verificationMethod,
+                'verification_method' => $verificationMethod,
                 'device_info' => $dto->deviceInfo,
                 'ip_address' => $dto->ipAddress,
                 'is_mock_location_detected' => false,
-                'notes' => $dto->notes,
+                'liveness_score' => $dto->livenessScore,
+                'notes' => $notes,
                 'work_type' => $workType,
                 'effective_minutes' => 0,
                 'cost_center' => $costCenter,
