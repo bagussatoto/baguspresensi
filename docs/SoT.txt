@@ -7,3 +7,4 @@ SoD pendaftaran mandiri -> docs/sod_pendaftaran_mandiri.mc (Selesai 100%)
 
 ISO 27000 dari aplikasi presensi -> docs/iso_27000_aplikasi_presensi.mc (Selesai 100%) 
 ISO 27000 pendaftaran mandiri -> docs/iso_27000_pendaftaran_mandiri.mc (Selesai 100%)
+
