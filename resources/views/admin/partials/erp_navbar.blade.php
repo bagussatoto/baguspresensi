@@ -272,7 +272,7 @@
             <span>User:</span>
             <strong>{{ Auth::user()->name ?? ($profileData['name'] ?? 'Bagus') }}</strong>
             <span class="header-user-badge">
-                {{ strtoupper(Auth::user()->role?->value ?? ($profileData['role'] ?? 'manager')) }} @PUSAT
+                {{ strtoupper(Auth::user()->role?->value ?? ($profileData['role'] ?? 'manager')) }} {{ '@'.strtoupper(Auth::user()->assignedBranch?->name ?? 'PUSAT') }}
             </span>
         </div>
 

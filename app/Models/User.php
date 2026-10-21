@@ -40,6 +40,11 @@ class User extends Authenticatable
         return $this->belongsTo(Branch::class, 'assigned_branch_id');
     }
 
+    public function branch(): BelongsTo
+    {
+        return $this->assignedBranch();
+    }
+
     public function isSuperAdmin(): bool
     {
         return $this->role === AdminRole::SuperAdmin || $this->role === null;

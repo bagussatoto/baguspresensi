@@ -32,6 +32,10 @@ class AdminEmployeeController extends Controller
      */
     public function index(Request $request): View
     {
+        $adminUser = Auth::user();
+        $isBranchAdmin = $adminUser && method_exists($adminUser, 'isBranchAdmin') && $adminUser->isBranchAdmin();
+        $assignedBranchId = $isBranchAdmin ? $adminUser->assigned_branch_id : null;
+
         $query = Employee::with('branch')->orderBy('id', 'asc');
 
         if ($request->filled('q')) {
@@ -44,7 +48,9 @@ class AdminEmployeeController extends Controller
             });
         }
 
-        if ($request->filled('kantor') && $request->input('kantor') !== 'all') {
+        if ($assignedBranchId) {
+            $query->where('branch_id', $assignedBranchId);
+        } elseif ($request->filled('kantor') && $request->input('kantor') !== 'all') {
             $query->where('branch_id', $request->input('kantor'));
         }
 
@@ -57,7 +63,11 @@ class AdminEmployeeController extends Controller
         }
 
         $employees = $query->get();
-        $branches = Branch::orderBy('id', 'asc')->get();
+        if ($assignedBranchId) {
+            $branches = Branch::where('id', $assignedBranchId)->get();
+        } else {
+            $branches = Branch::orderBy('id', 'asc')->get();
+        }
 
         return view('admin.karyawan.index', compact('employees', 'branches'));
     }
@@ -123,6 +133,13 @@ class AdminEmployeeController extends Controller
      */
     public function update(Request $request, Employee $employee): JsonResponse|RedirectResponse
     {
+        $adminUser = Auth::user();
+        if ($adminUser && method_exists($adminUser, 'isBranchAdmin') && $adminUser->isBranchAdmin() && $adminUser->assigned_branch_id) {
+            if ($employee->branch_id !== null && (int) $employee->branch_id !== (int) $adminUser->assigned_branch_id) {
+                abort(403, 'Akses Ditolak (SoD): Anda tidak memiliki wewenang mengelola data karyawan cabang lain.');
+            }
+        }
+
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:200'],
             'username' => ['sometimes', 'nullable', 'string', 'max:100'],
@@ -138,6 +155,12 @@ class AdminEmployeeController extends Controller
             'max_discount_approval_percent' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:100'],
             'is_active' => ['sometimes', 'boolean'],
         ]);
+
+        if ($adminUser && method_exists($adminUser, 'isBranchAdmin') && $adminUser->isBranchAdmin() && $adminUser->assigned_branch_id) {
+            if (isset($validated['branch_id'])) {
+                $validated['branch_id'] = $adminUser->assigned_branch_id;
+            }
+        }
 
         $employee->update($validated);
 
@@ -241,6 +264,12 @@ class AdminEmployeeController extends Controller
     public function toggleStatus(Request $request, Employee $employee, AuditLogService $auditLogService): JsonResponse|RedirectResponse
     {
         $adminUser = Auth::user();
+        if ($adminUser && method_exists($adminUser, 'isBranchAdmin') && $adminUser->isBranchAdmin() && $adminUser->assigned_branch_id) {
+            if ($employee->branch_id !== null && (int) $employee->branch_id !== (int) $adminUser->assigned_branch_id) {
+                abort(403, 'Akses Ditolak (SoD): Anda tidak memiliki wewenang mengubah status karyawan cabang lain.');
+            }
+        }
+
         $isDeactivating = $employee->is_active;
         $reason = $request->input('reason')
             ?: $request->input('deactivation_reason')
@@ -307,6 +336,26 @@ class AdminEmployeeController extends Controller
      */
     public function destroy(Employee $employee): JsonResponse|RedirectResponse
     {
+        $adminUser = Auth::user();
+        if ($adminUser && method_exists($adminUser, 'isBranchAdmin') && $adminUser->isBranchAdmin() && $adminUser->assigned_branch_id) {
+            if ($employee->branch_id !== null && (int) $employee->branch_id !== (int) $adminUser->assigned_branch_id) {
+                abort(403, 'Akses Ditolak (SoD): Anda tidak memiliki wewenang menghapus karyawan cabang lain.');
+            }
+        }
+
+        // Accidental Data Loss Prevention & Forensic Audit Integrity (ISO 27001 Klausul A.8.15 & A.8.28)
+        if ($employee->attendanceRecords()->exists()) {
+            $msg = "Karyawan {$employee->name} memiliki riwayat presensi/audit trail dan tidak boleh dihapus demi integritas data & kepatuhan ISO 27001. Silakan gunakan fitur Nonaktifkan Akun (De-provisioning).";
+            if (request()->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $msg,
+                ], 422);
+            }
+
+            return redirect()->back()->with('error', $msg);
+        }
+
         $name = $employee->name;
         $employee->delete();
 
@@ -329,6 +378,10 @@ class AdminEmployeeController extends Controller
      */
     public function verifikasiIndex(Request $request): View
     {
+        $adminUser = Auth::user();
+        $isBranchAdmin = $adminUser && method_exists($adminUser, 'isBranchAdmin') && $adminUser->isBranchAdmin();
+        $assignedBranchId = $isBranchAdmin ? $adminUser->assigned_branch_id : null;
+
         $pendingRegistrations = EmployeeRegistration::where('status', 'pending')
             ->orderBy('id', 'desc')
             ->get();
@@ -339,7 +392,11 @@ class AdminEmployeeController extends Controller
             ->limit(30)
             ->get();
 
-        $branches = Branch::where('is_active', true)->orderBy('name', 'asc')->get();
+        $branchesQuery = Branch::where('is_active', true);
+        if ($assignedBranchId) {
+            $branchesQuery->where('id', $assignedBranchId);
+        }
+        $branches = $branchesQuery->orderBy('name', 'asc')->get();
 
         return view('admin.karyawan.verifikasi', compact(
             'pendingRegistrations',
@@ -369,8 +426,16 @@ class AdminEmployeeController extends Controller
             'role.required' => 'Silakan tentukan peran / role karyawan.',
         ]);
 
-        // Cek anti self-approval (Prinsip SoD)
         $adminUser = Auth::user();
+
+        // Cek batasan hak akses Branch Admin (Least Privilege)
+        if ($adminUser && method_exists($adminUser, 'isBranchAdmin') && $adminUser->isBranchAdmin() && $adminUser->assigned_branch_id) {
+            if ((int) $validated['branch_id'] !== (int) $adminUser->assigned_branch_id) {
+                return back()->with('error', 'Pelanggaran Hak Akses (Least Privilege): Branch Admin hanya dapat menempatkan karyawan pada cabang yang ditugaskan.');
+            }
+        }
+
+        // Cek anti self-approval (Prinsip SoD)
         if ($adminUser && (
             strtolower((string) ($adminUser->email ?? '')) === strtolower($registration->username) ||
             strtolower((string) ($adminUser->name ?? '')) === strtolower($registration->full_name) ||
@@ -508,9 +573,15 @@ class AdminEmployeeController extends Controller
      */
     public function accessReviewIndex(Request $request): View
     {
+        $adminUser = Auth::user();
+        $isBranchAdmin = $adminUser && method_exists($adminUser, 'isBranchAdmin') && $adminUser->isBranchAdmin();
+        $assignedBranchId = $isBranchAdmin ? $adminUser->assigned_branch_id : null;
+
         $query = Employee::with(['branch', 'deactivator'])->orderBy('is_active', 'desc')->orderBy('name', 'asc');
 
-        if ($request->filled('branch_id') && $request->input('branch_id') !== 'all') {
+        if ($assignedBranchId) {
+            $query->where('branch_id', $assignedBranchId);
+        } elseif ($request->filled('branch_id') && $request->input('branch_id') !== 'all') {
             $query->where('branch_id', (int) $request->input('branch_id'));
         }
 
@@ -534,14 +605,24 @@ class AdminEmployeeController extends Controller
         }
 
         $employees = $query->paginate(20)->withQueryString();
-        $branches = Branch::where('is_active', true)->orderBy('name')->get();
 
-        // Metrik Kepatuhan ISO 27001 Klausul A.8.5
-        $totalAccounts = Employee::count();
-        $activeAccounts = Employee::where('is_active', true)->count();
-        $deprovisionedAccounts = Employee::where('is_active', false)->count();
-        $privilegedAccounts = Employee::whereIn('role', [EmployeeRole::SUPERVISOR, EmployeeRole::OTORISATOR])->count();
-        $reviewedThisPeriod = Employee::whereNotNull('last_access_review_at')
+        $branchesQuery = Branch::where('is_active', true);
+        if ($assignedBranchId) {
+            $branchesQuery->where('id', $assignedBranchId);
+        }
+        $branches = $branchesQuery->orderBy('name')->get();
+
+        // Metrik Kepatuhan ISO 27001 Klausul A.8.5 (scoped to branch if BranchAdmin)
+        $metricQuery = Employee::query();
+        if ($assignedBranchId) {
+            $metricQuery->where('branch_id', $assignedBranchId);
+        }
+
+        $totalAccounts = (clone $metricQuery)->count();
+        $activeAccounts = (clone $metricQuery)->where('is_active', true)->count();
+        $deprovisionedAccounts = (clone $metricQuery)->where('is_active', false)->count();
+        $privilegedAccounts = (clone $metricQuery)->whereIn('role', [EmployeeRole::SUPERVISOR, EmployeeRole::OTORISATOR])->count();
+        $reviewedThisPeriod = (clone $metricQuery)->whereNotNull('last_access_review_at')
             ->where('last_access_review_at', '>=', now()->subDays(90))
             ->count();
         $unreviewedAccounts = max(0, $totalAccounts - $reviewedThisPeriod);
@@ -615,11 +696,20 @@ class AdminEmployeeController extends Controller
      */
     public function exportAccessReviewCsv(Request $request): StreamedResponse
     {
+        $adminUser = Auth::user();
+        $isBranchAdmin = $adminUser && method_exists($adminUser, 'isBranchAdmin') && $adminUser->isBranchAdmin();
+        $assignedBranchId = $isBranchAdmin ? $adminUser->assigned_branch_id : null;
+
         $date = Carbon::now()->toDateString();
-        $employees = Employee::with(['branch', 'deactivator'])
+        $query = Employee::with(['branch', 'deactivator'])
             ->orderBy('is_active', 'desc')
-            ->orderBy('name', 'asc')
-            ->get();
+            ->orderBy('name', 'asc');
+
+        if ($assignedBranchId) {
+            $query->where('branch_id', $assignedBranchId);
+        }
+
+        $employees = $query->get();
 
         $filename = sprintf('berita-acara-audit-akses-pengguna-%s.csv', $date);
 

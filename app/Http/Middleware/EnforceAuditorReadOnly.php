@@ -25,6 +25,11 @@ class EnforceAuditorReadOnly
         $user = $request->user();
 
         if ($user && method_exists($user, 'isAuditor') && $user->isAuditor()) {
+            // Selalu izinkan logout untuk akun auditor
+            if ($request->is('logout', '*/logout') || $request->routeIs('logout', '*.logout')) {
+                return $next($request);
+            }
+
             $method = strtoupper($request->method());
             if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
                 if ($request->expectsJson() || $request->is('api/*')) {

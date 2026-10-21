@@ -67,9 +67,31 @@
 
 {{-- 10. KARYAWAN --}}
 <a href="{{ route('admin.karyawan') }}" 
-   class="subnav-item {{ (request()->routeIs('admin.karyawan*') || request()->is('*admin/karyawan*')) && !request()->is('*profile*') && request('tab') != 'tab-profil' ? 'active' : '' }}" 
-   title="Kelola Karyawan">
+   class="subnav-item {{ request()->routeIs('admin.karyawan') ? 'active' : '' }}" 
+   title="Kelola Master Karyawan">
     👤 karyawan
+</a>
+
+{{-- 10b. VERIFIKASI PENDAFTARAN --}}
+@php
+    $subnavPendingCount = \App\Models\EmployeeRegistration::where('status', 'pending')->count();
+@endphp
+<a href="{{ route('admin.karyawan.verifikasi') }}" 
+   class="subnav-item {{ request()->routeIs('admin.karyawan.verifikasi*') ? 'active' : '' }}" 
+   title="Verifikasi Calon Karyawan (Maker-Checker & SoD)">
+    🛡️ verifikasi
+    @if($subnavPendingCount > 0)
+        <span style="background: #ef4444; color: #fff; font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 999px; margin-left: 3px;">
+            {{ $subnavPendingCount }}
+        </span>
+    @endif
+</a>
+
+{{-- 10c. REVIEW HAK AKSES ISO 27001 --}}
+<a href="{{ route('admin.karyawan.access-review') }}" 
+   class="subnav-item {{ request()->routeIs('admin.karyawan.access-review*') ? 'active' : '' }}" 
+   title="Tinjauan Hak Akses Pengguna & De-provisioning (ISO 27001 Klausul A.8.5)">
+    🔒 review akses
 </a>
 
 {{-- 11. PROFILE --}}

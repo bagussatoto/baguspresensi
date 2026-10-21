@@ -27,6 +27,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\Employee;
@@ -43,8 +44,12 @@ class AdminAttendanceController extends Controller
      */
     public function index(Request $request): View
     {
+        $adminUser = $request->user();
+        $isBranchAdmin = $adminUser && method_exists($adminUser, 'isBranchAdmin') && $adminUser->isBranchAdmin();
+        $assignedBranchId = $isBranchAdmin ? $adminUser->assigned_branch_id : null;
+
         $selectedDate = $request->input('date', Carbon::today()->toDateString());
-        $selectedBranch = $request->input('branch_id', 'all');
+        $selectedBranch = $assignedBranchId ? (string) $assignedBranchId : $request->input('branch_id', 'all');
         $selectedShift = $request->input('shift_id', 'all');
         $selectedStatus = $request->input('status', 'all');
         $search = trim((string) $request->input('q', ''));
@@ -88,7 +93,11 @@ class AdminAttendanceController extends Controller
         $pendingLeaves = LeaveRequest::where('status', ApprovalStatus::Pending->value)->count();
         $pendingOvertimes = OvertimeClaim::where('status', ApprovalStatus::Pending->value)->count();
 
-        $branches = Branch::orderBy('name', 'asc')->get();
+        if ($assignedBranchId) {
+            $branches = Branch::where('id', $assignedBranchId)->get();
+        } else {
+            $branches = Branch::orderBy('name', 'asc')->get();
+        }
         $shifts = Shift::where('is_active', true)->orderBy('start_time', 'asc')->get();
 
         $employeeIds = $records->pluck('employee_id')->filter()->unique();
@@ -176,8 +185,12 @@ class AdminAttendanceController extends Controller
      */
     public function exportDailyAuditCsv(Request $request): StreamedResponse
     {
+        $adminUser = $request->user();
+        $isBranchAdmin = $adminUser && method_exists($adminUser, 'isBranchAdmin') && $adminUser->isBranchAdmin();
+        $assignedBranchId = $isBranchAdmin ? $adminUser->assigned_branch_id : null;
+
         $selectedDate = $request->input('date', Carbon::today()->toDateString());
-        $selectedBranch = $request->input('branch_id', 'all');
+        $selectedBranch = $assignedBranchId ? (string) $assignedBranchId : $request->input('branch_id', 'all');
         $selectedShift = $request->input('shift_id', 'all');
         $selectedStatus = $request->input('status', 'all');
         $search = trim((string) $request->input('q', ''));
@@ -305,9 +318,13 @@ class AdminAttendanceController extends Controller
      */
     public function rekap(Request $request): View|StreamedResponse
     {
+        $adminUser = $request->user();
+        $isBranchAdmin = $adminUser && method_exists($adminUser, 'isBranchAdmin') && $adminUser->isBranchAdmin();
+        $assignedBranchId = $isBranchAdmin ? $adminUser->assigned_branch_id : null;
+
         $selectedMonth = (int) $request->input('month', date('n'));
         $selectedYear = (int) $request->input('year', date('Y'));
-        $selectedBranch = $request->input('branch_id', 'all');
+        $selectedBranch = $assignedBranchId ? (string) $assignedBranchId : $request->input('branch_id', 'all');
 
         $employeeQuery = Employee::with('branch')->where('is_active', true);
         if ($selectedBranch !== 'all' && $selectedBranch !== '') {
@@ -482,6 +499,8 @@ class AdminAttendanceController extends Controller
      */
     public function approveLeave(Request $request, LeaveRequest $leave): RedirectResponse
     {
+        $this->ensureBranchAuthorized($leave->employee?->branch_id, 'menyetujui cuti karyawan');
+
         $leave->update([
             'status' => ApprovalStatus::Approved,
             'approved_at' => Carbon::now(),
@@ -496,6 +515,8 @@ class AdminAttendanceController extends Controller
      */
     public function rejectLeave(Request $request, LeaveRequest $leave): RedirectResponse
     {
+        $this->ensureBranchAuthorized($leave->employee?->branch_id, 'menolak cuti karyawan');
+
         $mandatoryNote = (bool) app(AttendanceSettingService::class)
             ->get('attendance.approval.rejection_note_mandatory', true);
 
@@ -520,6 +541,8 @@ class AdminAttendanceController extends Controller
      */
     public function approveOvertime(Request $request, OvertimeClaim $overtime): RedirectResponse
     {
+        $this->ensureBranchAuthorized($overtime->employee?->branch_id, 'menyetujui klaim lembur');
+
         $approvedMinutes = $request->filled('approved_minutes')
             ? (int) $request->input('approved_minutes')
             : (int) $overtime->requested_minutes;
@@ -539,6 +562,8 @@ class AdminAttendanceController extends Controller
      */
     public function rejectOvertime(Request $request, OvertimeClaim $overtime): RedirectResponse
     {
+        $this->ensureBranchAuthorized($overtime->employee?->branch_id, 'menolak klaim lembur');
+
         $note = $request->input('rejection_note', 'Aktivitas di luar lingkup lembur yang disetujui.');
 
         $overtime->update([
@@ -559,6 +584,9 @@ class AdminAttendanceController extends Controller
         AttendanceCorrection $correction,
         ApproveAttendanceCorrectionAction $action
     ): RedirectResponse {
+        $branchId = $correction->record?->branch_id ?? $correction->employee?->branch_id;
+        $this->ensureBranchAuthorized($branchId, 'menyetujui koreksi presensi');
+
         $approverId = (int) ($request->user()?->id ?? 1);
         $action->execute($correction, $approverId);
 
@@ -573,6 +601,9 @@ class AdminAttendanceController extends Controller
         AttendanceCorrection $correction,
         RejectAttendanceCorrectionAction $action
     ): RedirectResponse {
+        $branchId = $correction->record?->branch_id ?? $correction->employee?->branch_id;
+        $this->ensureBranchAuthorized($branchId, 'menolak koreksi presensi');
+
         $note = $request->input('rejection_note', 'Alasan atau bukti permohonan koreksi tidak memenuhi kualifikasi.');
         $approverId = (int) ($request->user()?->id ?? 1);
         $action->execute($correction, $approverId, $note);
@@ -588,6 +619,9 @@ class AdminAttendanceController extends Controller
         ShiftSwapRequest $swap,
         ApproveShiftSwapSupervisorAction $action
     ): RedirectResponse {
+        $branchId = $swap->requester?->branch_id ?? $swap->target?->branch_id;
+        $this->ensureBranchAuthorized($branchId, 'menyetujui permohonan tukar shift');
+
         $approverId = (int) ($request->user()?->id ?? 1);
         $action->execute($swap, $approverId);
 
@@ -602,6 +636,9 @@ class AdminAttendanceController extends Controller
         ShiftSwapRequest $swap,
         RejectShiftSwapSupervisorAction $action
     ): RedirectResponse {
+        $branchId = $swap->requester?->branch_id ?? $swap->target?->branch_id;
+        $this->ensureBranchAuthorized($branchId, 'menolak permohonan tukar shift');
+
         $note = $request->input('rejection_note', 'Kebutuhan operasional atau penjadwalan tidak memungkinkan tukar shift.');
         $approverId = (int) ($request->user()?->id ?? 1);
         $action->execute($swap, $approverId, $note);
@@ -614,6 +651,8 @@ class AdminAttendanceController extends Controller
      */
     public function approveRecordOvertime(Request $request, AttendanceRecord $record, AuditLogService $auditLogService): RedirectResponse
     {
+        $this->ensureBranchAuthorized($record->branch_id, 'menyetujui lembur presensi');
+
         $approvedMinutes = $request->filled('approved_minutes')
             ? (int) $request->input('approved_minutes')
             : (int) ($record->overtime_requested_minutes ?: 60);
@@ -660,6 +699,8 @@ class AdminAttendanceController extends Controller
      */
     public function rejectRecordOvertime(Request $request, AttendanceRecord $record, AuditLogService $auditLogService): RedirectResponse
     {
+        $this->ensureBranchAuthorized($record->branch_id, 'menolak lembur presensi');
+
         $note = $request->input('rejection_note', 'Tidak memenuhi syarat lembur.');
 
         $record->update([
@@ -690,6 +731,8 @@ class AdminAttendanceController extends Controller
      */
     public function approveRecordEarlyLeave(Request $request, AttendanceRecord $record, AuditLogService $auditLogService): RedirectResponse
     {
+        $this->ensureBranchAuthorized($record->branch_id, 'menyetujui izin pulang awal');
+
         $record->update([
             'early_leave_approved' => true,
         ]);
@@ -726,6 +769,7 @@ class AdminAttendanceController extends Controller
 
         $employee = Employee::findOrFail($validated['employee_id']);
         $branchId = $employee->branch_id ?? Branch::first()?->id ?? 1;
+        $this->ensureBranchAuthorized($branchId, 'menambah jam kerja karyawan');
 
         $workDate = Carbon::parse($validated['work_date'])->toDateString();
         $clockInAt = Carbon::parse($workDate.' '.$validated['clock_in_time']);
@@ -796,6 +840,8 @@ class AdminAttendanceController extends Controller
      */
     public function updateWorkHours(Request $request, AttendanceRecord $record, AuditLogService $auditLogService): RedirectResponse|JsonResponse
     {
+        $this->ensureBranchAuthorized($record->branch_id, 'memperbarui jam kerja');
+
         $validated = $request->validate([
             'employee_id' => ['required', 'exists:employees,id'],
             'shift_id' => ['nullable', 'exists:shifts,id'],
@@ -881,6 +927,8 @@ class AdminAttendanceController extends Controller
      */
     public function destroyWorkHours(Request $request, AttendanceRecord $record, AuditLogService $auditLogService): RedirectResponse|JsonResponse
     {
+        $this->ensureBranchAuthorized($record->branch_id, 'menghapus jam kerja');
+
         $employeeName = $record->employee?->name ?? 'Karyawan';
         $workDate = $record->work_date ? Carbon::parse($record->work_date)->format('d/m/Y') : '';
 
@@ -1062,5 +1110,18 @@ class AdminAttendanceController extends Controller
         $redirectTo = $request->input('redirect_to', route('admin.index').'?tab=tab-presensi#data-presensi');
 
         return redirect($redirectTo)->with('success', "Data kegiatan '{$title}' berhasil dihapus.");
+    }
+
+    /**
+     * Pastikan Branch Admin hanya mengakses entitas pada cabangnya sendiri (SoD & Least Privilege).
+     */
+    private function ensureBranchAuthorized(?int $branchId, string $actionMessage = 'melakukan tindakan ini'): void
+    {
+        $adminUser = Auth::user();
+        if ($adminUser && method_exists($adminUser, 'isBranchAdmin') && $adminUser->isBranchAdmin() && $adminUser->assigned_branch_id) {
+            if ($branchId !== null && (int) $branchId !== (int) $adminUser->assigned_branch_id) {
+                abort(403, "Akses Ditolak (SoD): Anda tidak memiliki wewenang {$actionMessage} untuk cabang lain.");
+            }
+        }
     }
 }
