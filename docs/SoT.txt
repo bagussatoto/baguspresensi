@@ -2,7 +2,7 @@ SoT dari aplikasi presensi -> docs/sot_aplikasi_presensi.mc (Selesai 100%)
 SoT pendaftaran mandiri -> docs/percakapan_sod_sot_iso_maker_checker.mc (Selesai 100%)
 
 
-SoD dari aplikasi presensi 
+SoD dari aplikasi presensi -> docs/sod_aplikasi_presensi.mc (Selesai 100%) 
 SoD pendaftaran mandiri
 
 ISO 27000 dari aplikasi presensi 
