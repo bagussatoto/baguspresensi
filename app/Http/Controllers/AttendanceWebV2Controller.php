@@ -67,7 +67,19 @@ class AttendanceWebV2Controller extends Controller
             return null;
         }
 
-        return Employee::with('branch')->where('is_active', true)->find($employeeId);
+        $employee = Employee::with('branch')->where('is_active', true)->find($employeeId);
+        if (! $employee) {
+            session()->forget([
+                'presensi2_employee_id',
+                'presensi2_employee_name',
+                'presensi2_branch_id',
+                'presensi2_employee_role',
+            ]);
+
+            return null;
+        }
+
+        return $employee;
     }
 
     /**
@@ -80,7 +92,19 @@ class AttendanceWebV2Controller extends Controller
             return null;
         }
 
-        return Employee::with('branch')->where('is_active', true)->find($employeeId);
+        $employee = Employee::with('branch')->where('is_active', true)->find($employeeId);
+        if (! $employee) {
+            session()->forget([
+                'presensi2_layanan_employee_id',
+                'presensi2_layanan_employee_name',
+                'presensi2_layanan_branch_id',
+                'presensi2_layanan_role',
+            ]);
+
+            return null;
+        }
+
+        return $employee;
     }
 
     /**
@@ -428,6 +452,7 @@ class AttendanceWebV2Controller extends Controller
         }
 
         session(['presensi2_employee_id' => $employee->id]);
+        $employee->update(['last_login_at' => now()]);
 
         // Catat log login ke database
         rescue(fn () => AuditLog::create([
@@ -1311,6 +1336,11 @@ class AttendanceWebV2Controller extends Controller
                 ->latest('id')
                 ->first();
 
+        if (! $attendanceToday || ! $attendanceToday->clock_in_at) {
+            return redirect()->route('presensi2.index')
+                ->with('error', 'Presensi dulu! Silakan lakukan presensi masuk terlebih dahulu sebelum mengakses sistem kasir POS.');
+        }
+
         // 1. Daftar Penjualan Makanan dan Minuman Hari Ini
         $fnbSales = CafeSale::with(['items.variant', 'employee'])
             ->where('total_fnb', '>', 0)
@@ -1452,6 +1482,31 @@ class AttendanceWebV2Controller extends Controller
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
             return redirect()->route('presensi2.login');
+        }
+
+        $now = Carbon::now();
+        $activeShift = $this->shiftResolverService->resolveShift(null, $now);
+        $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
+
+        $attendanceToday = AttendanceRecord::where('employee_id', $employee->id)
+            ->where(function ($q) use ($workDate): void {
+                $q->whereNull('clock_out_at')
+                    ->orWhere('work_date', $workDate->toDateString());
+            })
+            ->whereNotNull('clock_in_at')
+            ->latest('id')
+            ->first();
+
+        if (! $attendanceToday) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Presensi dulu! Anda wajib Clock-In sebelum melakukan transaksi kasir POS.',
+                ], 403);
+            }
+
+            return redirect()->route('presensi2.index')
+                ->with('error', 'Presensi dulu! Anda wajib Clock-In sebelum melakukan transaksi kasir POS.');
         }
 
         $type = (string) $request->input('transaction_type', 'fnb');

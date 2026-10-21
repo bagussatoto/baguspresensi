@@ -293,6 +293,9 @@
                 </span>
             @endif
         </a>
+        <a href="{{ route('admin.karyawan.access-review') }}" class="header-link-btn" title="Tinjauan Hak Akses & De-provisioning (ISO 27001 Klausul A.8.5)">
+            🔒 Review Akses
+        </a>
         <form action="{{ route('logout') }}" method="POST" style="margin: 0; display: inline;">
             @csrf
             <button type="submit" class="header-link-btn" style="border: 1px solid rgba(255,255,255,0.15); cursor: pointer;" title="Logout Sesi Admin">

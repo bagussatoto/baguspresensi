@@ -80,17 +80,17 @@ Route::prefix('presensi')->name('presensi.')->group(function () {
 // Portal Presensi Karyawan v2 (Verifikasi Password / PIN 6-Digit)
 Route::prefix('presensi2')->name('presensi2.')->group(function () {
     Route::get('/login', [AttendanceWebV2Controller::class, 'showLogin'])->name('login');
-    Route::post('/login', [AttendanceWebV2Controller::class, 'login'])->name('login.post');
+    Route::post('/login', [AttendanceWebV2Controller::class, 'login'])->middleware('throttle:5,1')->name('login.post');
     Route::get('/register', [AttendanceWebV2Controller::class, 'showRegister'])->name('register');
-    Route::post('/register', [AttendanceWebV2Controller::class, 'register'])->name('register.post');
+    Route::post('/register', [AttendanceWebV2Controller::class, 'register'])->middleware('throttle:6,1')->name('register.post');
     Route::get('/lupa-password', [AttendanceWebV2Controller::class, 'showForgotPassword'])->name('forgot-password');
-    Route::post('/lupa-password', [AttendanceWebV2Controller::class, 'resetPassword'])->name('forgot-password.post');
+    Route::post('/lupa-password', [AttendanceWebV2Controller::class, 'resetPassword'])->middleware('throttle:5,1')->name('forgot-password.post');
     Route::match(['get', 'post'], '/logout', [AttendanceWebV2Controller::class, 'logout'])->name('logout');
 
     Route::get('/', [AttendanceWebV2Controller::class, 'index'])->name('index');
     Route::get('/scan', [AttendanceWebV2Controller::class, 'scan'])->name('scan');
-    Route::post('/clock-in', [AttendanceWebV2Controller::class, 'submitClockIn'])->name('clock-in');
-    Route::post('/clock-out', [AttendanceWebV2Controller::class, 'submitClockOut'])->name('clock-out');
+    Route::post('/clock-in', [AttendanceWebV2Controller::class, 'submitClockIn'])->middleware('throttle:10,1')->name('clock-in');
+    Route::post('/clock-out', [AttendanceWebV2Controller::class, 'submitClockOut'])->middleware('throttle:10,1')->name('clock-out');
     Route::get('/riwayat', [AttendanceWebV2Controller::class, 'riwayat'])->name('riwayat');
 
     // Halaman Stok Barang (Checklist Serah Terima Shift)
@@ -151,13 +151,13 @@ Route::get('/bagus/presensi2/rekap', [AttendanceWebV2Controller::class, 'rekapIn
 
 // Alias URL alternatif presensi/login2 dan register sesuai kebutuhan user
 Route::get('/presensi/login2', [AttendanceWebV2Controller::class, 'showLogin']);
-Route::post('/presensi/login2', [AttendanceWebV2Controller::class, 'login']);
+Route::post('/presensi/login2', [AttendanceWebV2Controller::class, 'login'])->middleware('throttle:5,1');
 Route::get('/presensi/daftar2', [AttendanceWebV2Controller::class, 'showRegister']);
-Route::post('/presensi/daftar2', [AttendanceWebV2Controller::class, 'register']);
+Route::post('/presensi/daftar2', [AttendanceWebV2Controller::class, 'register'])->middleware('throttle:6,1');
 Route::get('/presensi/register', [AttendanceWebV2Controller::class, 'showRegister']);
-Route::post('/presensi/register', [AttendanceWebV2Controller::class, 'register']);
+Route::post('/presensi/register', [AttendanceWebV2Controller::class, 'register'])->middleware('throttle:6,1');
 Route::get('/presensi/lupa-password', [AttendanceWebV2Controller::class, 'showForgotPassword']);
-Route::post('/presensi/lupa-password', [AttendanceWebV2Controller::class, 'resetPassword']);
+Route::post('/presensi/lupa-password', [AttendanceWebV2Controller::class, 'resetPassword'])->middleware('throttle:5,1');
 
 // Alias URL alternatif untuk GC, Meeting, BO/Training, dan Ambil Stok
 Route::get('/presensi/gc', [AttendanceWebV2Controller::class, 'gcIndex']);
@@ -170,7 +170,7 @@ Route::get('/presensi/ambil-stok', [AttendanceWebV2Controller::class, 'ambilStok
 Route::post('/presensi/ambil-stok', [AttendanceWebV2Controller::class, 'ambilStokStore']);
 
 // Admin ERP Maya Graha Kencana
-Route::prefix('admin')->group(function () {
+Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function () {
     Route::get('/', [AdminDashboardController::class, 'index'])->name('admin.index');
     Route::get('/data', [AdminDashboardController::class, 'dataIndex'])->name('admin.data');
     Route::get('/distribusi', [AdminDashboardController::class, 'distribusiIndex'])->name('admin.distribusi');
@@ -242,6 +242,11 @@ Route::prefix('admin')->group(function () {
     Route::get('/karyawan-verifikasi', [AdminEmployeeController::class, 'verifikasiIndex'])->name('admin.karyawan.verifikasi');
     Route::post('/karyawan-verifikasi/{registration}/approve', [AdminEmployeeController::class, 'approveRegistration'])->name('admin.karyawan.verifikasi.approve');
     Route::post('/karyawan-verifikasi/{registration}/reject', [AdminEmployeeController::class, 'rejectRegistration'])->name('admin.karyawan.verifikasi.reject');
+
+    // Tinjauan Hak Akses Pengguna & De-provisioning (ISO/IEC 27001:2022 Klausul A.8.5)
+    Route::get('/karyawan-access-review', [AdminEmployeeController::class, 'accessReviewIndex'])->name('admin.karyawan.access-review');
+    Route::post('/karyawan-access-review/sign-off', [AdminEmployeeController::class, 'signOffAccessReview'])->name('admin.karyawan.access-review.sign-off');
+    Route::get('/karyawan-access-review/export', [AdminEmployeeController::class, 'exportAccessReviewCsv'])->name('admin.karyawan.access-review.export');
 
     // Penjualan & POS Kasir ERP
     Route::get('/penjualan', [AdminSaleController::class, 'index'])->name('admin.penjualan');

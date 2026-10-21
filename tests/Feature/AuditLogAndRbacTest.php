@@ -169,4 +169,22 @@ class AuditLogAndRbacTest extends TestCase
         $this->assertNotNull($this->branchAdmin->assignedBranch);
         $this->assertSame('Maya Graha Surabaya', $this->branchAdmin->assignedBranch->name);
     }
+
+    public function test_auditor_can_view_read_only_pages(): void
+    {
+        $response = $this->actingAs($this->auditor)->get(route('admin.presensi.audit-logs'));
+        $response->assertOk();
+    }
+
+    public function test_auditor_is_blocked_with_403_from_mutating_data(): void
+    {
+        $response = $this->actingAs($this->auditor)->post(route('admin.karyawan.store'), [
+            'name' => 'Fictitious Employee',
+            'branch_id' => $this->branch1->id,
+            'role' => 'kasir',
+        ]);
+
+        $response->assertForbidden();
+    }
 }
+

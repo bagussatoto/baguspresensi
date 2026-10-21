@@ -38,6 +38,11 @@ class Employee extends Authenticatable
         'password',
         'pin',
         'is_active',
+        'deactivated_at',
+        'deactivated_by',
+        'deactivation_reason',
+        'last_access_review_at',
+        'last_login_at',
         'default_work_type',
         'default_contract_hours',
         'default_cost_center',
@@ -52,8 +57,26 @@ class Employee extends Authenticatable
         'role' => EmployeeRole::class,
         'max_discount_approval_percent' => 'float',
         'is_active' => 'boolean',
+        'deactivated_at' => 'datetime',
+        'last_access_review_at' => 'datetime',
+        'last_login_at' => 'datetime',
         'access_rights' => 'array',
     ];
+
+    public function deactivator(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\User::class, 'deactivated_by');
+    }
+
+    public function isDeactivated(): bool
+    {
+        return ! $this->is_active;
+    }
+
+    public function isPrivileged(): bool
+    {
+        return in_array($this->role, [EmployeeRole::SUPERVISOR, EmployeeRole::OTORISATOR], true);
+    }
 
     public function branch(): BelongsTo
     {

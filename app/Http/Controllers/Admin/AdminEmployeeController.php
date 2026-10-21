@@ -7,8 +7,10 @@ namespace App\Http\Controllers\Admin;
 use App\Domains\Attendance\Enums\ApprovalStatus;
 use App\Domains\Attendance\Enums\AttendanceStatus;
 use App\Domains\Attendance\Models\AuditLog;
+use App\Domains\Attendance\Services\AuditLogService;
 use App\Http\Controllers\Controller;
 use App\Models\EmployeeRegistration;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,6 +20,7 @@ use Illuminate\View\View;
 use Modules\MasterData\Domain\Enums\EmployeeRole;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\Employee;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Controller Admin ERP Maya Graha Kencana: Pengaturan Karyawan & Hak Akses.
@@ -233,23 +236,70 @@ class AdminEmployeeController extends Controller
     }
 
     /**
-     * Toggle status aktif/non-aktif karyawan.
+     * Toggle status aktif/non-aktif karyawan (Instant De-provisioning ISO 27001 Klausul A.8.5).
      */
-    public function toggleStatus(Employee $employee): JsonResponse|RedirectResponse
+    public function toggleStatus(Request $request, Employee $employee, AuditLogService $auditLogService): JsonResponse|RedirectResponse
     {
-        $employee->update([
-            'is_active' => ! $employee->is_active,
-        ]);
+        $adminUser = Auth::user();
+        $isDeactivating = $employee->is_active;
+        $reason = $request->input('reason')
+            ?: $request->input('deactivation_reason')
+            ?: ($isDeactivating ? 'Dinonaktifkan oleh Administrator' : 'Diaktifkan kembali oleh Administrator');
 
-        if (request()->wantsJson()) {
+        if ($isDeactivating) {
+            $employee->update([
+                'is_active' => false,
+                'deactivated_at' => now(),
+                'deactivated_by' => $adminUser?->id,
+                'deactivation_reason' => $reason,
+            ]);
+
+            $auditLogService->log(
+                action: 'employee_deprovisioned',
+                auditable: $employee,
+                oldValues: ['is_active' => true],
+                newValues: [
+                    'is_active' => false,
+                    'deactivated_at' => now()->toIso8601String(),
+                    'deactivated_by' => $adminUser?->id,
+                    'deactivation_reason' => $reason,
+                ],
+                userId: $adminUser?->id
+            );
+        } else {
+            $employee->update([
+                'is_active' => true,
+                'deactivated_at' => null,
+                'deactivated_by' => null,
+                'deactivation_reason' => null,
+            ]);
+
+            $auditLogService->log(
+                action: 'employee_reactivated',
+                auditable: $employee,
+                oldValues: ['is_active' => false],
+                newValues: [
+                    'is_active' => true,
+                    'reactivated_at' => now()->toIso8601String(),
+                    'reactivated_by' => $adminUser?->id,
+                ],
+                userId: $adminUser?->id
+            );
+        }
+
+        $message = "Status {$employee->name} berhasil diubah menjadi ".($employee->is_active ? 'Aktif' : 'Non-Aktif (Akses Dicabut)');
+
+        if ($request->wantsJson()) {
             return response()->json([
                 'success' => true,
-                'message' => "Status {$employee->name} berhasil diubah menjadi ".($employee->is_active ? 'Aktif' : 'Non-Aktif'),
+                'message' => $message,
                 'is_active' => $employee->is_active,
+                'deactivated_at' => $employee->deactivated_at?->toDateTimeString(),
+                'deactivation_reason' => $employee->deactivation_reason,
             ]);
         }
 
-        return redirect()->route('admin.karyawan');
+        return redirect()->back()->with('success', $message);
     }
 
     /**
@@ -451,5 +501,176 @@ class AdminEmployeeController extends Controller
 
         return redirect()->route('admin.karyawan.verifikasi')
             ->with('info', "Permohonan pendaftaran {$registration->full_name} telah ditolak.");
+    }
+
+    /**
+     * Tampilkan Matriks Tinjauan Hak Akses Pengguna (Periodic Access Rights Review - ISO 27001 Klausul A.8.5).
+     */
+    public function accessReviewIndex(Request $request): View
+    {
+        $query = Employee::with(['branch', 'deactivator'])->orderBy('is_active', 'desc')->orderBy('name', 'asc');
+
+        if ($request->filled('branch_id') && $request->input('branch_id') !== 'all') {
+            $query->where('branch_id', (int) $request->input('branch_id'));
+        }
+
+        if ($request->filled('role') && $request->input('role') !== 'all') {
+            $query->where('role', $request->input('role'));
+        }
+
+        if ($request->filled('status') && $request->input('status') !== 'all') {
+            $isActive = $request->input('status') === 'active';
+            $query->where('is_active', $isActive);
+        }
+
+        if ($request->filled('q')) {
+            $search = '%'.trim((string) $request->input('q')).'%';
+            $query->where(function ($q) use ($search): void {
+                $q->where('name', 'ilike', $search)
+                    ->orWhere('code', 'ilike', $search)
+                    ->orWhere('username', 'ilike', $search)
+                    ->orWhere('phone', 'ilike', $search);
+            });
+        }
+
+        $employees = $query->paginate(20)->withQueryString();
+        $branches = Branch::where('is_active', true)->orderBy('name')->get();
+
+        // Metrik Kepatuhan ISO 27001 Klausul A.8.5
+        $totalAccounts = Employee::count();
+        $activeAccounts = Employee::where('is_active', true)->count();
+        $deprovisionedAccounts = Employee::where('is_active', false)->count();
+        $privilegedAccounts = Employee::whereIn('role', [EmployeeRole::SUPERVISOR, EmployeeRole::OTORISATOR])->count();
+        $reviewedThisPeriod = Employee::whereNotNull('last_access_review_at')
+            ->where('last_access_review_at', '>=', now()->subDays(90))
+            ->count();
+        $unreviewedAccounts = max(0, $totalAccounts - $reviewedThisPeriod);
+
+        $lastSignOffLog = AuditLog::where('action', 'access_rights_periodic_review')
+            ->latest('id')
+            ->first();
+
+        return view('admin.karyawan.access_review', compact(
+            'employees',
+            'branches',
+            'totalAccounts',
+            'activeAccounts',
+            'deprovisionedAccounts',
+            'privilegedAccounts',
+            'reviewedThisPeriod',
+            'unreviewedAccounts',
+            'lastSignOffLog'
+        ));
+    }
+
+    /**
+     * Sahkan Tinjauan Hak Akses Berkala (Sign-Off Berita Acara Review Akses).
+     */
+    public function signOffAccessReview(Request $request, AuditLogService $auditLogService): RedirectResponse|JsonResponse
+    {
+        $adminUser = Auth::user();
+        $notes = $request->input('notes', 'Tinjauan berkala hak akses pengguna ISO 27001 telah diverifikasi dan disetujui.');
+
+        $selectedIds = $request->input('employee_ids');
+        $query = Employee::query();
+        if (! empty($selectedIds) && is_array($selectedIds)) {
+            $query->whereIn('id', $selectedIds);
+        }
+
+        $count = $query->count();
+        $query->update([
+            'last_access_review_at' => now(),
+        ]);
+
+        $auditLogService->log(
+            action: 'access_rights_periodic_review',
+            auditable: null,
+            oldValues: null,
+            newValues: [
+                'total_accounts_reviewed' => $count,
+                'reviewer_id' => $adminUser?->id,
+                'reviewer_name' => $adminUser?->name,
+                'review_notes' => $notes,
+                'reviewed_at' => now()->toIso8601String(),
+                'iso_clause' => 'ISO/IEC 27001:2022 Klausul A.8.5',
+            ],
+            userId: $adminUser?->id
+        );
+
+        $msg = "Berita Acara Tinjauan Hak Akses Pengguna ({$count} akun) berhasil disahkan & dicatat ke Jejak Audit ISO 27001.";
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $msg,
+                'reviewed_count' => $count,
+            ]);
+        }
+
+        return redirect()->back()->with('success', $msg);
+    }
+
+    /**
+     * Unduh Laporan Berita Acara Tinjauan Hak Akses Pengguna (CSV).
+     */
+    public function exportAccessReviewCsv(Request $request): StreamedResponse
+    {
+        $date = Carbon::now()->toDateString();
+        $employees = Employee::with(['branch', 'deactivator'])
+            ->orderBy('is_active', 'desc')
+            ->orderBy('name', 'asc')
+            ->get();
+
+        $filename = sprintf('berita-acara-audit-akses-pengguna-%s.csv', $date);
+
+        return response()->stream(function () use ($employees, $date): void {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, [
+                'BERITA ACARA TINJAUAN HAK AKSES PENGGUNA (PERIODIC ACCESS RIGHTS REVIEW)',
+                'STANDAR REGULASI: ISO/IEC 27001:2022 KLAUSUL A.8.5',
+                'TANGGAL AUDIT: '.$date,
+            ]);
+            fputcsv($handle, []);
+            fputcsv($handle, [
+                'No',
+                'NIK / Kode',
+                'Nama Karyawan',
+                'Username',
+                'Cabang',
+                'Peran / Role',
+                'Jabatan',
+                'Batas Diskon POS (%)',
+                'Status Akun',
+                'Wewenang Khusus (Privileged)',
+                'Tanggal Penonaktifan',
+                'Alasan Penonaktifan',
+                'Login Terakhir',
+                'Tinjauan Akses Terakhir',
+            ]);
+
+            foreach ($employees as $idx => $emp) {
+                fputcsv($handle, [
+                    $idx + 1,
+                    $emp->code,
+                    $emp->name,
+                    $emp->username ?? '-',
+                    $emp->branch?->name ?? 'Semua Cabang',
+                    $emp->role?->value ?? (string) $emp->role,
+                    $emp->position ?? $emp->jabatan ?? 'Staff',
+                    number_format((float) $emp->max_discount_approval_percent, 1).'%',
+                    $emp->is_active ? 'AKTIF' : 'NON-AKTIF (DE-PROVISIONED)',
+                    $emp->isPrivileged() ? 'YA (SUPERVISOR/OTORISATOR)' : 'TIDAK (REGULER)',
+                    $emp->deactivated_at ? $emp->deactivated_at->toDateTimeString() : '-',
+                    $emp->deactivation_reason ?? '-',
+                    $emp->last_login_at ? $emp->last_login_at->toDateTimeString() : 'Belum Pernah',
+                    $emp->last_access_review_at ? $emp->last_access_review_at->toDateTimeString() : 'Belum Ditinjau',
+                ]);
+            }
+
+            fclose($handle);
+        }, 200, [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ]);
     }
 }
