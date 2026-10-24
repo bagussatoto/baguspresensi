@@ -834,10 +834,10 @@
 
         <div class="sidebar-user">
             <div class="user-avatar-circle">
-                {{ substr($profileData['name'] ?? 'Admin', 0, 1) }}
+                {{ substr($profileData['name'] ?? 'Bagus Satoto', 0, 1) }}
             </div>
             <div>
-                <div class="user-meta-name">{{ $profileData['name'] ?? 'Admin Manager' }}</div>
+                <div class="user-meta-name">{{ $profileData['name'] ?? 'Bagus Satoto' }}</div>
                 <div class="user-meta-badge">
                     <span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
                     {{ $profileData['role'] ?? 'Manager' }} &bull; Online
@@ -866,8 +866,9 @@
                         </span>
                         <span style="font-size: 11px;">▾</span>
                     </a>
-                    <ul class="nav-sub-list" id="data-submenu" style="{{ request()->routeIs('admin.data') ? 'display: flex;' : 'display: none;' }}">
+                    <ul class="nav-sub-list" id="data-submenu" style="{{ request()->routeIs('admin.data') || request()->routeIs('admin.karyawan.verifikasi') ? 'display: flex;' : 'display: none;' }}">
                         <li><a href="{{ route('admin.data', ['tab' => 'tab-profil']) }}" class="nav-sub-link {{ request('tab') == 'tab-profil' || (!request('tab') && request()->routeIs('admin.data')) ? 'active' : '' }}"><span>👤</span> Profil & Karyawan</a></li>
+                        <li><a href="{{ route('admin.karyawan.verifikasi') }}" class="nav-sub-link {{ request()->routeIs('admin.karyawan.verifikasi') ? 'active' : '' }}"><span>🛡️</span> Verifikasi Pendaftaran Karyawan</a></li>
                         <li><a href="{{ route('admin.data', ['tab' => 'tab-jadwal']) }}" class="nav-sub-link {{ request('tab') == 'tab-jadwal' ? 'active' : '' }}"><span>📅</span> Jadwal Shift Karyawan</a></li>
                         <li><a href="{{ route('admin.data', ['tab' => 'tab-billing']) }}" class="nav-sub-link {{ request('tab') == 'tab-billing' ? 'active' : '' }}"><span>💰</span> Data Billing Setiap Shift</a></li>
                         <li><a href="{{ route('admin.data', ['tab' => 'tab-presensi']) }}" class="nav-sub-link {{ request('tab') == 'tab-presensi' ? 'active' : '' }}"><span>👥</span> Presensi Karyawan</a></li>

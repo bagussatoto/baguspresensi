@@ -6,6 +6,7 @@ use App\Models\EmployeeRegistration;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Modules\MasterData\Domain\Enums\EmployeeRole;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\Employee;
 use Tests\TestCase;
@@ -33,7 +34,7 @@ class EmployeeRegistrationMakerCheckerTest extends TestCase
         $response = $this->post(route('presensi2.register.post'), [
             'full_name' => 'Budi Santoso',
             'username' => 'budi_santoso',
-            'credential' => '654321',
+            'credential' => '582914',
             'phone' => '081234567890',
             'email' => 'budi@wisata.id',
         ]);
@@ -51,7 +52,7 @@ class EmployeeRegistrationMakerCheckerTest extends TestCase
 
         $registration = EmployeeRegistration::where('username', 'budi_santoso')->first();
         $this->assertNotNull($registration);
-        $this->assertTrue(Hash::check('654321', $registration->pin));
+        $this->assertTrue(Hash::check('582914', $registration->pin));
         $this->assertNull($registration->approved_by);
         $this->assertNull($registration->approved_at);
 
@@ -101,6 +102,7 @@ class EmployeeRegistrationMakerCheckerTest extends TestCase
             'username' => 'karyawan_resmi',
             'credential' => '111222',
             'phone' => '081999888777',
+            'email' => 'tiruan@mgk.id',
         ]);
 
         $response->assertRedirect(route('presensi2.register'));
@@ -112,18 +114,20 @@ class EmployeeRegistrationMakerCheckerTest extends TestCase
         EmployeeRegistration::factory()->create([
             'username' => 'antrean_pending',
             'phone' => '085566778899',
+            'email' => 'antrean@mgk.id',
             'status' => 'pending',
         ]);
 
-        $response = $this->post(route('presensi2.register.post'), [
+        $response = $this->from(route('presensi2.register'))->post(route('presensi2.register.post'), [
             'full_name' => 'Coba Daftar Lagi',
             'username' => 'antrean_pending',
             'credential' => '998877',
             'phone' => '085566778899',
+            'email' => 'antrean@mgk.id',
         ]);
 
-        $response->assertRedirect(route('presensi2.login'));
-        $response->assertSessionHas('info');
+        $response->assertRedirect(route('presensi2.register'));
+        $response->assertSessionHasErrors('username');
     }
 
     public function test_admin_can_access_verification_page_and_view_pending_queue(): void
@@ -142,6 +146,8 @@ class EmployeeRegistrationMakerCheckerTest extends TestCase
         $response->assertSee('Verifikasi Pendaftaran Mandiri Karyawan');
         $response->assertSee('Ahmad Kasir');
         $response->assertSee('ahmad_kasir');
+        $response->assertDontSee('Admin Manager');
+        $response->assertSee($admin->name);
     }
 
     public function test_admin_can_approve_pending_registration_creating_master_employee_and_audit_log(): void
@@ -250,5 +256,32 @@ class EmployeeRegistrationMakerCheckerTest extends TestCase
             'auditable_type' => EmployeeRegistration::class,
             'auditable_id' => $registration->id,
         ]);
+    }
+
+    public function test_verification_page_displays_manager_name_and_never_generic_admin_manager(): void
+    {
+        $branch = Branch::create([
+            'name' => 'Maya Graha Kencana - Pusat',
+            'code' => 'MGK-PST',
+            'is_active' => true,
+        ]);
+
+        Employee::create([
+            'branch_id' => $branch->id,
+            'code' => 'EMP-043',
+            'name' => 'Bagus Satoto',
+            'position' => 'Manager',
+            'jabatan' => 'Manager Operasional',
+            'role' => EmployeeRole::SUPERVISOR,
+            'is_active' => true,
+        ]);
+
+        $admin = User::factory()->create();
+
+        $response = $this->actingAs($admin)->get(route('admin.karyawan.verifikasi'));
+
+        $response->assertOk();
+        $response->assertDontSee('Admin Manager');
+        $response->assertSee('Bagus Satoto');
     }
 }

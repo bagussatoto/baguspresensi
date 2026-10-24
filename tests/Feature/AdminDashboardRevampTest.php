@@ -266,9 +266,7 @@ class AdminDashboardRevampTest extends TestCase
         $response->assertSee('shif 1: (01-07)');
         $response->assertSee('Total Shift');
         $response->assertSee('BO (jam)');
-        $response->assertSee('Mepet');
         $response->assertSee('Telat');
-        $response->assertSee('Komisi');
         $response->assertSee('Rekap Kehadiran Kegiatan (Meeting, Pelatihan, GC)');
         $response->assertSee('Ringkasan per Kategori Kegiatan (Meeting, Pelatihan, GC)');
         $response->assertSee('Catatan Kehadiran Kegiatan Karyawan');

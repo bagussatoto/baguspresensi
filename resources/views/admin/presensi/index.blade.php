@@ -474,8 +474,42 @@
                         <span style="background:#e11d48;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;">{{ $pendingLeaves + $pendingOvertimes }}</span>
                     @endif
                 </a>
-                <a href="{{ route('admin.presensi.audit-logs') }}" class="internal-tab-link">🛡️ WORM Audit Trail (ISO 27001)</a>
+                <a href="{{ route('admin.presensi.audit-logs') }}" class="internal-tab-link">
+                    🛡️ WORM Audit Trail (ISO 27001)
+                    @if($todayLockouts > 0)
+                        <span style="background:#ef4444;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:bold;">🚨 {{ $todayLockouts }} Alert</span>
+                    @endif
+                </a>
             </div>
+
+            @if($todayLockouts > 0)
+                <!-- SECURITY ALERT WIDGET: EARLY WARNING LOCKOUT INCIDENTS -->
+                <div style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.05)); border: 1px solid #ef4444; border-radius: 8px; padding: 12px 18px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="background: #ef4444; color: #ffffff; width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);">
+                            🚨
+                        </div>
+                        <div>
+                            <div style="font-weight: 700; color: #b91c1c; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+                                <span>Peringatan Dini Keamanan: Terdeteksi {{ $todayLockouts }} Percobaan Login Gagal (Lockout) Hari Ini</span>
+                                <span style="background: #fee2e2; color: #991b1b; font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 800;">SECURITY ALERT</span>
+                            </div>
+                            <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
+                                Akun karyawan dikunci sementara selama 60 detik karena 3 kali salah memasukkan Password/PIN.
+                                @if(isset($recentLockouts) && count($recentLockouts) > 0)
+                                    Insiden terbaru: <strong style="color: #0f172a;">{{ $recentLockouts->first()->new_values['employee_name'] ?? 'Karyawan' }}</strong> (IP: {{ $recentLockouts->first()->ip_address }}) pada {{ \Carbon\Carbon::parse($recentLockouts->first()->created_at)->format('H:i') }} WIB.
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <a href="{{ route('admin.presensi.audit-logs', ['action' => 'portal_login_lockout']) }}" style="background: #b91c1c; color: #ffffff; padding: 7px 14px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; transition: background 0.15s;">
+                            <span>🔍 Periksa Jejak Forensik</span>
+                            <span>→</span>
+                        </a>
+                    </div>
+                </div>
+            @endif
 
             <!-- KPI CARDS -->
             <div class="stats-grid">

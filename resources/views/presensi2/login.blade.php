@@ -900,6 +900,37 @@
         </div>
 
         <!-- Flash Notifications -->
+        @if(session('registration_submitted'))
+            @php $regInfo = session('registration_submitted'); @endphp
+            <div style="background: rgba(16, 185, 129, 0.1); border: 1.5px solid rgba(16, 185, 129, 0.35); border-radius: 16px; padding: 16px; margin-bottom: 18px; text-align: left; box-shadow: 0 4px 18px rgba(16, 185, 129, 0.12);">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <span style="font-size: 20px;">🎉</span>
+                    <strong style="color: #10b981; font-size: 14.5px;">Pendaftaran Mandiri Berhasil Diajukan!</strong>
+                </div>
+                <div style="font-size: 12.5px; color: var(--login-text-body); line-height: 1.5; margin-bottom: 12px;">
+                    Permohonan akun untuk <strong>{{ $regInfo['full_name'] ?? $regInfo['username'] }}</strong> (<code style="color: #38bdf8;">{{ $regInfo['username'] }}</code>) telah masuk ke antrean verifikasi.
+                </div>
+                <div style="background: rgba(2, 132, 199, 0.12); border: 1px solid rgba(2, 132, 199, 0.3); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 20px;">⏱️</span>
+                    <div>
+                        <div style="font-size: 11px; color: #38bdf8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Estimasi Waktu Verifikasi Admin/HR</div>
+                        <div style="font-size: 13.5px; font-weight: 700; color: var(--login-text-heading);">{{ $regInfo['estimated_time'] ?? '1x24 Jam Kerja (Senin - Sabtu)' }}</div>
+                    </div>
+                </div>
+                <div style="font-size: 11.5px; color: var(--login-text-body); line-height: 1.4;">
+                    💡 <em>Petunjuk:</em> Tim Admin/HR akan memverifikasi kesesuaian data Anda. Setelah akun disetujui, Anda dapat langsung masuk dengan Username dan PIN / Password yang telah didaftarkan.
+                </div>
+            </div>
+        @elseif(session('success'))
+            <div class="auth-alert-box auth-alert-success" style="margin-bottom: 14px; text-align: left;">
+                <span style="font-size: 16px;">🎉</span>
+                <div>
+                    <strong style="color: #10b981; display: block; margin-bottom: 2px;">Berhasil!</strong>
+                    <span>{{ session('success') }}</span>
+                </div>
+            </div>
+        @endif
+
         @if(session('info'))
             <div class="auth-alert-box auth-alert-success">
                 <span>ℹ️</span>
@@ -914,7 +945,69 @@
             </div>
         @endif
 
-        @if(isset($errors) && $errors->any())
+        @if(session('lockout_seconds'))
+            <div class="auth-alert-box auth-alert-error" id="lockout-alert-box" style="background: rgba(239, 68, 68, 0.18); border: 2px solid #ef4444; border-radius: 16px; color: #fca5a5; padding: 16px; flex-direction: column; align-items: stretch; gap: 10px; box-shadow: 0 0 25px rgba(239, 68, 68, 0.35);">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; color: #ef4444; font-size: 15px;">
+                        <span style="font-size: 20px;">🛡️</span>
+                        <span>SISTEM TERKUNCI (UI LOCKOUT)</span>
+                    </div>
+                    <span style="background: rgba(239, 68, 68, 0.3); color: #fecaca; font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: bold;">
+                        Anti Brute-Force
+                    </span>
+                </div>
+                <div style="font-size: 13px; line-height: 1.5; color: #fee2e2;">
+                    {{ $errors->first() }}
+                </div>
+                
+                <!-- Digital Countdown Display -->
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 10px;">
+                    <span style="font-size: 12px; color: #cbd5e1; font-weight: 600;">Waktu tunggu tersisa:</span>
+                    <div style="display: flex; align-items: baseline; gap: 4px;">
+                        <span id="lockout-timer" data-seconds="{{ session('lockout_seconds') }}" style="font-size: 24px; font-weight: 900; font-family: monospace; color: #fde047;">
+                            {{ session('lockout_seconds') }}
+                        </span>
+                        <span style="font-size: 12px; color: #fef08a; font-weight: bold;">detik</span>
+                    </div>
+                </div>
+
+                <!-- Animated Progress Bar -->
+                <div style="width: 100%; height: 6px; background: rgba(255, 255, 255, 0.1); border-radius: 10px; overflow: hidden;">
+                    <div id="lockout-progress-bar" style="width: 100%; height: 100%; background: linear-gradient(90deg, #ef4444, #f59e0b); transition: width 1s linear;"></div>
+                </div>
+            </div>
+        @elseif(session('remaining_attempts') === 1)
+            <!-- Critical Early Warning: Percobaan Terakhir -->
+            <div class="auth-alert-box" style="background: rgba(239, 68, 68, 0.2); border: 2px solid #ef4444; color: #fecaca; flex-direction: column; align-items: flex-start; gap: 6px; box-shadow: 0 0 15px rgba(239, 68, 68, 0.3); animation: pulseAlert 1.5s infinite alternate;">
+                <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; color: #f87171; font-size: 14px;">
+                    <span>🚨</span>
+                    <span>EARLY WARNING: KESEMPATAN TERAKHIR!</span>
+                </div>
+                <div style="font-size: 13px; line-height: 1.4; color: #fef2f2;">
+                    {{ $errors->first() }}
+                </div>
+                <div style="margin-top: 4px; font-size: 12px; color: #fde047;">
+                    💡 <em>Lupa PIN atau Password? Klik link <strong>"Lupa Password?"</strong> di bawah daripada akun terkunci.</em>
+                </div>
+            </div>
+            <style>
+                @keyframes pulseAlert {
+                    0% { transform: scale(1); box-shadow: 0 0 10px rgba(239, 68, 68, 0.2); }
+                    100% { transform: scale(1.01); box-shadow: 0 0 20px rgba(239, 68, 68, 0.45); }
+                }
+            </style>
+        @elseif(session('remaining_attempts') === 2)
+            <!-- Mild Early Warning: Percobaan ke-1 Gagal -->
+            <div class="auth-alert-box" style="background: rgba(245, 158, 11, 0.18); border: 1px solid rgba(245, 158, 11, 0.45); color: #fde68a; flex-direction: column; align-items: flex-start; gap: 6px;">
+                <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #fbbf24;">
+                    <span>⚠️</span>
+                    <span>Peringatan Dini: Password Salah</span>
+                </div>
+                <div style="font-size: 13px; line-height: 1.4;">
+                    {{ $errors->first() }}
+                </div>
+            </div>
+        @elseif(isset($errors) && $errors->any())
             <div class="auth-alert-box auth-alert-error">
                 <span>⚠️</span>
                 <div>{{ $errors->first() }}</div>
@@ -1104,6 +1197,14 @@
                 <span>Karyawan Baru / Ingin Daftar Ulang? <strong>Klik di Sini</strong> &rarr;</span>
             </a>
         </div>
+
+        <!-- Cek Status Pengajuan Link -->
+        <div style="margin-top: 6px; text-align: center;">
+            <a href="{{ route('presensi2.check-status') }}" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: var(--login-text-body); font-size: 12px; text-decoration: none; padding: 6px 12px; transition: color 0.2s;">
+                <span>🔍</span>
+                <span>Sudah pernah daftar? <strong>Cek Status Pengajuan Akun</strong></span>
+            </a>
+        </div>
     </div>
 </div>
 
@@ -1200,9 +1301,74 @@
         btn.style.pointerEvents = 'none';
     });
 
+    // Lockout countdown timer handler
+    function initLockoutTimer() {
+        const timerEl = document.getElementById('lockout-timer');
+        if (!timerEl) return;
+
+        let initialSeconds = parseInt(timerEl.getAttribute('data-seconds'), 10);
+        let seconds = initialSeconds;
+        if (isNaN(seconds) || seconds <= 0) return;
+
+        const btn = document.getElementById('btn-submit-portal');
+        const btnText = document.getElementById('btn-text');
+        const credInput = document.getElementById('credential');
+        const progressBar = document.getElementById('lockout-progress-bar');
+
+        if (btn) {
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+            btn.style.filter = 'grayscale(100%)';
+            if (btnText) btnText.textContent = `Terkunci (${seconds}s)`;
+        }
+        if (credInput) {
+            credInput.disabled = true;
+            credInput.placeholder = 'Input dikunci sementara...';
+            credInput.style.backgroundColor = 'rgba(239, 68, 68, 0.08)';
+            credInput.style.borderColor = 'rgba(239, 68, 68, 0.35)';
+        }
+
+        const interval = setInterval(() => {
+            seconds--;
+            if (timerEl) timerEl.textContent = seconds;
+            if (btnText) btnText.textContent = `Terkunci (${seconds}s)`;
+            if (progressBar && initialSeconds > 0) {
+                const percent = Math.max(0, (seconds / initialSeconds) * 100);
+                progressBar.style.width = percent + '%';
+            }
+
+            if (seconds <= 0) {
+                clearInterval(interval);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                    btn.style.filter = 'none';
+                    if (btnText) btnText.textContent = 'Masuk ke Sistem';
+                }
+                if (credInput) {
+                    credInput.disabled = false;
+                    credInput.placeholder = 'Masukkan Password atau PIN 6-digit';
+                    credInput.style.backgroundColor = '';
+                    credInput.style.borderColor = '';
+                }
+                const box = document.getElementById('lockout-alert-box');
+                if (box) {
+                    box.style.background = 'rgba(34, 197, 94, 0.15)';
+                    box.style.borderColor = 'rgba(34, 197, 94, 0.4)';
+                    box.style.color = '#86efac';
+                    box.style.boxShadow = '0 0 15px rgba(34, 197, 94, 0.25)';
+                    box.innerHTML = '<div style="display: flex; align-items: center; gap: 8px; font-weight: bold; color: #4ade80;"><span>✅</span><span>Waktu tunggu selesai. Silakan masukkan password/PIN Anda kembali.</span></div>';
+                }
+            }
+        }, 1000);
+    }
+
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', () => {
         initPortalTheme();
+        initLockoutTimer();
     });
 </script>
 @endpush

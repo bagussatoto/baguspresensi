@@ -7,6 +7,7 @@ namespace Modules\MasterData\Domain\Models;
 use App\Domains\Attendance\Models\AttendanceRecord;
 use App\Domains\Attendance\Models\OvertimeClaim;
 use App\Domains\Leave\Models\LeaveRequest;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -65,7 +66,7 @@ class Employee extends Authenticatable
 
     public function deactivator(): BelongsTo
     {
-        return $this->belongsTo(\App\Models\User::class, 'deactivated_by');
+        return $this->belongsTo(User::class, 'deactivated_by');
     }
 
     public function isDeactivated(): bool

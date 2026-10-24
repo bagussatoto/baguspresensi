@@ -187,4 +187,3 @@ class AuditLogAndRbacTest extends TestCase
         $response->assertForbidden();
     }
 }
-

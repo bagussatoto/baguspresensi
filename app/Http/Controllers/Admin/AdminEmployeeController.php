@@ -397,11 +397,13 @@ class AdminEmployeeController extends Controller
             $branchesQuery->where('id', $assignedBranchId);
         }
         $branches = $branchesQuery->orderBy('name', 'asc')->get();
+        $profileData = AdminDashboardController::getProfileData($request);
 
         return view('admin.karyawan.verifikasi', compact(
             'pendingRegistrations',
             'processedRegistrations',
-            'branches'
+            'branches',
+            'profileData'
         ));
     }
 
@@ -462,6 +464,7 @@ class AdminEmployeeController extends Controller
                 'name' => $registration->full_name,
                 'username' => $registration->username,
                 'phone' => $registration->phone,
+                'email' => $registration->email,
                 'role' => $role,
                 'position' => $validated['position'] ?? 'Staff',
                 'jabatan' => $validated['position'] ?? 'Staff',
@@ -569,6 +572,135 @@ class AdminEmployeeController extends Controller
     }
 
     /**
+     * Detail Berkas Pendaftaran & Log Audit ISO 27001 (Read).
+     */
+    public function showRegistration(EmployeeRegistration $registration): JsonResponse
+    {
+        $registration->load(['approver', 'createdEmployee.branch']);
+
+        $auditTrail = AuditLog::where(function ($q) use ($registration) {
+            $q->where('auditable_type', EmployeeRegistration::class)
+                ->where('auditable_id', $registration->id);
+            if ($registration->created_employee_id) {
+                $q->orWhere(function ($sub) use ($registration) {
+                    $sub->where('auditable_type', Employee::class)
+                        ->where('auditable_id', $registration->created_employee_id);
+                });
+            }
+        })->latest('id')->get();
+
+        return response()->json([
+            'success' => true,
+            'registration' => $registration,
+            'audit_trail' => $auditTrail,
+        ]);
+    }
+
+    /**
+     * Buka Ulang / Kembalikan Berkas Ditolak ke Status Pending untuk Ditinjau Ulang (Update).
+     */
+    public function resetRegistrationToPending(Request $request, EmployeeRegistration $registration): RedirectResponse
+    {
+        if ($registration->status === 'approved') {
+            return back()->with('error', 'Berkas yang sudah disetujui resmi menjadi karyawan tidak dapat dikembalikan ke antrean.');
+        }
+
+        $adminUser = Auth::user();
+        $oldReason = $registration->rejection_reason;
+
+        $registration->update([
+            'status' => 'pending',
+            'rejection_reason' => null,
+            'approved_by' => null,
+            'approved_at' => null,
+        ]);
+
+        AuditLog::create([
+            'user_id' => $adminUser?->id,
+            'action' => 'EMPLOYEE_REGISTRATION_RESET_TO_PENDING',
+            'auditable_type' => EmployeeRegistration::class,
+            'auditable_id' => $registration->id,
+            'old_values' => ['status' => 'rejected', 'rejection_reason' => $oldReason],
+            'new_values' => ['status' => 'pending', 'reset_by' => $adminUser?->name],
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'created_at' => now(),
+        ]);
+
+        return redirect()->route('admin.karyawan.verifikasi')
+            ->with('success', "Berkas pendaftaran {$registration->full_name} berhasil dikembalikan ke antrean pending untuk ditinjau ulang.");
+    }
+
+    /**
+     * Koreksi Catatan Verifikasi / Catatan Audit (Update).
+     */
+    public function updateRegistrationNote(Request $request, EmployeeRegistration $registration): RedirectResponse
+    {
+        $validated = $request->validate([
+            'rejection_reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $adminUser = Auth::user();
+        $oldReason = $registration->rejection_reason;
+
+        $registration->update([
+            'rejection_reason' => $validated['rejection_reason'],
+        ]);
+
+        AuditLog::create([
+            'user_id' => $adminUser?->id,
+            'action' => 'EMPLOYEE_REGISTRATION_NOTE_UPDATED',
+            'auditable_type' => EmployeeRegistration::class,
+            'auditable_id' => $registration->id,
+            'old_values' => ['rejection_reason' => $oldReason],
+            'new_values' => ['rejection_reason' => $validated['rejection_reason']],
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'created_at' => now(),
+        ]);
+
+        return redirect()->route('admin.karyawan.verifikasi')
+            ->with('success', 'Catatan verifikasi berhasil diperbarui.');
+    }
+
+    /**
+     * Hapus Arsip Berkas Pendaftaran Ditolak (Delete).
+     */
+    public function destroyRegistration(Request $request, EmployeeRegistration $registration): RedirectResponse
+    {
+        if ($registration->status === 'approved') {
+            return back()->with('error', 'Berkas pendaftaran yang sudah disetujui tidak boleh dihapus demi integritas Master Data.');
+        }
+
+        $adminUser = Auth::user();
+        $name = $registration->full_name;
+        $username = $registration->username;
+
+        AuditLog::create([
+            'user_id' => $adminUser?->id,
+            'action' => 'EMPLOYEE_REGISTRATION_ARCHIVE_DELETED',
+            'auditable_type' => EmployeeRegistration::class,
+            'auditable_id' => $registration->id,
+            'old_values' => [
+                'full_name' => $name,
+                'username' => $username,
+                'phone' => $registration->phone,
+                'email' => $registration->email,
+                'status' => $registration->status,
+            ],
+            'new_values' => ['status' => 'DELETED'],
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'created_at' => now(),
+        ]);
+
+        $registration->delete();
+
+        return redirect()->route('admin.karyawan.verifikasi')
+            ->with('success', "Arsip pendaftaran untuk {$name} ({$username}) telah dihapus dari sistem.");
+    }
+
+    /**
      * Tampilkan Matriks Tinjauan Hak Akses Pengguna (Periodic Access Rights Review - ISO 27001 Klausul A.8.5).
      */
     public function accessReviewIndex(Request $request): View
@@ -630,6 +762,7 @@ class AdminEmployeeController extends Controller
         $lastSignOffLog = AuditLog::where('action', 'access_rights_periodic_review')
             ->latest('id')
             ->first();
+        $profileData = AdminDashboardController::getProfileData($request);
 
         return view('admin.karyawan.access_review', compact(
             'employees',
@@ -640,7 +773,8 @@ class AdminEmployeeController extends Controller
             'privilegedAccounts',
             'reviewedThisPeriod',
             'unreviewedAccounts',
-            'lastSignOffLog'
+            'lastSignOffLog',
+            'profileData'
         ));
     }
 

@@ -1,0 +1,23 @@
+pada registrasi diperlukan
+username unik
+nomor tlp unik
+email unik
+
+
+pada tombol register 
+ketikan 
+menyimpan data kaeryakan diganti register atau daftar
+
+2. Username -->> early warning / peringatan dini
+kalau sudah ke daftar dapat info diberitahu 
+username , nomor tlp, email harus sama
+
+di cek pada 2 titik
+di tabel register dan karyawan
+
+username diberi saran yang bisa dipake 
+nomor tlp ga bisa dipake karena bukan orang
+tombol register disable sebelum data dinyatakan lengkap
+
+percobaan register harus dibatasi untuk mencegah bom 
+

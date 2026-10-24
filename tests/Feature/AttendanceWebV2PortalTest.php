@@ -8,6 +8,7 @@ use App\Domains\Attendance\Enums\AttendanceStatus;
 use App\Domains\Attendance\Enums\VerificationMethod;
 use App\Domains\Attendance\Models\AttendanceRecord;
 use App\Domains\Employee\Models\Shift;
+use App\Models\EmployeeRegistration;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -319,37 +320,32 @@ class AttendanceWebV2PortalTest extends TestCase
             'phone' => '081299998888',
         ]);
 
-        $response->assertRedirect(route('presensi2.index'));
-        $this->assertDatabaseHas('employees', [
+        $response->assertRedirect(route('presensi2.login'));
+        $response->assertSessionHas('success');
+        $this->assertDatabaseHas('employee_registrations', [
             'username' => 'karyawan_baru',
             'email' => 'baru@wisata.id',
             'phone' => '081299998888',
+            'status' => 'pending',
         ]);
 
-        $newEmployee = Employee::where('username', 'karyawan_baru')->first();
-        $this->assertNotNull($newEmployee);
-        $this->assertTrue(Hash::check('889900', $newEmployee->pin));
-        $this->assertEquals($newEmployee->id, session('presensi2_employee_id'));
+        $reg = EmployeeRegistration::where('username', 'karyawan_baru')->first();
+        $this->assertNotNull($reg);
+        $this->assertTrue(Hash::check('889900', $reg->pin));
     }
 
-    public function test_existing_employee_can_re_register_and_update_pin(): void
+    public function test_existing_employee_email_cannot_be_re_registered(): void
     {
-        // Karyawan lama melakukan daftar ulang menggunakan email yang sama
         $this->employee->update(['email' => 'bagus_old@wisata.id', 'username' => 'bagus_old']);
 
         $response = $this->post(route('presensi2.register.post'), [
             'username' => 'bagus_updated',
-            'credential' => '112233',
+            'credential' => '582914',
             'email' => 'bagus_old@wisata.id',
             'phone' => '089988776655',
         ]);
 
-        $response->assertRedirect(route('presensi2.index'));
-
-        $this->employee->refresh();
-        $this->assertEquals('bagus_updated', $this->employee->username);
-        $this->assertEquals('089988776655', $this->employee->phone);
-        $this->assertTrue(Hash::check('112233', $this->employee->pin));
+        $response->assertSessionHasErrors('email');
     }
 
     public function test_new_employee_can_register_with_custom_branch(): void
@@ -371,25 +367,14 @@ class AttendanceWebV2PortalTest extends TestCase
             'branch_id' => $branch2->id,
         ]);
 
-        $response->assertRedirect(route('presensi2.index'));
-        $newEmployee = Employee::where('username', 'staff_surabaya')->first();
-        $this->assertNotNull($newEmployee);
-        $this->assertEquals($branch2->id, $newEmployee->branch_id);
+        $response->assertRedirect(route('presensi2.login'));
+        $reg = EmployeeRegistration::where('username', 'staff_surabaya')->first();
+        $this->assertNotNull($reg);
+        $this->assertEquals('pending', $reg->status);
     }
 
-    public function test_register_generates_collision_safe_employee_code(): void
+    public function test_register_creates_pending_registration_record(): void
     {
-        // Simulasi jika EMP-002 sudah ada tapi ID-nya bukan max
-        Employee::create([
-            'branch_id' => $this->branch->id,
-            'name' => 'Employee Existing',
-            'code' => 'EMP-002',
-            'position' => 'Staff',
-            'password' => Hash::make('secret'),
-            'pin' => Hash::make('123456'),
-            'is_active' => true,
-        ]);
-
         $response = $this->post(route('presensi2.register.post'), [
             'username' => 'user_baru_unik',
             'credential' => '556677',
@@ -397,11 +382,10 @@ class AttendanceWebV2PortalTest extends TestCase
             'phone' => '087711223344',
         ]);
 
-        $response->assertRedirect(route('presensi2.index'));
-        $created = Employee::where('username', 'user_baru_unik')->first();
+        $response->assertRedirect(route('presensi2.login'));
+        $created = EmployeeRegistration::where('username', 'user_baru_unik')->first();
         $this->assertNotNull($created);
-        // Pastikan kodenya tidak bertabrakan dengan EMP-002
-        $this->assertNotEquals('EMP-002', $created->code);
+        $this->assertEquals('pending', $created->status);
     }
 
     public function test_login_page_renders_lupa_password_link(): void
@@ -416,7 +400,9 @@ class AttendanceWebV2PortalTest extends TestCase
         $response = $this->get(route('presensi2.forgot-password'));
         $response->assertOk();
         $response->assertSee('Lupa Password');
-        $response->assertSee('Bagus Karyawan');
+        $response->assertSee('Tulis Nama Karyawan Anda');
+        $response->assertSee('Password atau PIN 6-Digit Lama');
+        $response->assertDontSee('<select');
 
         $aliasResponse = $this->get('/presensi/lupa-password');
         $aliasResponse->assertOk();
@@ -427,6 +413,7 @@ class AttendanceWebV2PortalTest extends TestCase
     {
         $response = $this->post(route('presensi2.forgot-password.post'), [
             'employee_id' => $this->employee->id,
+            'old_credential' => '654321',
             'new_credential' => 'newpass654',
             'confirm_credential' => 'newpass654',
         ]);
@@ -445,6 +432,37 @@ class AttendanceWebV2PortalTest extends TestCase
         ]);
         $loginResponse->assertRedirect(route('presensi2.index'));
         $this->assertEquals($this->employee->id, session('presensi2_employee_id'));
+    }
+
+    public function test_employee_can_reset_password_through_forgot_password_with_manual_name(): void
+    {
+        $response = $this->post(route('presensi2.forgot-password.post'), [
+            'employee_name' => $this->employee->name,
+            'old_credential' => '654321',
+            'new_credential' => 'newpass789',
+            'confirm_credential' => 'newpass789',
+        ]);
+
+        $response->assertRedirect(route('presensi2.login'));
+        $response->assertSessionHas('success');
+
+        $this->employee->refresh();
+        $this->assertTrue(Hash::check('newpass789', $this->employee->pin));
+        $this->assertTrue(Hash::check('newpass789', $this->employee->password));
+    }
+
+    public function test_employee_cannot_reset_password_with_wrong_old_credential(): void
+    {
+        $response = $this->post(route('presensi2.forgot-password.post'), [
+            'employee_name' => $this->employee->name,
+            'old_credential' => 'wrongpass999',
+            'new_credential' => 'newpass789',
+            'confirm_credential' => 'newpass789',
+        ]);
+
+        $response->assertSessionHasErrors('old_credential');
+        $this->employee->refresh();
+        $this->assertTrue(Hash::check('654321', $this->employee->pin));
     }
 
     public function test_root_url_and_bagus_alias_redirect_to_presensi2(): void

@@ -34,6 +34,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\View\View;
 use Modules\MasterData\Domain\Enums\EmployeeRole;
 use Modules\MasterData\Domain\Models\Branch;
@@ -275,64 +277,305 @@ class AttendanceWebV2Controller extends Controller
     }
 
     /**
+     * Pengecekan Ketersediaan Data Registrasi (Early Warning: Username, Phone, Email di 2 titik).
+     */
+    public function checkAvailability(Request $request): JsonResponse
+    {
+        $field = (string) $request->input('field');
+        $value = trim((string) $request->input('value'));
+
+        if (! in_array($field, ['username', 'phone', 'email']) || $value === '') {
+            return response()->json([
+                'valid' => false,
+                'available' => false,
+                'message' => 'Parameter tidak valid.',
+            ], 422);
+        }
+
+        if ($field === 'username') {
+            if (strlen($value) < 3) {
+                return response()->json([
+                    'valid' => false,
+                    'available' => false,
+                    'message' => 'Username minimal 3 karakter.',
+                ]);
+            }
+            if (! preg_match('/^[a-zA-Z0-9_.-]+$/', $value)) {
+                return response()->json([
+                    'valid' => false,
+                    'available' => false,
+                    'message' => 'Username hanya boleh huruf, angka, titik (.), strip (-), atau garis bawah (_).',
+                ]);
+            }
+
+            $existingEmployee = Employee::whereRaw('LOWER(username) = ?', [strtolower($value)])->first();
+            $existingRegistration = EmployeeRegistration::where('status', 'pending')
+                ->whereRaw('LOWER(username) = ?', [strtolower($value)])
+                ->first();
+
+            if ($existingEmployee) {
+                $suggestions = $this->generateUsernameSuggestions($value);
+
+                return response()->json([
+                    'valid' => true,
+                    'available' => false,
+                    'status_type' => 'master_active',
+                    'message' => "Akun dengan username '{$value}' sudah terdaftar dan aktif sebagai karyawan resmi MGK. Silakan langsung login.",
+                    'login_url' => route('presensi2.login'),
+                    'suggestions' => $suggestions,
+                ]);
+            }
+
+            if ($existingRegistration) {
+                $suggestions = $this->generateUsernameSuggestions($value);
+
+                return response()->json([
+                    'valid' => true,
+                    'available' => false,
+                    'status_type' => 'pending_approval',
+                    'message' => "Pendaftaran dengan username '{$value}' sudah pernah diajukan dan saat ini sedang menunggu persetujuan verifikasi Admin/HR.",
+                    'login_url' => route('presensi2.login'),
+                    'suggestions' => $suggestions,
+                ]);
+            }
+
+            return response()->json([
+                'valid' => true,
+                'available' => true,
+                'message' => 'Username tersedia dan dapat digunakan.',
+            ]);
+        }
+
+        if ($field === 'phone') {
+            $cleaned = preg_replace('/[^0-9]/', '', $value);
+            // Validasi format nomor telepon orang (Indonesia: 08xx / 628xx, panjang 10-15 digit)
+            $isPersonPhone = preg_match('/^(08|628|\+628)[0-9]{8,12}$/', $value) || (strlen($cleaned) >= 10 && strlen($cleaned) <= 15 && in_array(substr($cleaned, 0, 2), ['08', '62']));
+
+            if (! $isPersonPhone) {
+                return response()->json([
+                    'valid' => false,
+                    'available' => false,
+                    'message' => 'Nomor HP tidak valid. Pastikan nomor ponsel asli yang aktif (contoh: 081234567890).',
+                ]);
+            }
+
+            $inEmployee = Employee::where('phone', $value)->orWhere('phone', $cleaned)->exists();
+            $inRegistration = EmployeeRegistration::where('status', 'pending')
+                ->where(function ($q) use ($value, $cleaned) {
+                    $q->where('phone', $value)->orWhere('phone', $cleaned);
+                })
+                ->exists();
+
+            if ($inEmployee || $inRegistration) {
+                $location = $inEmployee ? 'Master Data Karyawan' : 'Antrean Verifikasi Pendaftaran';
+
+                return response()->json([
+                    'valid' => true,
+                    'available' => false,
+                    'message' => "Nomor HP sudah terdaftar di {$location}. Nomor HP tidak dapat digunakan kembali.",
+                ]);
+            }
+
+            return response()->json([
+                'valid' => true,
+                'available' => true,
+                'message' => 'Nomor HP tersedia dan dapat digunakan.',
+            ]);
+        }
+
+        if ($field === 'email') {
+            if (! filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                return response()->json([
+                    'valid' => false,
+                    'available' => false,
+                    'message' => 'Format alamat email tidak valid.',
+                ]);
+            }
+
+            $inEmployee = Employee::whereRaw('LOWER(email) = ?', [strtolower($value)])->exists();
+            $inRegistration = EmployeeRegistration::where('status', 'pending')
+                ->whereRaw('LOWER(email) = ?', [strtolower($value)])
+                ->exists();
+
+            if ($inEmployee || $inRegistration) {
+                $location = $inEmployee ? 'Master Data Karyawan' : 'Antrean Verifikasi Pendaftaran';
+
+                return response()->json([
+                    'valid' => true,
+                    'available' => false,
+                    'message' => "Email sudah terdaftar di {$location}. Silakan gunakan email lain.",
+                ]);
+            }
+
+            return response()->json([
+                'valid' => true,
+                'available' => true,
+                'message' => 'Alamat email tersedia dan dapat digunakan.',
+            ]);
+        }
+
+        return response()->json(['valid' => false, 'available' => false, 'message' => 'Pemeriksaan gagal.']);
+    }
+
+    /**
+     * Buat rekomendasi alternatif username yang belum digunakan.
+     */
+    protected function generateUsernameSuggestions(string $base): array
+    {
+        $base = strtolower(preg_replace('/[^a-zA-Z0-9_.-]/', '', $base));
+        $candidates = [
+            $base.rand(10, 99),
+            $base.'_'.date('y'),
+            $base.'.'.rand(1, 99),
+            $base.rand(100, 999),
+        ];
+
+        $results = [];
+        foreach ($candidates as $cand) {
+            $inEmp = Employee::whereRaw('LOWER(username) = ?', [$cand])->exists();
+            $inReg = EmployeeRegistration::where('status', 'pending')->whereRaw('LOWER(username) = ?', [$cand])->exists();
+            if (! $inEmp && ! $inReg && ! in_array($cand, $results)) {
+                $results[] = $cand;
+            }
+            if (count($results) >= 3) {
+                break;
+            }
+        }
+
+        return $results;
+    }
+
+    /**
      * Proses Pendaftaran / Daftar Ulang Karyawan.
      */
     public function register(Request $request): RedirectResponse
     {
-        $request->validate([
+        // Proteksi Honeypot Anti-Spam Bot: Jika input jebakan diisi, tolak diam-diam tanpa membebani database
+        if ($request->filled('honeypot_website') || $request->filled('website')) {
+            Log::warning('Honeypot anti-spam bot terpicu pada formulir registrasi presensi.', [
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'payload' => $request->except(['credential', 'confirm_credential', 'password', 'pin']),
+            ]);
+
+            return redirect()->route('presensi2.login')
+                ->with('success', 'Permohonan pendaftaran akun Anda berhasil diajukan dan sedang menunggu verifikasi Admin/HR.');
+        }
+
+        $validationRules = [
             'full_name' => 'nullable|string|min:3|max:150',
             'username' => 'required|string|min:3|max:50|regex:/^[a-zA-Z0-9_.-]+$/',
-            'credential' => 'required|string|min:4|max:50',
-            'email' => 'nullable|email|max:100',
-            'phone' => 'required|string|min:8|max:20',
-        ], [
+            'credential' => 'required|string|min:6|max:50',
+            'email' => 'required|email|max:100',
+            'phone' => ['required', 'string', 'min:8', 'max:20', 'regex:/^(08|628|\+628)[0-9]{8,12}$/'],
+        ];
+
+        if ($request->has('confirm_credential')) {
+            $validationRules['confirm_credential'] = 'required|same:credential';
+        }
+
+        $request->validate($validationRules, [
             'username.required' => 'Username wajib diisi.',
             'username.min' => 'Username minimal 3 karakter.',
             'username.regex' => 'Username hanya boleh berisi huruf, angka, titik (.), garis bawah (_), dan tanda hubung (-).',
-            'credential.required' => 'PIN / Password wajib diisi.',
-            'credential.min' => 'PIN / Password minimal 4 karakter.',
+            'credential.required' => 'PIN atau Password wajib diisi.',
+            'credential.min' => 'PIN wajib 6 digit angka, atau Password wajib minimal 8 karakter (huruf/angka).',
+            'confirm_credential.required' => 'Konfirmasi PIN atau Password wajib diisi.',
+            'confirm_credential.same' => 'Konfirmasi PIN atau Password tidak cocok. Pastikan pengetikan sama persis.',
             'phone.required' => 'Nomor HP/WhatsApp wajib diisi.',
-            'phone.min' => 'Nomor HP minimal 8 digit.',
+            'phone.regex' => 'Format nomor HP tidak valid. Gunakan format ponsel aktif (contoh: 081234567890).',
+            'email.required' => 'Alamat email wajib diisi.',
             'email.email' => 'Format email tidak valid.',
         ]);
 
         $username = trim((string) $request->input('username'));
         $credential = trim((string) $request->input('credential'));
-        $email = $request->filled('email') ? trim((string) $request->input('email')) : null;
+
+        // Validasi Kredensial: PIN tepat 6 digit angka, atau Password minimal 8 karakter (angka/huruf)
+        $isNumericCredential = ctype_digit($credential);
+        if ($isNumericCredential) {
+            if (strlen($credential) !== 6) {
+                return back()->withInput()->withErrors([
+                    'credential' => 'PIN angka wajib tepat 6 digit (contoh: 582914).',
+                ]);
+            }
+
+            if (self::isWeakPin($credential)) {
+                return back()->withInput()->withErrors([
+                    'credential' => 'PIN terlalu lemah atau mudah ditebak (hindari angka urut atau berulang seperti 123456, 111111, 121212). Gunakan 6 angka acak yang lebih aman.',
+                ]);
+            }
+        } else {
+            if (strlen($credential) < 8) {
+                return back()->withInput()->withErrors([
+                    'credential' => 'Password minimal 8 karakter (bisa berupa huruf atau kombinasi angka dan huruf).',
+                ]);
+            }
+        }
+        $email = trim((string) $request->input('email'));
         $phone = trim((string) $request->input('phone'));
+        $cleanedPhone = preg_replace('/[^0-9]/', '', $phone);
         $fullName = trim((string) $request->input('full_name'));
         if (empty($fullName)) {
             $fullName = ucwords(str_replace(['.', '_', '-'], ' ', $username));
         }
 
-        // 1. Cek apakah sudah terdaftar di Master Data Karyawan (Single Source of Truth)
-        $existingEmployee = Employee::where(function ($q) use ($username, $phone) {
+        // 1. Cek di Titik 1: Master Data Karyawan (Single Source of Truth)
+        $employeeConflict = Employee::where(function ($q) use ($username, $phone, $cleanedPhone, $email) {
             $q->whereRaw('LOWER(username) = ?', [strtolower($username)])
-                ->orWhere('phone', $phone);
+                ->orWhere('phone', $phone)
+                ->orWhere('phone', $cleanedPhone)
+                ->orWhereRaw('LOWER(email) = ?', [strtolower($email)]);
         })->first();
 
-        if ($existingEmployee) {
-            return back()->withInput()->withErrors([
-                'username' => 'Karyawan dengan Username atau Nomor HP tersebut sudah terdaftar di Master Data. Silakan login atau hubungi Admin/HR.',
-            ]);
+        if ($employeeConflict) {
+            $errorField = 'username';
+            $msg = 'Data sudah terdaftar di Master Data Karyawan.';
+            if (strtolower($employeeConflict->username) === strtolower($username)) {
+                $errorField = 'username';
+                $msg = 'Username sudah digunakan oleh karyawan terdaftar.';
+            } elseif ($employeeConflict->phone === $phone || $employeeConflict->phone === $cleanedPhone) {
+                $errorField = 'phone';
+                $msg = 'Nomor HP/WhatsApp sudah digunakan oleh karyawan terdaftar.';
+            } elseif ($employeeConflict->email && strtolower($employeeConflict->email) === strtolower($email)) {
+                $errorField = 'email';
+                $msg = 'Email sudah digunakan oleh karyawan terdaftar.';
+            }
+
+            return back()->withInput()->withErrors([$errorField => $msg]);
         }
 
-        // 2. Cek apakah sudah ada pengajuan pending di antrean staging (Maker-Checker)
-        $existingPending = EmployeeRegistration::where('status', 'pending')
-            ->where(function ($q) use ($username, $phone) {
+        // 2. Cek di Titik 2: Antrean Pendaftaran / Staging Table (Maker-Checker)
+        $pendingConflict = EmployeeRegistration::where('status', 'pending')
+            ->where(function ($q) use ($username, $phone, $cleanedPhone, $email) {
                 $q->whereRaw('LOWER(username) = ?', [strtolower($username)])
-                    ->orWhere('phone', $phone);
+                    ->orWhere('phone', $phone)
+                    ->orWhere('phone', $cleanedPhone)
+                    ->orWhereRaw('LOWER(email) = ?', [strtolower($email)]);
             })->first();
 
-        if ($existingPending) {
-            return redirect()->route('presensi2.login')
-                ->with('info', 'Pendaftaran untuk akun "'.$username.'" sudah diajukan sebelumnya dan saat ini sedang menunggu persetujuan Admin/HR.');
+        if ($pendingConflict) {
+            $errorField = 'username';
+            $msg = 'Data sudah pernah diajukan dan sedang menunggu persetujuan Admin/HR.';
+            if (strtolower($pendingConflict->username) === strtolower($username)) {
+                $errorField = 'username';
+                $msg = "Username '{$username}' sedang menunggu persetujuan verifikasi Admin/HR.";
+            } elseif ($pendingConflict->phone === $phone || $pendingConflict->phone === $cleanedPhone) {
+                $errorField = 'phone';
+                $msg = 'Nomor HP tersebut sedang menunggu persetujuan verifikasi Admin/HR.';
+            } elseif ($pendingConflict->email && strtolower($pendingConflict->email) === strtolower($email)) {
+                $errorField = 'email';
+                $msg = 'Email tersebut sedang menunggu persetujuan verifikasi Admin/HR.';
+            }
+
+            return back()->withInput()->withErrors([$errorField => $msg]);
         }
 
         // 3. Simpan ke Staging Table (Maker)
         EmployeeRegistration::create([
             'full_name' => $fullName,
             'phone' => $phone,
+            'email' => $email,
             'username' => $username,
             'password' => Hash::make($credential),
             'pin' => Hash::make($credential),
@@ -342,7 +585,12 @@ class AttendanceWebV2Controller extends Controller
         ]);
 
         return redirect()->route('presensi2.login')
-            ->with('success', 'Pendaftaran mandiri berhasil diajukan! Akun Anda (Username: '.$username.') sedang menunggu verifikasi dan persetujuan Admin/HR (Standar SoD & ISO 27001).');
+            ->with('success', 'Pendaftaran mandiri berhasil diajukan! Akun Anda (Username: '.$username.') sedang menunggu verifikasi dan persetujuan Admin/HR. Estimasi waktu verifikasi adalah 1x24 jam kerja.')
+            ->with('registration_submitted', [
+                'username' => $username,
+                'full_name' => $fullName,
+                'estimated_time' => '1x24 Jam Kerja (Senin - Sabtu)',
+            ]);
     }
 
     /**
@@ -354,11 +602,7 @@ class AttendanceWebV2Controller extends Controller
             return redirect()->route('presensi2.index');
         }
 
-        $employees = Employee::where('is_active', true)
-            ->orderBy('name', 'asc')
-            ->get();
-
-        return view('presensi2.forgot-password', compact('employees'));
+        return view('presensi2.forgot-password');
     }
 
     /**
@@ -366,21 +610,101 @@ class AttendanceWebV2Controller extends Controller
      */
     public function resetPassword(Request $request): RedirectResponse
     {
+        // Proteksi Honeypot Anti-Spam Bot: Jika input jebakan diisi, tolak diam-diam
+        if ($request->filled('honeypot_website') || $request->filled('website')) {
+            Log::warning('Honeypot anti-spam bot terpicu pada formulir reset password presensi.', [
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            return redirect()->route('presensi2.login')
+                ->with('success', 'Kata sandi / PIN berhasil diperbarui.');
+        }
+
         $request->validate([
-            'employee_id' => 'required|exists:employees,id',
+            'employee_name' => 'required_without:employee_id|nullable|string|max:100',
+            'employee_id' => 'required_without:employee_name|nullable|exists:employees,id',
+            'old_credential' => 'required|string',
             'new_credential' => 'required|string|min:4|max:50',
             'confirm_credential' => 'required|same:new_credential',
         ], [
-            'employee_id.required' => 'Silakan pilih nama karyawan terlebih dahulu.',
+            'employee_name.required_without' => 'Silakan tulis nama karyawan Anda terlebih dahulu.',
+            'employee_name.required' => 'Silakan tulis nama karyawan Anda terlebih dahulu.',
+            'employee_id.required' => 'Silakan tulis nama karyawan Anda terlebih dahulu.',
             'employee_id.exists' => 'Data karyawan tidak ditemukan.',
+            'old_credential.required' => 'Password atau PIN lama wajib diisi demi keamanan akun.',
             'new_credential.required' => 'Password atau PIN baru wajib diisi.',
             'new_credential.min' => 'Password atau PIN baru minimal 4 karakter.',
             'confirm_credential.required' => 'Konfirmasi password / PIN wajib diisi.',
             'confirm_credential.same' => 'Konfirmasi password / PIN tidak cocok.',
         ]);
 
-        $employee = Employee::where('is_active', true)->findOrFail($request->input('employee_id'));
+        $employee = null;
+
+        if ($request->filled('employee_id')) {
+            $employee = Employee::where('is_active', true)->find($request->input('employee_id'));
+        }
+
+        if (! $employee && $request->filled('employee_name')) {
+            $nameInput = trim((string) $request->input('employee_name'));
+
+            // 1. Pencocokan langsung nama karyawan (case-insensitive)
+            $employee = Employee::where('is_active', true)
+                ->whereRaw('LOWER(name) = ?', [mb_strtolower($nameInput)])
+                ->first();
+
+            // 2. Pencocokan berdasarkan kode, username, atau email
+            if (! $employee) {
+                $employee = Employee::where('is_active', true)
+                    ->where(function ($q) use ($nameInput) {
+                        $q->where('code', $nameInput)
+                            ->orWhere('username', $nameInput)
+                            ->orWhere('email', $nameInput);
+                    })
+                    ->first();
+            }
+
+            // 3. Pencocokan LIKE nama (jika hanya ada 1 hasil spesifik)
+            if (! $employee) {
+                $matchingEmployees = Employee::where('is_active', true)
+                    ->where('name', 'LIKE', '%'.$nameInput.'%')
+                    ->get();
+
+                if ($matchingEmployees->count() === 1) {
+                    $employee = $matchingEmployees->first();
+                } elseif ($matchingEmployees->count() > 1) {
+                    return back()->withInput()->withErrors([
+                        'employee_name' => 'Ditemukan lebih dari 1 karyawan dengan nama tersebut. Mohon tuliskan nama lengkap Anda secara spesifik atau gunakan kode karyawan.',
+                    ]);
+                }
+            }
+        }
+
+        if (! $employee) {
+            $searched = (string) ($request->input('employee_name') ?? $request->input('employee_id'));
+
+            return back()->withInput()->withErrors([
+                'employee_name' => 'Data karyawan dengan nama "'.$searched.'" tidak ditemukan atau tidak aktif. Mohon periksa kembali penulisan nama Anda.',
+            ]);
+        }
+
+        // Verifikasi kredensial lama demi mencegah pembobolan akun
+        $oldCredential = trim((string) $request->input('old_credential'));
+        if (! empty($employee->password) || ! empty($employee->pin)) {
+            if (! $this->verifyEmployeeCredential($employee, $oldCredential)) {
+                return back()->withInput()->withErrors([
+                    'old_credential' => 'Password atau PIN lama yang Anda masukkan tidak sesuai. Akses ditolak demi mencegah pembobolan akun.',
+                ]);
+            }
+        }
+
         $newCredential = trim((string) $request->input('new_credential'));
+
+        if (ctype_digit($newCredential) && strlen($newCredential) === 6 && self::isWeakPin($newCredential)) {
+            return back()->withInput()->withErrors([
+                'new_credential' => 'PIN baru terlalu lemah atau mudah ditebak (hindari angka urut atau berulang seperti 123456, 111111, 121212). Gunakan 6 angka acak yang lebih aman.',
+            ]);
+        }
 
         $employee->update([
             'pin' => Hash::make($newCredential),
@@ -389,6 +713,168 @@ class AttendanceWebV2Controller extends Controller
 
         return redirect()->route('presensi2.login')
             ->with('success', 'Kata sandi / PIN untuk '.$employee->name.' berhasil diperbarui! Silakan masuk dengan PIN baru Anda.');
+    }
+
+    /**
+     * Cek apakah PIN 6-digit tergolong lemah / pasaran (mudah ditebak).
+     */
+    public static function isWeakPin(string $pin): bool
+    {
+        if (! ctype_digit($pin) || strlen($pin) !== 6) {
+            return false;
+        }
+
+        // 1. Semua digit kembar (contoh: 000000, 111111, dll)
+        if (preg_match('/^(\d)\1{5}$/', $pin)) {
+            return true;
+        }
+
+        // 2. Berulang pola 2-digit (121212, 131313, 232323, 505050, dll)
+        if (preg_match('/^(\d{2})\1{2}$/', $pin)) {
+            return true;
+        }
+
+        // 3. Berulang pola 3-digit (123123, 654654, 321321, dll)
+        if (preg_match('/^(\d{3})\1$/', $pin)) {
+            return true;
+        }
+
+        // 4. Urut naik atau turun (123456, 654321, 012345, 987654, 234567, dll)
+        $ascending = '0123456789';
+        $descending = '9876543210';
+        if (str_contains($ascending, $pin) || str_contains($descending, $pin)) {
+            return true;
+        }
+
+        // 5. Pola umum pasaran lainnya
+        $commonWeakPins = [
+            '112233', '332211', '123321', '321123', '102030', '302010', '007007',
+        ];
+        if (in_array($pin, $commonWeakPins, true)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Halaman Cek Status Pengajuan Pendaftaran Akun Mandiri.
+     */
+    public function showCheckStatus(): View
+    {
+        return view('presensi2.check-status');
+    }
+
+    /**
+     * Proses Cek Status Pengajuan Pendaftaran (via Form / AJAX).
+     */
+    public function checkStatusQuery(Request $request): View|JsonResponse
+    {
+        $request->validate([
+            'keyword' => 'required|string|min:3|max:100',
+        ], [
+            'keyword.required' => 'Masukkan username atau nomor HP Anda.',
+            'keyword.min' => 'Pencarian minimal 3 karakter.',
+        ]);
+
+        $keyword = trim((string) $request->input('keyword'));
+        $cleanedPhone = preg_replace('/[^0-9]/', '', $keyword);
+
+        // 1. Cek di antrean pendaftaran (terbaru)
+        $registration = EmployeeRegistration::where(function ($q) use ($keyword, $cleanedPhone) {
+            $q->whereRaw('LOWER(username) = ?', [strtolower($keyword)])
+                ->orWhere('phone', $keyword);
+            if (! empty($cleanedPhone) && strlen($cleanedPhone) >= 8) {
+                $q->orWhere('phone', $cleanedPhone);
+            }
+        })->latest()->first();
+
+        // 2. Cek di Master Data Karyawan
+        $employee = Employee::where(function ($q) use ($keyword, $cleanedPhone) {
+            $q->whereRaw('LOWER(username) = ?', [strtolower($keyword)])
+                ->orWhere('code', $keyword)
+                ->orWhere('phone', $keyword);
+            if (! empty($cleanedPhone) && strlen($cleanedPhone) >= 8) {
+                $q->orWhere('phone', $cleanedPhone);
+            }
+        })->first();
+
+        $result = null;
+
+        if ($employee && $employee->is_active) {
+            $result = [
+                'found' => true,
+                'status' => 'active',
+                'badge' => 'Aktif & Disetujui ✅',
+                'badge_color' => '#10b981',
+                'full_name' => $employee->name,
+                'username' => $employee->username ?? $keyword,
+                'message' => 'Akun Anda sudah berstatus Karyawan Resmi Aktif dan siap digunakan untuk presensi.',
+                'action_label' => '👉 Masuk ke Portal Login',
+                'action_url' => route('presensi2.login'),
+            ];
+        } elseif ($registration) {
+            if ($registration->status === 'pending') {
+                $result = [
+                    'found' => true,
+                    'status' => 'pending',
+                    'badge' => 'Menunggu Verifikasi ⏳',
+                    'badge_color' => '#f59e0b',
+                    'full_name' => $registration->full_name,
+                    'username' => $registration->username,
+                    'registered_at' => $registration->created_at?->format('d M Y, H:i') ?? '-',
+                    'estimated_time' => '1x24 Jam Kerja (Senin - Sabtu)',
+                    'message' => 'Pengajuan Anda sedang dalam antrean verifikasi Admin / HR. Mohon tunggu proses approval.',
+                    'action_label' => 'Kembali ke Halaman Login',
+                    'action_url' => route('presensi2.login'),
+                ];
+            } elseif ($registration->status === 'approved') {
+                $result = [
+                    'found' => true,
+                    'status' => 'approved',
+                    'badge' => 'Telah Disetujui ✅',
+                    'badge_color' => '#10b981',
+                    'full_name' => $registration->full_name,
+                    'username' => $registration->username,
+                    'approved_at' => $registration->approved_at?->format('d M Y, H:i') ?? 'Baru saja',
+                    'message' => 'Pendaftaran Anda telah disetujui! Silakan langsung login dengan PIN / Password Anda.',
+                    'action_label' => '👉 Masuk ke Portal Login',
+                    'action_url' => route('presensi2.login'),
+                ];
+            } elseif ($registration->status === 'rejected') {
+                $result = [
+                    'found' => true,
+                    'status' => 'rejected',
+                    'badge' => 'Perlu Perbaikan / Ditolak ⚠️',
+                    'badge_color' => '#ef4444',
+                    'full_name' => $registration->full_name,
+                    'username' => $registration->username,
+                    'rejection_reason' => $registration->rejection_reason ?: 'Data tidak sesuai atau berkas identitas belum memenuhi syarat.',
+                    'message' => 'Pengajuan Anda belum disetujui oleh Admin / HR.',
+                    'action_label' => 'Daftar Ulang Sekarang',
+                    'action_url' => route('presensi2.register'),
+                ];
+            }
+        } else {
+            $result = [
+                'found' => false,
+                'status' => 'not_found',
+                'badge' => 'Tidak Ditemukan ❓',
+                'badge_color' => '#6b7280',
+                'message' => "Tidak ditemukan pengajuan akun dengan username atau nomor HP '{$keyword}'. Pastikan penulisan sudah benar.",
+                'action_label' => 'Daftar Akun Baru',
+                'action_url' => route('presensi2.register'),
+            ];
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json($result);
+        }
+
+        return view('presensi2.check-status', [
+            'keyword' => $keyword,
+            'result' => $result,
+        ]);
     }
 
     /**
@@ -447,12 +933,70 @@ class AttendanceWebV2Controller extends Controller
                 ->withErrors(['employee_id' => 'Identitas karyawan atau NIK tidak ditemukan. Silakan periksa kembali atau pilih dari daftar.']);
         }
 
-        // Verifikasi: cek password dulu, lalu PIN
-        if (! $this->verifyEmployeeCredential($employee, $credential)) {
+        $throttleKey = 'presensi2_login:'.($employee ? 'emp_'.$employee->id : ($identifier ?: 'unknown')).'|'.$request->ip();
+
+        if (RateLimiter::tooManyAttempts($throttleKey, 3)) {
+            $seconds = RateLimiter::availableIn($throttleKey);
+
             return redirect()->route('presensi2.login')
                 ->withInput()
-                ->withErrors(['credential' => 'Password atau PIN yang Anda masukkan salah.']);
+                ->with('lockout_seconds', $seconds)
+                ->withErrors([
+                    'credential' => "Terlalu banyak percobaan login gagal. Demi keamanan, akses dikunci selama {$seconds} detik.",
+                ]);
         }
+
+        // Verifikasi: cek password dulu, lalu PIN
+        if (! $this->verifyEmployeeCredential($employee, $credential)) {
+            RateLimiter::hit($throttleKey, 60);
+            $remaining = RateLimiter::remaining($throttleKey, 3);
+
+            if ($remaining === 2) {
+                // Early warning percobaan ke-1
+                return redirect()->route('presensi2.login')
+                    ->withInput()
+                    ->with('remaining_attempts', 2)
+                    ->withErrors(['credential' => 'Password atau PIN salah. Anda memiliki 2 kali kesempatan lagi sebelum akses dikunci 1 menit.']);
+            } elseif ($remaining === 1) {
+                // Critical early warning percobaan ke-2 (peringatan terakhir)
+                return redirect()->route('presensi2.login')
+                    ->withInput()
+                    ->with('remaining_attempts', 1)
+                    ->withErrors(['credential' => 'PERINGATAN TERAKHIR: Percobaan ke-2 gagal! Jika salah 1 kali lagi, akun dan perangkat akan dikunci selama 1 menit.']);
+            } else {
+                $seconds = RateLimiter::availableIn($throttleKey);
+
+                // Catat Kejadian Lockout ke AuditLog (Deteksi Keamanan & Anti Brute-Force)
+                rescue(fn () => AuditLog::create([
+                    'user_id' => $employee?->id,
+                    'auditable_type' => Employee::class,
+                    'auditable_id' => $employee?->id ?? 0,
+                    'action' => 'portal_login_lockout',
+                    'new_values' => [
+                        'status' => 'LOCKED_OUT',
+                        'reason' => '3_FAILED_PASSWORD_ATTEMPTS',
+                        'employee_name' => $employee?->name ?? 'Unknown',
+                        'employee_code' => $employee?->code ?? $identifier,
+                        'lockout_duration_seconds' => $seconds,
+                        'ip_address' => $request->ip() ?? '127.0.0.1',
+                        'user_agent' => $request->userAgent() ?? 'Web Portal Presensi v2',
+                        'attempted_at' => now()->toDateTimeString(),
+                    ],
+                    'ip_address' => $request->ip() ?? '127.0.0.1',
+                    'user_agent' => $request->userAgent() ?? 'Web Portal Presensi v2',
+                    'created_at' => now(),
+                ]));
+
+                return redirect()->route('presensi2.login')
+                    ->withInput()
+                    ->with('lockout_seconds', $seconds)
+                    ->withErrors([
+                        'credential' => "Anda telah salah memasukkan password sebanyak 3 kali. Akses dikunci selama {$seconds} detik.",
+                    ]);
+            }
+        }
+
+        RateLimiter::clear($throttleKey);
 
         session(['presensi2_employee_id' => $employee->id]);
         $employee->update(['last_login_at' => now()]);

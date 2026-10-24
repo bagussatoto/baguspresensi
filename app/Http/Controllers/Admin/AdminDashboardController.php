@@ -209,7 +209,7 @@ class AdminDashboardController extends Controller
     /**
      * Ambil profil admin dan cabang penugasan.
      */
-    private function getProfileData(Request $request): array
+    public static function getProfileData(?Request $request = null): array
     {
         $currentUser = Auth::user();
         $managerEmployee = Employee::where('is_active', true)
@@ -221,7 +221,7 @@ class AdminDashboardController extends Controller
             ->first();
 
         $adminRole = session('admin_role', 'Manager');
-        $adminName = session('admin_user_name') ?: ($managerEmployee?->name ?: ($currentUser?->name ?: 'Bagus'));
+        $adminName = session('admin_user_name') ?: ($managerEmployee?->name ?: ($currentUser?->name ?: 'Bagus Satoto'));
         $adminEmail = $managerEmployee?->email ?: ($currentUser?->email ?: 'bagusbudi1308@gmail.com');
         $adminPhone = $managerEmployee?->phone ?: '031-3981811';
         $adminNik = $managerEmployee?->code ?: 'EMP-043';
@@ -244,7 +244,7 @@ class AdminDashboardController extends Controller
             'company' => 'Maya Graha Kencana (MGK)',
             'system_version' => 'v2.5.0 Enterprise ERP',
             'status' => 'Online & Terverifikasi',
-            'ip_address' => $request->ip() ?: '192.168.5.10',
+            'ip_address' => ($request ? $request->ip() : null) ?: '192.168.5.10',
             'server_time' => Carbon::now()->isoFormat('dddd, D MMMM Y - HH:mm:ss').' WIB',
         ];
     }
@@ -644,9 +644,6 @@ class AdminDashboardController extends Controller
         }
 
         $allRowsForTotal = $matrixRows;
-        if ($unclaimedRow) {
-            $allRowsForTotal[] = $unclaimedRow;
-        }
 
         $matrixTotals = [
             'shift_1_hours' => array_sum(array_column($allRowsForTotal, 'shift_1_hours')),
@@ -669,7 +666,7 @@ class AdminDashboardController extends Controller
                 'month_name' => ($monthNames[$rekapMonth] ?? 'Bulan').' '.$rekapYear,
                 'branch_name' => $branches->first()?->name ?? 'Maya Graha Kencana',
                 'rows' => $matrixRows,
-                'unclaimed' => $unclaimedRow,
+                'unclaimed' => null,
                 'totals' => $matrixTotals,
             ],
         ];

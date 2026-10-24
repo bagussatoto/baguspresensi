@@ -105,10 +105,10 @@
                     <tr style="background: rgba(30, 41, 59, 0.8); border-bottom: 1px solid var(--border-glass); color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
                         <th style="padding: 12px 16px;">No</th>
                         <th style="padding: 12px 16px;">Waktu Daftar</th>
-                        <th style="padding: 12px 16px;">Nama Lengkap Pemohon</th>
-                        <th style="padding: 12px 16px;">Username Pilihan</th>
-                        <th style="padding: 12px 16px;">Kontak WhatsApp</th>
-                        <th style="padding: 12px 16px;">Sidik Jari Perangkat (ISO Audit)</th>
+                        <th style="padding: 12px 16px;">Nama Lengkap</th>
+                        <th style="padding: 12px 16px;">Username</th>
+                        <th style="padding: 12px 16px;">Kontak &amp; Email</th>
+                        <th style="padding: 12px 16px;">Sidik Jari Perangkat</th>
                         <th style="padding: 12px 16px; text-align: center;">Status</th>
                         <th style="padding: 12px 16px; text-align: center;">Tindakan Otorisasi</th>
                     </tr>
@@ -134,10 +134,17 @@
                             </td>
                             <td style="padding: 12px 16px; color: var(--text-muted);">
                                 @if($reg->phone)
-                                    <a href="https://wa.me/{{ preg_replace('/^0/', '62', preg_replace('/[^0-9]/', '', $reg->phone)) }}" target="_blank" style="color: #34d399; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;" title="Chat via WhatsApp">
-                                        <span>💬</span> {{ $reg->phone }}
-                                    </a>
-                                @else
+                                    <div>
+                                        <a href="https://wa.me/{{ preg_replace('/^0/', '62', preg_replace('/[^0-9]/', '', $reg->phone)) }}" target="_blank" style="color: #34d399; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;" title="Chat via WhatsApp">
+                                            <span>💬</span> {{ $reg->phone }}
+                                        </a>
+                                    </div>
+                                @endif
+                                @if($reg->email)
+                                    <div style="font-size: 11.5px; color: #94a3b8; margin-top: 2px; display: inline-flex; align-items: center; gap: 4px;">
+                                        <span>✉️</span> {{ $reg->email }}
+                                    </div>
+                                @elseif(!$reg->phone)
                                     <span style="color: var(--text-sub);">-</span>
                                 @endif
                             </td>
@@ -201,6 +208,7 @@
                         <th style="padding: 10px 14px;">Status Akhir</th>
                         <th style="padding: 10px 14px;">Diverifikasi Oleh (Checker)</th>
                         <th style="padding: 10px 14px;">Hasil di Master Data (SoT)</th>
+                        <th style="padding: 10px 14px; text-align: center;">Aksi &amp; Forensik</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -237,6 +245,38 @@
                                 @else
                                     <span style="color: var(--text-sub);">-</span>
                                 @endif
+                            </td>
+                            <td style="padding: 10px 14px; text-align: center;">
+                                <div style="display: flex; gap: 6px; justify-content: center; align-items: center;">
+                                    <!-- Read: Detail 360 -->
+                                    <button type="button" onclick="showDetailModal({{ $item->id }})" style="background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;" title="Lihat Detail & Jejak Audit">
+                                        👁️ Detail
+                                    </button>
+
+                                    @if($item->status === 'rejected')
+                                        <!-- Update: Buka Ulang ke Pending -->
+                                        <form method="POST" action="{{ route('admin.karyawan.verifikasi.reset', $item->id) }}" style="display: inline;" onsubmit="return confirm('Kembalikan berkas pendaftaran {{ $item->full_name }} ke antrean pending untuk ditinjau ulang?');">
+                                            @csrf
+                                            <button type="submit" style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); color: #fbbf24; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;" title="Review Kembali / Buka Ulang">
+                                                🔄 Review Ulang
+                                            </button>
+                                        </form>
+
+                                        <!-- Update: Edit Catatan Penolakan -->
+                                        <button type="button" onclick="openEditNoteModal({{ $item->id }}, '{{ addslashes($item->rejection_reason ?? '') }}')" style="background: rgba(148, 163, 184, 0.15); border: 1px solid rgba(148, 163, 184, 0.3); color: #cbd5e1; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;" title="Koreksi Catatan">
+                                            ✏️ Catatan
+                                        </button>
+
+                                        <!-- Delete: Hapus Arsip Berkas Ditolak -->
+                                        <form method="POST" action="{{ route('admin.karyawan.verifikasi.destroy', $item->id) }}" style="display: inline;" onsubmit="return confirm('PERINGATAN: Hapus arsip pendaftaran {{ $item->full_name }} secara permanen?');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;" title="Hapus Arsip">
+                                                🗑️
+                                            </button>
+                                        </form>
+                                    @endif
+                                </div>
                             </td>
                         </tr>
                     @empty
@@ -294,6 +334,11 @@
                     <div style="margin-bottom: 12px;">
                         <label style="font-size: 11px; color: var(--text-sub); display: block; margin-bottom: 2px;">Nomor WhatsApp:</label>
                         <div id="modal_view_phone" style="font-size: 13px; color: #34d399; font-weight: 600;">-</div>
+                    </div>
+
+                    <div style="margin-bottom: 12px;">
+                        <label style="font-size: 11px; color: var(--text-sub); display: block; margin-bottom: 2px;">Alamat Email:</label>
+                        <div id="modal_view_email" style="font-size: 13px; color: #38bdf8; font-weight: 600;">-</div>
                     </div>
 
                     <div style="margin-bottom: 12px;">
@@ -371,7 +416,7 @@
             <!-- MODAL FOOTER -->
             <div style="background: rgba(15, 23, 42, 0.95); border-top: 1px solid var(--border-glass); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;">
                 <div style="font-size: 11px; color: var(--text-sub);">
-                    Otorisator: <strong>{{ Auth::user()->name ?? 'Administrator' }}</strong> (Super Admin)
+                    Otorisator: <strong>{{ $profileData['name'] ?? (session('admin_user_name') ?: (Auth::user()->name ?? 'Bagus Satoto')) }}</strong> ({{ $profileData['role'] ?? 'Manager' }})
                 </div>
                 <div style="display: flex; gap: 10px;">
                     <button type="button" onclick="closeApprovalModal()" style="background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #94a3b8; padding: 8px 16px; border-radius: 8px; font-size: 13px; cursor: pointer;">
@@ -428,14 +473,17 @@
 </div>
 
 <script>
+    const verifikasiBaseUrl = "{{ url('/admin/karyawan-verifikasi') }}";
+
     function openApprovalModal(reg) {
-        document.getElementById('modal_view_name').textContent = reg.full_name;
-        document.getElementById('modal_view_username').textContent = reg.username;
+        document.getElementById('modal_view_name').textContent = reg.full_name || '-';
+        document.getElementById('modal_view_username').textContent = reg.username || '-';
         document.getElementById('modal_view_phone').textContent = reg.phone || '-';
+        document.getElementById('modal_view_email').textContent = reg.email || '-';
         document.getElementById('modal_view_meta').textContent = (reg.created_at ? reg.created_at : 'Baru saja') + ' | IP: ' + (reg.ip_address || '127.0.0.1');
 
         const form = document.getElementById('formApproval');
-        form.action = "{{ url('/admin/karyawan-verifikasi') }}/" + reg.id + "/approve";
+        form.action = verifikasiBaseUrl + "/" + reg.id + "/approve";
 
         const modal = document.getElementById('modalApproval');
         modal.style.display = 'flex';
@@ -446,10 +494,10 @@
     }
 
     function openRejectModal(reg) {
-        document.getElementById('reject_emp_name').textContent = reg.full_name + ' (' + reg.username + ')';
+        document.getElementById('reject_emp_name').textContent = (reg.full_name || '') + ' (' + (reg.username || '') + ')';
 
         const form = document.getElementById('formReject');
-        form.action = "{{ url('/admin/karyawan-verifikasi') }}/" + reg.id + "/reject";
+        form.action = verifikasiBaseUrl + "/" + reg.id + "/reject";
 
         const modal = document.getElementById('modalReject');
         modal.style.display = 'flex';
@@ -463,8 +511,162 @@
     window.addEventListener('click', function(e) {
         const modalApprove = document.getElementById('modalApproval');
         const modalReject = document.getElementById('modalReject');
+        const modalDetail = document.getElementById('modalDetail');
+        const modalEditNote = document.getElementById('modalEditNote');
         if (e.target === modalApprove) closeApprovalModal();
         if (e.target === modalReject) closeRejectModal();
+        if (e.target === modalDetail) closeDetailModal();
+        if (e.target === modalEditNote) closeEditNoteModal();
     });
+
+    // Detail 360 Forensik Modal (Read)
+    async function showDetailModal(regId) {
+        const modal = document.getElementById('modalDetail');
+        const bodyContent = document.getElementById('modal_detail_content');
+        modal.style.display = 'flex';
+        bodyContent.innerHTML = '<div style="text-align: center; padding: 30px; color: #38bdf8;">⏳ Memuat jejak forensik ISO 27001...</div>';
+
+        try {
+            const res = await fetch(verifikasiBaseUrl + "/" + regId, {
+                headers: { 'Accept': 'application/json' }
+            });
+            const data = await res.json();
+            if (!data.success) {
+                bodyContent.innerHTML = '<div style="color: #ef4444; padding: 20px;">Gagal memuat rincian berkas.</div>';
+                return;
+            }
+
+            const reg = data.registration;
+            const trails = data.audit_trail || [];
+
+            let html = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+                    <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px;">
+                        <div style="font-size: 11px; text-transform: uppercase; color: #38bdf8; font-weight: 700; margin-bottom: 8px;">Informasi Pendaftar (Maker)</div>
+                        <div style="font-size: 14px; font-weight: 700; color: #fff;">${reg.full_name}</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Username: <code style="color: #38bdf8;">${reg.username}</code></div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">No HP: ${reg.phone} | Email: ${reg.email}</div>
+                        <div style="font-size: 11px; color: var(--text-sub); margin-top: 6px;">IP Pemohon: ${reg.ip_address || '-'}</div>
+                    </div>
+
+                    <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px;">
+                        <div style="font-size: 11px; text-transform: uppercase; color: #34d399; font-weight: 700; margin-bottom: 8px;">Keputusan Otorisasi (Checker)</div>
+                        <div>
+                            Status: <span style="font-weight: 800; color: ${reg.status === 'approved' ? '#34d399' : '#f87171'}; text-transform: uppercase;">${reg.status}</span>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Diverifikasi oleh: <strong>${reg.approver ? reg.approver.name : 'System/Admin'}</strong></div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Waktu: ${reg.approved_at || '-'}</div>
+                        ${reg.rejection_reason ? `<div style="font-size: 12px; color: #fca5a5; margin-top: 6px; background: rgba(239, 68, 68, 0.1); padding: 6px 10px; border-radius: 6px;">Alasan: ${reg.rejection_reason}</div>` : ''}
+                    </div>
+                </div>
+
+                <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px;">
+                    <div style="font-size: 11px; text-transform: uppercase; color: #e2e8f0; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                        <span>📜</span>
+                        <span>Log Jejak Audit Forensik (WORM ISO 27001)</span>
+                    </div>
+                    <div style="max-height: 200px; overflow-y: auto;">
+            `;
+
+            if (trails.length === 0) {
+                html += `<div style="font-size: 12px; color: var(--text-sub); text-align: center; padding: 12px;">Belum ada log jejak audit tambahan.</div>`;
+            } else {
+                html += `<table style="width: 100%; border-collapse: collapse; font-size: 11.5px; text-align: left;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-sub);">
+                            <th style="padding: 6px;">Waktu</th>
+                            <th style="padding: 6px;">Aksi</th>
+                            <th style="padding: 6px;">Pelaksana</th>
+                            <th style="padding: 6px;">IP Address</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+                trails.forEach(t => {
+                    html += `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                            <td style="padding: 6px; color: var(--text-sub);">${t.created_at || '-'}</td>
+                            <td style="padding: 6px; font-weight: 600; color: #38bdf8;">${t.action}</td>
+                            <td style="padding: 6px; color: #fff;">${t.user_id ? 'User #' + t.user_id : 'System'}</td>
+                            <td style="padding: 6px; color: var(--text-sub);">${t.ip_address || '-'}</td>
+                        </tr>
+                    `;
+                });
+                html += `</tbody></table>`;
+            }
+
+            html += `</div></div>`;
+            bodyContent.innerHTML = html;
+        } catch (e) {
+            bodyContent.innerHTML = '<div style="color: #ef4444; padding: 20px;">Terjadi kesalahan saat memuat data.</div>';
+        }
+    }
+
+    function closeDetailModal() {
+        document.getElementById('modalDetail').style.display = 'none';
+    }
+
+    // Modal Edit Catatan Penolakan (Update)
+    function openEditNoteModal(regId, currentNote) {
+        document.getElementById('edit_rejection_reason').value = currentNote || '';
+        const form = document.getElementById('formEditNote');
+        form.action = verifikasiBaseUrl + "/" + regId;
+        document.getElementById('modalEditNote').style.display = 'flex';
+    }
+
+    function closeEditNoteModal() {
+        document.getElementById('modalEditNote').style.display = 'none';
+    }
 </script>
+
+<!-- MODAL DETAIL 360 FORENSIK (READ) -->
+<div id="modalDetail" style="display: none; position: fixed; inset: 0; background: rgba(2, 6, 23, 0.85); backdrop-filter: blur(8px); z-index: 1050; align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: #0f172a; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 16px; width: 100%; max-width: 720px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7); overflow: hidden; animation: popIn 0.25s ease-out;">
+        <div style="background: linear-gradient(90deg, #0284c7, #0f172a); padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 20px;">🔍</span>
+                <h3 style="margin: 0; font-size: 15px; font-weight: 800; color: #fff;">Detail Berkas &amp; Forensik ISO 27001</h3>
+            </div>
+            <button type="button" onclick="closeDetailModal()" style="background: transparent; border: none; color: #94a3b8; font-size: 22px; cursor: pointer;">&times;</button>
+        </div>
+        <div id="modal_detail_content" style="padding: 20px; max-height: 75vh; overflow-y: auto;">
+            <!-- Render via JS -->
+        </div>
+        <div style="background: rgba(15, 23, 42, 0.95); border-top: 1px solid rgba(255,255,255,0.08); padding: 12px 20px; text-align: right;">
+            <button type="button" onclick="closeDetailModal()" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 6px 14px; border-radius: 8px; font-size: 12px; cursor: pointer;">
+                Tutup
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL EDIT CATATAN PENOLAKAN (UPDATE) -->
+<div id="modalEditNote" style="display: none; position: fixed; inset: 0; background: rgba(2, 6, 23, 0.85); backdrop-filter: blur(8px); z-index: 1050; align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: #0f172a; border: 1px solid rgba(148, 163, 184, 0.35); border-radius: 16px; width: 100%; max-width: 480px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7); overflow: hidden; animation: popIn 0.25s ease-out;">
+        <div style="background: linear-gradient(90deg, #334155, #0f172a); padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 20px;">✏️</span>
+                <h3 style="margin: 0; font-size: 15px; font-weight: 800; color: #fff;">Koreksi Catatan Verifikasi</h3>
+            </div>
+            <button type="button" onclick="closeEditNoteModal()" style="background: transparent; border: none; color: #94a3b8; font-size: 22px; cursor: pointer;">&times;</button>
+        </div>
+        <form id="formEditNote" method="POST" action="">
+            @csrf
+            @method('PUT')
+            <div style="padding: 20px;">
+                <label for="edit_rejection_reason" style="font-size: 12px; font-weight: 700; color: #fff; display: block; margin-bottom: 6px;">
+                    Catatan Verifikasi / Alasan Penolakan:
+                </label>
+                <textarea name="rejection_reason" id="edit_rejection_reason" rows="3" class="filter-input" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 12px; outline: none;"></textarea>
+            </div>
+            <div style="background: rgba(15, 23, 42, 0.95); border-top: 1px solid rgba(255,255,255,0.08); padding: 12px 20px; display: flex; justify-content: flex-end; gap: 8px;">
+                <button type="button" onclick="closeEditNoteModal()" style="background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #94a3b8; padding: 6px 14px; border-radius: 8px; font-size: 12px; cursor: pointer;">
+                    Batal
+                </button>
+                <button type="submit" style="background: #0284c7; border: none; color: #fff; padding: 6px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;">
+                    Simpan Perubahan
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 @endsection

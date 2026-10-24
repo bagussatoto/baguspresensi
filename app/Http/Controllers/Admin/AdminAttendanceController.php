@@ -107,6 +107,16 @@ class AdminAttendanceController extends Controller
             ->get()
             ->keyBy('employee_id');
 
+        $todayLockouts = AuditLog::where('action', 'portal_login_lockout')
+            ->whereDate('created_at', $selectedDate)
+            ->count();
+
+        $recentLockouts = AuditLog::where('action', 'portal_login_lockout')
+            ->whereDate('created_at', $selectedDate)
+            ->latest('id')
+            ->limit(3)
+            ->get();
+
         return view('admin.presensi.index', compact(
             'records',
             'branches',
@@ -122,7 +132,9 @@ class AdminAttendanceController extends Controller
             'totalMenitTelat',
             'totalLemburMenit',
             'pendingLeaves',
-            'pendingOvertimes'
+            'pendingOvertimes',
+            'todayLockouts',
+            'recentLockouts'
         ));
     }
 

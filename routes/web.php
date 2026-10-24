@@ -83,9 +83,12 @@ Route::prefix('presensi2')->name('presensi2.')->group(function () {
     Route::get('/login', [AttendanceWebV2Controller::class, 'showLogin'])->name('login');
     Route::post('/login', [AttendanceWebV2Controller::class, 'login'])->middleware('throttle:5,1')->name('login.post');
     Route::get('/register', [AttendanceWebV2Controller::class, 'showRegister'])->name('register');
+    Route::post('/register/check-availability', [AttendanceWebV2Controller::class, 'checkAvailability'])->middleware('throttle:30,1')->name('register.check');
     Route::post('/register', [AttendanceWebV2Controller::class, 'register'])->middleware('throttle:6,1')->name('register.post');
     Route::get('/lupa-password', [AttendanceWebV2Controller::class, 'showForgotPassword'])->name('forgot-password');
     Route::post('/lupa-password', [AttendanceWebV2Controller::class, 'resetPassword'])->middleware('throttle:5,1')->name('forgot-password.post');
+    Route::get('/cek-status', [AttendanceWebV2Controller::class, 'showCheckStatus'])->name('check-status');
+    Route::post('/cek-status', [AttendanceWebV2Controller::class, 'checkStatusQuery'])->middleware('throttle:20,1')->name('check-status.query');
     Route::match(['get', 'post'], '/logout', [AttendanceWebV2Controller::class, 'logout'])->name('logout');
 
     Route::get('/', [AttendanceWebV2Controller::class, 'index'])->name('index');
@@ -244,8 +247,12 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::post('/karyawan/{employee}/toggle-status', [AdminEmployeeController::class, 'toggleStatus'])->name('admin.karyawan.toggle-status');
     Route::delete('/karyawan/{employee}', [AdminEmployeeController::class, 'destroy'])->name('admin.karyawan.destroy');
     Route::get('/karyawan-verifikasi', [AdminEmployeeController::class, 'verifikasiIndex'])->name('admin.karyawan.verifikasi');
+    Route::get('/karyawan-verifikasi/{registration}', [AdminEmployeeController::class, 'showRegistration'])->name('admin.karyawan.verifikasi.show');
     Route::post('/karyawan-verifikasi/{registration}/approve', [AdminEmployeeController::class, 'approveRegistration'])->name('admin.karyawan.verifikasi.approve');
     Route::post('/karyawan-verifikasi/{registration}/reject', [AdminEmployeeController::class, 'rejectRegistration'])->name('admin.karyawan.verifikasi.reject');
+    Route::post('/karyawan-verifikasi/{registration}/reset', [AdminEmployeeController::class, 'resetRegistrationToPending'])->name('admin.karyawan.verifikasi.reset');
+    Route::put('/karyawan-verifikasi/{registration}', [AdminEmployeeController::class, 'updateRegistrationNote'])->name('admin.karyawan.verifikasi.update');
+    Route::delete('/karyawan-verifikasi/{registration}', [AdminEmployeeController::class, 'destroyRegistration'])->name('admin.karyawan.verifikasi.destroy');
 
     // Tinjauan Hak Akses Pengguna & De-provisioning (ISO/IEC 27001:2022 Klausul A.8.5)
     Route::get('/karyawan-access-review', [AdminEmployeeController::class, 'accessReviewIndex'])->name('admin.karyawan.access-review');

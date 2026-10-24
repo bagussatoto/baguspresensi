@@ -18,6 +18,7 @@ class EmployeeRegistration extends Model
     protected $fillable = [
         'full_name',
         'phone',
+        'email',
         'username',
         'password',
         'pin',

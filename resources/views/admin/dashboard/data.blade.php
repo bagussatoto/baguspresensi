@@ -21,15 +21,6 @@
     </div>
 
     <div class="section-card-body">
-        <!-- SUB TABS NAVIGATION -->
-        <div class="tab-nav-pills">
-            <a href="javascript:void(0)" class="tab-pill-btn {{ $activeTab == 'tab-profil' ? 'active' : '' }}" onclick="switchDataTab(event, 'tab-profil')"><span>👤</span> 1.1 Profil & Karyawan</a>
-            <a href="javascript:void(0)" class="tab-pill-btn {{ $activeTab == 'tab-jadwal' ? 'active' : '' }}" onclick="switchDataTab(event, 'tab-jadwal')"><span>📅</span> 1.2 Jadwal Shift</a>
-            <a href="javascript:void(0)" class="tab-pill-btn {{ $activeTab == 'tab-billing' ? 'active' : '' }}" onclick="switchDataTab(event, 'tab-billing')"><span>💰</span> 1.3 Data Billing Shift</a>
-            <a href="javascript:void(0)" class="tab-pill-btn {{ $activeTab == 'tab-presensi' ? 'active' : '' }}" onclick="switchDataTab(event, 'tab-presensi')"><span>👥</span> 1.4 Jumlah Presensi Karyawan</a>
-            <a href="javascript:void(0)" class="tab-pill-btn {{ $activeTab == 'tab-jamkerja' ? 'active' : '' }}" onclick="switchDataTab(event, 'tab-jamkerja')"><span>⏱️</span> 1.5 Jam Kerja Karyawan</a>
-            <a href="javascript:void(0)" class="tab-pill-btn {{ $activeTab == 'tab-sop' ? 'active' : '' }}" onclick="switchDataTab(event, 'tab-sop')"><span>📜</span> 1.6 Standard Operating Procedure</a>
-        </div>
 
         <!-- ============================================================== -->
         <!-- 1.1 PROFIL & CRUD DATA KARYAWAN -->
@@ -368,6 +359,9 @@
         <!-- 1.4 JUMLAH PRESENSI KARYAWAN & REKAP BULANAN -->
         <!-- ============================================================== -->
         <div id="tab-presensi" class="data-sub-tab" style="{{ $activeTab == 'tab-presensi' ? 'display: block;' : 'display: none;' }}">
+            <h4 style="font-size: 15px; font-weight: 800; color: #fff; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
+                <span>👥</span> Jumlah Presensi Karyawan &amp; Monitoring Kehadiran
+            </h4>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px;">
                 <div style="background: rgba(15, 23, 42, 0.6); padding: 14px; border-radius: 10px; border: 1px solid var(--border-glass); text-align: center;">
                     <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Total Karyawan</div>
@@ -745,6 +739,7 @@
                                     <th style="padding: 10px 10px; text-align: right; font-weight: 800; color: #334155; border-right: 1px solid #e2e8f0;">Total Shift</th>
                                     <th style="padding: 10px 10px; text-align: right; font-weight: 800; color: #334155; border-right: 1px solid #e2e8f0;">BO (jam)</th>
                                     <th style="padding: 10px 10px; text-align: right; font-weight: 800; color: #334155; border-right: 1px solid #e2e8f0;">Total (jam)</th>
+                                    <th style="padding: 10px 12px; text-align: center; font-weight: 800; color: #334155; width: 75px;">Telat</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -765,45 +760,21 @@
                                         @endif
                                     </td>
                                     <td style="padding: 8px 10px; text-align: right; font-weight: 800; color: #0f172a; border-right: 1px solid #e2e8f0;">{{ $row['total_hours'] }}</td>
-                                    <td style="padding: 6px 8px; text-align: center; border-right: 1px solid #e2e8f0;">
-                                        @if($row['mepet_count'] > 0)
-                                            <span class="badge-mepet-print" style="background: #ea580c; color: #ffffff; font-weight: 800; border-radius: 4px; padding: 2px 8px; display: inline-block; min-width: 22px;">{{ $row['mepet_count'] }}</span>
-                                        @else
-                                            <span style="color: #94a3b8;">0</span>
-                                        @endif
-                                    </td>
-                                    <td style="padding: 6px 8px; text-align: center; border-right: 1px solid #e2e8f0;">
+                                    <td style="padding: 6px 8px; text-align: center;">
                                         @if($row['late_count'] > 0)
-                                            <span class="badge-telat-print" style="background: #be185d; color: #ffffff; font-weight: 800; border-radius: 4px; padding: 2px 8px; display: inline-block; min-width: 22px;">{{ $row['late_count'] }}</span>
+                                            <span class="badge-telat-print" style="background: #a2124d; color: #ffffff; font-weight: 800; border-radius: 6px; padding: 3px 8px; display: inline-block; min-width: 26px; text-align: center; box-shadow: 0 1px 2px rgba(162, 18, 77, 0.3);">{{ $row['late_count'] }}</span>
                                         @else
-                                            <span style="color: #94a3b8;">0</span>
+                                            <span style="color: #94a3b8; font-weight: 500;">0</span>
                                         @endif
                                     </td>
-                                    <td style="padding: 8px 12px; text-align: right; font-weight: 700; color: #334155;">{{ $row['komisi_formatted'] }}</td>
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="12" style="text-align: center; color: #64748b; padding: 24px;">
+                                    <td colspan="10" style="text-align: center; color: #64748b; padding: 24px;">
                                         Belum ada rincian jam kerja staf outlet untuk periode {{ $rekapBulanSummary['month_name'] }}.
                                     </td>
                                 </tr>
                                 @endforelse
-
-                                @if(!empty($rekapOutletSummary['shift_matrix']['unclaimed']))
-                                @php $uncl = $rekapOutletSummary['shift_matrix']['unclaimed']; @endphp
-                                <tr style="border-bottom: 1px solid #cbd5e1; background: #fff7ed;">
-                                    <td style="padding: 8px; text-align: center; color: #9a3412; font-weight: 700; border-right: 1px solid #e2e8f0;">{{ $uncl['no'] }}</td>
-                                    <td style="padding: 8px 14px; text-align: left; font-weight: 800; color: #9a3412; border-right: 1px solid #e2e8f0; letter-spacing: 0.5px;">{{ $uncl['operator'] }}</td>
-                                    <td style="padding: 8px 10px; text-align: right; color: #9a3412; font-weight: 700; border-right: 1px solid #e2e8f0;">{{ $uncl['shift_1_hours'] }}</td>
-                                    <td style="padding: 8px 10px; text-align: right; color: #9a3412; font-weight: 700; border-right: 1px solid #e2e8f0;">{{ $uncl['shift_2_hours'] }}</td>
-                                    <td style="padding: 8px 10px; text-align: right; color: #9a3412; font-weight: 700; border-right: 1px solid #e2e8f0;">{{ $uncl['shift_3_hours'] }}</td>
-                                    <td style="padding: 8px 10px; text-align: right; color: #9a3412; font-weight: 700; border-right: 1px solid #e2e8f0;">{{ $uncl['shift_4_hours'] }}</td>
-                                    <td style="padding: 8px 10px; text-align: right; font-weight: 800; color: #9a3412; border-right: 1px solid #e2e8f0;">{{ $uncl['total_shift_hours'] }}</td>
-                                    <td style="padding: 8px 10px; text-align: right; color: #94a3b8; border-right: 1px solid #e2e8f0;">0</td>
-                                    <td style="padding: 8px 10px; text-align: right; font-weight: 800; color: #9a3412; border-right: 1px solid #e2e8f0;">{{ $uncl['total_hours'] }}</td>
-                                  
-                                </tr>
-                                @endif
                             </tbody>
                             <tfoot>
                                 @php $totals = $rekapOutletSummary['shift_matrix']['totals']; @endphp
@@ -819,9 +790,7 @@
                                         <span class="color-bo-print" style="color: #dc2626; font-weight: 900;">{{ $totals['bo_hours'] }}</span>
                                     </td>
                                     <td style="padding: 10px 10px; text-align: right; font-weight: 900; color: #0f172a; border-right: 1px solid #cbd5e1;">{{ $totals['total_hours'] }}</td>
-                                    <td style="padding: 10px 8px; text-align: center; font-weight: 900; color: #0f172a; border-right: 1px solid #cbd5e1;">{{ $totals['mepet_count'] }}</td>
-                                    <td style="padding: 10px 8px; text-align: center; font-weight: 900; color: #0f172a; border-right: 1px solid #cbd5e1;">{{ $totals['late_count'] }}</td>
-                                    <td style="padding: 10px 12px; text-align: right; font-weight: 900; color: #0f172a;">{{ $totals['komisi_formatted'] }}</td>
+                                    <td style="padding: 10px 8px; text-align: center; font-weight: 900; color: #0f172a;">{{ $totals['late_count'] }}</td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -1281,7 +1250,7 @@
         <!-- ============================================================== -->
         <div id="tab-sop" class="data-sub-tab" style="{{ $activeTab == 'tab-sop' ? 'display: block;' : 'display: none;' }}">
             <div style="margin-bottom: 16px;">
-                <h3 style="font-size: 15px; font-weight: 700; color: #fff;">📜 Panduan Standar Operasional Prosedur (SOP) Maya Graha Kencana</h3>
+                <h3 style="font-size: 15px; font-weight: 700; color: #fff;">📜 Standard Operating Procedure (SOP) Maya Graha Kencana</h3>
                 <span style="font-size: 12px; color: var(--text-muted);">Seluruh staff dan admin wajib mematuhi seluruh tahapan kerja di bawah ini.</span>
             </div>
 

@@ -314,39 +314,75 @@
         <form action="{{ route('presensi2.forgot-password.post') }}" method="POST" id="form-forgot">
             @csrf
 
-            <!-- 1. Pilih Nama Karyawan -->
+            <!-- Proteksi Honeypot Anti-Spam Bot (Tersembunyi bagi pengguna manusia, jebakan untuk bot otomatis) -->
+            <div style="display: none !important; position: absolute !important; left: -9999px !important; top: -9999px !important; width: 0 !important; height: 0 !important; overflow: hidden !important;" aria-hidden="true">
+                <label for="honeypot_website">Website / Profil Perusahaan (Kosongkan):</label>
+                <input type="text" name="honeypot_website" id="honeypot_website" tabindex="-1" autocomplete="off" value="">
+            </div>
+
+            <!-- 1. Tulis Nama Karyawan Manual -->
             <div class="form-group-custom">
-                <label for="employee_id" class="form-label-custom">
-                    <span>1. Pilih Identitas Karyawan Anda</span>
-                    <span style="font-size: 11px; color: #f59e0b; font-weight: normal;">(Akun Terdaftar)</span>
+                <label for="employee_name" class="form-label-custom">
+                    <span>1. Tulis Nama Karyawan Anda</span>
+                    <span style="font-size: 11px; color: #f59e0b; font-weight: normal;">(Input Manual)</span>
                 </label>
                 <div class="input-field-wrap">
                     <span class="input-leading-icon">👤</span>
-                    <select 
-                        name="employee_id" 
-                        id="employee_id" 
-                        class="form-control-custom"
-                        style="cursor: pointer; appearance: none; -webkit-appearance: none; padding-right: 40px;"
-                        required
+                    <input 
+                        type="text" 
+                        name="employee_name" 
+                        id="employee_name" 
+                        class="form-control-custom" 
+                        placeholder="Ketik nama lengkap Anda (cth: Bagus Satoto)..." 
+                        value="{{ old('employee_name') }}"
+                        required 
                         autofocus
+                        autocomplete="name"
                     >
-                        <option value="" disabled selected>-- Pilih nama Anda --</option>
-                        @foreach($employees as $emp)
-                            <option value="{{ $emp->id }}" {{ old('employee_id') == $emp->id ? 'selected' : '' }}>
-                                {{ $emp->name }} ({{ $emp->code ?? 'Karyawan' }}) — {{ $emp->position ?? ($emp->role ? $emp->role->value : 'Staf') }}
-                            </option>
-                        @endforeach
-                    </select>
-                    <div style="position: absolute; right: 14px; pointer-events: none; color: var(--fp-text-body); font-size: 12px;">
-                        ▼
-                    </div>
+                </div>
+                <div style="font-size: 11.5px; color: var(--fp-text-body); margin-top: 6px; display: flex; align-items: center; gap: 5px;">
+                    <span>ℹ️</span>
+                    <span>Tulis nama lengkap Anda secara manual sesuai data akun terdaftar.</span>
                 </div>
             </div>
 
-            <!-- 2. PIN atau Password Baru -->
+            <!-- 2. Password atau PIN Lama (Verifikasi Keamanan) -->
+            <div class="form-group-custom">
+                <label for="old_credential" class="form-label-custom">
+                    <span>2. Password atau PIN 6-Digit Lama</span>
+                    <span style="font-size: 11px; color: #ef4444; font-weight: normal;">(Verifikasi Keamanan Akun)</span>
+                </label>
+                <div class="input-field-wrap">
+                    <span class="input-leading-icon">🔒</span>
+                    <input 
+                        type="password" 
+                        name="old_credential" 
+                        id="old_credential" 
+                        class="form-control-custom" 
+                        placeholder="Masukkan Password atau PIN lama Anda saat ini" 
+                        required 
+                        minlength="4"
+                        style="padding-right: 42px;"
+                    >
+                    <button 
+                        type="button" 
+                        class="password-toggle-btn" 
+                        onclick="toggleVisibility('old_credential', 'eye-icon-0')" 
+                        title="Tampilkan / Sembunyikan"
+                    >
+                        <span id="eye-icon-0">👁️</span>
+                    </button>
+                </div>
+                <div style="font-size: 11.5px; color: var(--fp-text-body); margin-top: 6px; display: flex; align-items: center; gap: 5px;">
+                    <span>🛡️</span>
+                    <span>Wajib memasukkan PIN / Password lama agar akun Anda terlindungi dan tidak dibobol pihak lain.</span>
+                </div>
+            </div>
+
+            <!-- 3. PIN atau Password Baru -->
             <div class="form-group-custom">
                 <label for="new_credential" class="form-label-custom">
-                    <span>2. Password atau PIN 6-Digit Baru</span>
+                    <span>3. Password atau PIN 6-Digit Baru</span>
                     <span style="font-size: 11px; color: #f59e0b; font-weight: normal;" id="pin-status-text">
                         (Minimal 4 karakter)
                     </span>
@@ -382,12 +418,24 @@
                     <div class="pin-dot" id="pdot-5"></div>
                     <div class="pin-dot" id="pdot-6"></div>
                 </div>
+
+                <!-- Indikator Kekuatan Password Dinamis (Mode Password) -->
+                <div id="password-meter-container" style="display: none; margin-top: 10px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--fp-input-border); border-radius: 10px; padding: 10px 12px; text-align: left;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 11.5px;">
+                        <span style="color: var(--fp-text-body);">Kekuatan Password:</span>
+                        <span id="password-strength-label" style="font-weight: 700; color: #f59e0b;">Cukup</span>
+                    </div>
+                    <div style="width: 100%; height: 6px; background: rgba(255, 255, 255, 0.08); border-radius: 999px; overflow: hidden;">
+                        <div id="password-strength-bar" style="width: 0%; height: 100%; border-radius: 999px; transition: all 0.3s ease; background: #ef4444;"></div>
+                    </div>
+                    <div id="password-strength-hint" style="font-size: 11px; color: var(--fp-text-body); margin-top: 5px; line-height: 1.35;"></div>
+                </div>
             </div>
 
-            <!-- 3. Konfirmasi PIN / Password Baru -->
+            <!-- 4. Konfirmasi PIN / Password Baru -->
             <div class="form-group-custom">
                 <label for="confirm_credential" class="form-label-custom">
-                    <span>3. Ulangi Password atau PIN Baru</span>
+                    <span>4. Ulangi Password atau PIN Baru</span>
                     <span style="font-size: 11px; color: var(--fp-text-body); font-weight: normal;">(Harus sama)</span>
                 </label>
                 <div class="input-field-wrap">
@@ -459,10 +507,67 @@
         }
     }
 
+    function isWeakPin(pin) {
+        if (!/^\d{6}$/.test(pin)) return false;
+        if (/^(\d)\1{5}$/.test(pin)) return true;
+        if (/^(\d{2})\1{2}$/.test(pin)) return true;
+        if (/^(\d{3})\1$/.test(pin)) return true;
+        const asc = '0123456789';
+        const desc = '9876543210';
+        if (asc.includes(pin) || desc.includes(pin)) return true;
+        const common = ['112233', '332211', '123321', '321123', '102030', '302010', '007007'];
+        if (common.includes(pin)) return true;
+        return false;
+    }
+
+    function calculatePasswordStrength(val) {
+        let score = 0;
+        const len = val.length;
+        if (len >= 8) score += 1;
+        if (len >= 10) score += 1;
+        if (/[a-z]/.test(val) && /[A-Z]/.test(val)) score += 1;
+        if (/\d/.test(val)) score += 1;
+        if (/[^a-zA-Z0-9]/.test(val)) score += 1;
+
+        if (len < 8) {
+            return {
+                percent: Math.min(30, Math.round((len / 8) * 30)),
+                label: 'Kurang (< 8 Karakter)',
+                color: '#ef4444',
+                hint: '⚠️ Password minimal 8 karakter angka ataupun huruf.'
+            };
+        }
+
+        if (score <= 2) {
+            return {
+                percent: 45,
+                label: 'Cukup',
+                color: '#f59e0b',
+                hint: '💡 Tips: Campurkan variasi huruf besar dan angka agar semakin kuat.'
+            };
+        } else if (score <= 3) {
+            return {
+                percent: 75,
+                label: 'Kuat ✅',
+                color: '#0284c7',
+                hint: '👍 Kombinasi huruf dan angka sudah bagus dan aman.'
+            };
+        } else {
+            return {
+                percent: 100,
+                label: 'Sangat Kuat 🛡️',
+                color: '#10b981',
+                hint: '🔒 Sangat aman! Memiliki kombinasi huruf besar, kecil, angka, dan simbol lengkap.'
+            };
+        }
+    }
+
     function handleCredentialInput(val) {
         const isNumeric = /^\d+$/.test(val);
         const len = val.length;
         const statusText = document.getElementById('pin-status-text');
+        const dotsContainer = document.getElementById('pin-dots-container');
+        const meterContainer = document.getElementById('password-meter-container');
 
         for (let i = 1; i <= 6; i++) {
             const dot = document.getElementById(`pdot-${i}`);
@@ -475,15 +580,58 @@
             }
         }
 
-        if (isNumeric && len > 0) {
-            statusText.textContent = `PIN Terdeteksi (${len}/6 Digit)`;
-            statusText.style.color = '#f59e0b';
-        } else if (len > 0) {
-            statusText.textContent = 'Password Alfanumerik';
-            statusText.style.color = 'var(--fp-text-body)';
-        } else {
+        if (len === 0) {
             statusText.textContent = '(Minimal 4 karakter)';
             statusText.style.color = '#f59e0b';
+            if (dotsContainer) dotsContainer.style.display = 'flex';
+            if (meterContainer) meterContainer.style.display = 'none';
+        } else if (isNumeric) {
+            if (dotsContainer) dotsContainer.style.display = 'flex';
+            if (meterContainer) meterContainer.style.display = 'none';
+
+            if (len === 6) {
+                if (isWeakPin(val)) {
+                    statusText.textContent = 'PIN Terlalu Lemah / Pasaran ⚠️';
+                    statusText.style.color = '#ef4444';
+                } else {
+                    statusText.textContent = 'PIN 6-Digit Kuat ✅';
+                    statusText.style.color = '#10b981';
+                }
+            } else {
+                statusText.textContent = `PIN Terdeteksi (${len}/6 Digit)`;
+                statusText.style.color = '#f59e0b';
+            }
+        } else {
+            // Mode Password
+            if (dotsContainer) dotsContainer.style.display = 'none';
+
+            if (meterContainer) {
+                meterContainer.style.display = 'block';
+                const strength = calculatePasswordStrength(val);
+                const bar = document.getElementById('password-strength-bar');
+                const label = document.getElementById('password-strength-label');
+                const hint = document.getElementById('password-strength-hint');
+
+                if (bar) {
+                    bar.style.width = strength.percent + '%';
+                    bar.style.background = strength.color;
+                }
+                if (label) {
+                    label.textContent = strength.label;
+                    label.style.color = strength.color;
+                }
+                if (hint) {
+                    hint.textContent = strength.hint;
+                }
+            }
+
+            if (len >= 8) {
+                statusText.textContent = `Password ${len} Karakter Valid ✅`;
+                statusText.style.color = '#10b981';
+            } else {
+                statusText.textContent = `Password Terdeteksi (${len}/8 Karakter)`;
+                statusText.style.color = '#f59e0b';
+            }
         }
     }
 

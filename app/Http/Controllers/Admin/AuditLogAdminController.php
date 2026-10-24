@@ -47,6 +47,8 @@ class AuditLogAdminController extends Controller
             'overtime_rejected' => 'Penolakan Klaim Lembur',
             'overtime_approval_updated' => 'Persetujuan Lembur',
             'attendance_setting_updated' => 'Pembaruan Pengaturan Presensi',
+            'portal_login' => 'Login Karyawan Berhasil',
+            'portal_login_lockout' => '🚨 Insiden Keamanan: Percobaan Login Gagal (Lockout)',
         ];
 
         return view('admin.presensi.audit_logs', compact('logs', 'actionLabels'));
