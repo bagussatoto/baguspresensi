@@ -217,19 +217,25 @@ class EarlyWarningNotificationService
 
         try {
             $response = Http::timeout(5)
-                ->withToken($apiToken)
+                ->withHeaders([
+                    'Authorization' => $apiToken,
+                ])
                 ->post($apiUrl, [
                     'target' => $cleanPhone,
                     'message' => $message,
+                    'countryCode' => '62',
                 ]);
 
-            if ($response->successful()) {
+            $json = $response->json();
+            $isSuccess = $response->successful() && (($json['status'] ?? true) === true);
+
+            if ($isSuccess) {
                 Log::info("[EarlyWarning WhatsApp] Berhasil terkirim ke {$cleanPhone}");
 
                 return true;
             }
 
-            Log::warning("[EarlyWarning WhatsApp] Gagal kirim ke {$cleanPhone}: HTTP {$response->status()}");
+            Log::warning("[EarlyWarning WhatsApp] Gagal kirim ke {$cleanPhone}: HTTP {$response->status()} - ".json_encode($json));
 
             return false;
         } catch (\Throwable $e) {
