@@ -1,0 +1,21 @@
+25 / 10 /26  - Thomas
+
+1. menambahkan notifikasi untuk celah keamanan registrasi
+di usahakan pada regitasi memelurkan keamanan yang tidak bisa dibobol
+ketika orang lain mencoba 3 kali, akan diberitahukan melalui whatsap untul melakukan approve ke admin
+
+memaiaki 
+API : https://api.fonnte.com/
+
+uji : tail -f storage/logs/laravel.log
+
+
+2. membuat cek list daftar verifikati gagal dan yang disetujui
+
+3. Menu Persetujuan Reset di Panel Admin (Maker-Checker)
+
+5. Halaman Cek Status Permohonan Reset Mandiri
+
+6. Membuat sorotan Khusus pada Kolom yang Bermasalah / Highlighted Fields
+
+7. Membuat rencana antrean
