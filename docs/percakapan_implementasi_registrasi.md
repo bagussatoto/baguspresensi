@@ -1,6 +1,6 @@
 # Dokumentasi Fitur Registrasi Mandiri, Lupa Password & Keamanan Akun Portal Presensi
 
-**Tanggal Pembaruan:** 24 Oktober 2026  
+**Tanggal Pembaruan:** 25 Oktober 2026  
 **Aplikasi:** Portal Presensi Karyawan v2 (MGK)  
 **Dokumen Rujukan Awal:** `docs/registrasi diperlukan.txt`
 
