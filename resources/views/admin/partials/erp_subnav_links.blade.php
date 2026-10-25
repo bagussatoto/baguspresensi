@@ -87,7 +87,22 @@
     @endif
 </a>
 
-{{-- 10c. REVIEW HAK AKSES ISO 27001 --}}
+{{-- 10c. OTORISASI RESET PASSWORD --}}
+@php
+    $subnavResetPendingCount = \App\Models\PasswordResetRequest::where('status', 'pending')->count();
+@endphp
+<a href="{{ route('admin.karyawan.reset-password') }}" 
+   class="subnav-item {{ request()->routeIs('admin.karyawan.reset-password*') ? 'active' : '' }}" 
+   title="Otorisasi Reset Password & PIN Karyawan (Maker-Checker)">
+    🔑 reset pin
+    @if($subnavResetPendingCount > 0)
+        <span style="background: #ef4444; color: #fff; font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 999px; margin-left: 3px;">
+            {{ $subnavResetPendingCount }}
+        </span>
+    @endif
+</a>
+
+{{-- 10d. REVIEW HAK AKSES ISO 27001 --}}
 <a href="{{ route('admin.karyawan.access-review') }}" 
    class="subnav-item {{ request()->routeIs('admin.karyawan.access-review*') ? 'active' : '' }}" 
    title="Tinjauan Hak Akses Pengguna & De-provisioning (ISO 27001 Klausul A.8.5)">

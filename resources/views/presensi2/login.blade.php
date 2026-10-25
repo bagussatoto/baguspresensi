@@ -914,11 +914,17 @@
                     <span style="font-size: 20px;">⏱️</span>
                     <div>
                         <div style="font-size: 11px; color: #38bdf8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Estimasi Waktu Verifikasi Admin/HR</div>
-                        <div style="font-size: 13.5px; font-weight: 700; color: var(--login-text-heading);">{{ $regInfo['estimated_time'] ?? '1x24 Jam Kerja (Senin - Sabtu)' }}</div>
+                        <div style="font-size: 13.5px; font-weight: 700; color: var(--login-text-heading);">{{ $regInfo['estimated_time'] ?? '1x24 Jam Kerja (Maksimal 3 Hari)' }}</div>
                     </div>
                 </div>
-                <div style="font-size: 11.5px; color: var(--login-text-body); line-height: 1.4;">
+                <div style="font-size: 11.5px; color: var(--login-text-body); line-height: 1.4; margin-bottom: 12px;">
                     💡 <em>Petunjuk:</em> Tim Admin/HR akan memverifikasi kesesuaian data Anda. Setelah akun disetujui, Anda dapat langsung masuk dengan Username dan PIN / Password yang telah didaftarkan.
+                </div>
+                <div style="text-align: right;">
+                    <a href="{{ route('presensi2.check-status') }}" style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #38bdf8; text-decoration: none; padding: 6px 14px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.28); border-radius: 8px; transition: all 0.2s ease;">
+                        <span>🔍</span>
+                        <span>Pantau Status Verifikasi &rarr;</span>
+                    </a>
                 </div>
             </div>
         @elseif(session('success'))
@@ -967,7 +973,7 @@
                         <span id="lockout-timer" data-seconds="{{ session('lockout_seconds') }}" style="font-size: 24px; font-weight: 900; font-family: monospace; color: #fde047;">
                             {{ session('lockout_seconds') }}
                         </span>
-                        <span style="font-size: 12px; color: #fef08a; font-weight: bold;">detik</span>
+                        <span id="lockout-timer-unit" style="font-size: 12px; color: #fef08a; font-weight: bold;">detik</span>
                     </div>
                 </div>
 
@@ -1197,14 +1203,6 @@
                 <span>Karyawan Baru / Ingin Daftar Ulang? <strong>Klik di Sini</strong> &rarr;</span>
             </a>
         </div>
-
-        <!-- Cek Status Pengajuan Link -->
-        <div style="margin-top: 6px; text-align: center;">
-            <a href="{{ route('presensi2.check-status') }}" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: var(--login-text-body); font-size: 12px; text-decoration: none; padding: 6px 12px; transition: color 0.2s;">
-                <span>🔍</span>
-                <span>Sudah pernah daftar? <strong>Cek Status Pengajuan Akun</strong></span>
-            </a>
-        </div>
     </div>
 </div>
 
@@ -1314,13 +1312,23 @@
         const btnText = document.getElementById('btn-text');
         const credInput = document.getElementById('credential');
         const progressBar = document.getElementById('lockout-progress-bar');
+        const unitEl = document.getElementById('lockout-timer-unit');
+
+        function formatTimeDisplay(totalSec) {
+            if (totalSec >= 60) {
+                const m = Math.floor(totalSec / 60);
+                const s = totalSec % 60;
+                return `${m}m ${s < 10 ? '0' : ''}${s}s`;
+            }
+            return `${totalSec}`;
+        }
 
         if (btn) {
             btn.disabled = true;
             btn.style.opacity = '0.5';
             btn.style.cursor = 'not-allowed';
             btn.style.filter = 'grayscale(100%)';
-            if (btnText) btnText.textContent = `Terkunci (${seconds}s)`;
+            if (btnText) btnText.textContent = `Terkunci (${formatTimeDisplay(seconds)})`;
         }
         if (credInput) {
             credInput.disabled = true;
@@ -1329,10 +1337,21 @@
             credInput.style.borderColor = 'rgba(239, 68, 68, 0.35)';
         }
 
+        if (seconds >= 60 && unitEl) {
+            unitEl.textContent = '';
+        }
+
         const interval = setInterval(() => {
             seconds--;
-            if (timerEl) timerEl.textContent = seconds;
-            if (btnText) btnText.textContent = `Terkunci (${seconds}s)`;
+            if (timerEl) {
+                timerEl.textContent = formatTimeDisplay(seconds);
+            }
+            if (unitEl) {
+                unitEl.textContent = seconds < 60 ? 'detik' : '';
+            }
+            if (btnText) {
+                btnText.textContent = `Terkunci (${formatTimeDisplay(seconds)})`;
+            }
             if (progressBar && initialSeconds > 0) {
                 const percent = Math.max(0, (seconds / initialSeconds) * 100);
                 progressBar.style.width = percent + '%';

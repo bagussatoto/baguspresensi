@@ -35,4 +35,15 @@ return [
         ],
     ],
 
+    'whatsapp' => [
+        'api_url' => env('WHATSAPP_API_URL'),
+        'api_token' => env('WHATSAPP_API_TOKEN'),
+        'admin_phone' => env('WHATSAPP_ADMIN_PHONE'),
+    ],
+
+    'telegram' => [
+        'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+        'chat_id' => env('TELEGRAM_ADMIN_CHAT_ID'),
+    ],
+
 ];

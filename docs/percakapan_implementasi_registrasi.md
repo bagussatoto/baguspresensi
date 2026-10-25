@@ -68,7 +68,7 @@ Kombinasi 6 angka yang mudah ditebak otomatis ditolak baik di frontend maupun ba
 - Memberikan informasi akurat:
   - **Menunggu Verifikasi ⏳**: Menampilkan estimasi waktu dan tanggal pengajuan.
   - **Telah Disetujui / Aktif ✅**: Tautan langsung menuju halaman login presensi.
-  - **Perlu Perbaikan / Ditolak ⚠️**: Menampilkan catatan alasan penolakan dari Admin/HR dan tombol daftar ulang.
+  - **Perlu Perbaikan / Ditolak ⚠️**: Menampilkan catatan alasan penolakan dari Admin/HR dan tombol daftar ulang terintegrasi.
   - **Tidak Ditemukan ❓**: Menampilkan arahan untuk mendaftar akun baru jika data belum pernah diajukan.
 
 ---
@@ -80,16 +80,18 @@ Kombinasi 6 angka yang mudah ditebak otomatis ditolak baik di frontend maupun ba
   - `resources/views/presensi2/login.blade.php`
   - `resources/views/presensi2/forgot-password.blade.php`
   - `resources/views/presensi2/check-status.blade.php`
+  - `resources/views/admin/karyawan/verifikasi.blade.php`
 - **Controller & Routes:**
   - `app/Http/Controllers/AttendanceWebV2Controller.php`
+  - `app/Http/Controllers/Admin/AdminEmployeeController.php`
   - `routes/web.php`
 - **Database & Model:**
   - `app/Models/EmployeeRegistration.php`
   - `database/migrations/2026_10_24_113812_add_email_to_employee_registrations_table.php`
   - `database/migrations/2026_10_18_171854_create_employee_registrations_table.php`
 - **Unit & Feature Tests:**
-  - `tests/Feature/RegistrationEarlyWarningAndUniqueValidationTest.php` (15 skenario pengujian)
-  - `tests/Feature/EmployeeRegistrationMakerCheckerTest.php` (8 skenario pengujian)
+  - `tests/Feature/RegistrationEarlyWarningAndUniqueValidationTest.php` (18 skenario pengujian)
+  - `tests/Feature/EmployeeRegistrationMakerCheckerTest.php` (9 skenario pengujian)
   - `tests/Feature/AttendanceWebV2PortalTest.php` (38 skenario pengujian)
 
 ---
@@ -98,7 +100,7 @@ Kombinasi 6 angka yang mudah ditebak otomatis ditolak baik di frontend maupun ba
 
 Pengujian dijalankan melalui PHPUnit dengan hasil:
 ```
-Tests: 61 passed (337 assertions)
+Tests: 65 passed (347 assertions)
 Status: SUCCESS (100% Passed)
 Code Formatter: Laravel Pint (Passed)
 ```

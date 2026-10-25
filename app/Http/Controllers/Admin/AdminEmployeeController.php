@@ -8,14 +8,17 @@ use App\Domains\Attendance\Enums\ApprovalStatus;
 use App\Domains\Attendance\Enums\AttendanceStatus;
 use App\Domains\Attendance\Models\AuditLog;
 use App\Domains\Attendance\Services\AuditLogService;
+use App\Domains\Attendance\Services\EarlyWarningNotificationService;
 use App\Http\Controllers\Controller;
 use App\Models\EmployeeRegistration;
+use App\Models\PasswordResetRequest;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\View\View;
 use Modules\MasterData\Domain\Enums\EmployeeRole;
 use Modules\MasterData\Domain\Models\Branch;
@@ -383,6 +386,8 @@ class AdminEmployeeController extends Controller
         $assignedBranchId = $isBranchAdmin ? $adminUser->assigned_branch_id : null;
 
         $pendingRegistrations = EmployeeRegistration::where('status', 'pending')
+            ->orderByRaw("CASE WHEN rejection_reason LIKE '%[Sebelumnya Ditolak]%' THEN 0 ELSE 1 END")
+            ->orderBy('updated_at', 'desc')
             ->orderBy('id', 'desc')
             ->get();
 
@@ -896,5 +901,312 @@ class AdminEmployeeController extends Controller
             'Content-Type' => 'text/csv',
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ]);
+    }
+
+    /**
+     * Tampilkan antrean permohonan reset password/PIN karyawan (Maker-Checker & SoD).
+     */
+    public function resetPasswordIndex(Request $request): View
+    {
+        $adminUser = Auth::user();
+        $isBranchAdmin = $adminUser && method_exists($adminUser, 'isBranchAdmin') && $adminUser->isBranchAdmin();
+        $assignedBranchId = $isBranchAdmin ? $adminUser->assigned_branch_id : null;
+
+        $pendingQuery = PasswordResetRequest::with(['employee.branch'])->where('status', 'pending');
+        if ($assignedBranchId) {
+            $pendingQuery->whereHas('employee', fn ($q) => $q->where('branch_id', $assignedBranchId));
+        }
+        $pendingRequests = $pendingQuery->orderBy('id', 'desc')->get();
+
+        $processedQuery = PasswordResetRequest::with(['employee.branch', 'approver'])
+            ->whereIn('status', ['approved', 'rejected']);
+        if ($assignedBranchId) {
+            $processedQuery->whereHas('employee', fn ($q) => $q->where('branch_id', $assignedBranchId));
+        }
+        $processedRequests = $processedQuery->orderBy('updated_at', 'desc')->limit(30)->get();
+
+        $profileData = AdminDashboardController::getProfileData($request);
+
+        return view('admin.karyawan.reset-password', compact(
+            'pendingRequests',
+            'processedRequests',
+            'profileData'
+        ));
+    }
+
+    /**
+     * Setujui Permohonan Reset Password / PIN Karyawan.
+     */
+    public function approvePasswordReset(Request $request, PasswordResetRequest $resetRequest): RedirectResponse
+    {
+        if ($resetRequest->status !== 'pending') {
+            return back()->with('error', 'Permohonan reset ini sudah diproses sebelumnya.');
+        }
+
+        $employee = $resetRequest->employee;
+        if (! $employee) {
+            return back()->with('error', 'Data karyawan tidak ditemukan.');
+        }
+
+        $adminUser = Auth::user();
+
+        // Terapkan PIN/Password baru ke Master Data Karyawan
+        $employee->update([
+            'pin' => $resetRequest->new_credential,
+            'password' => $resetRequest->new_credential,
+        ]);
+
+        $resetRequest->update([
+            'status' => 'approved',
+            'approved_by' => $adminUser?->id,
+            'approved_at' => now(),
+        ]);
+
+        // Catat AuditLog
+        rescue(fn () => AuditLog::create([
+            'user_id' => $adminUser?->id,
+            'action' => 'EMPLOYEE_PASSWORD_RESET_APPROVED',
+            'auditable_type' => PasswordResetRequest::class,
+            'auditable_id' => $resetRequest->id,
+            'new_values' => [
+                'employee_id' => $employee->id,
+                'employee_name' => $employee->name,
+                'status' => 'approved',
+                'approved_by' => $adminUser?->name ?? 'Admin',
+            ],
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'created_at' => now(),
+        ]));
+
+        return redirect()->route('admin.karyawan.reset-password')
+            ->with('success', "Permohonan reset password/PIN untuk {$employee->name} ({$employee->code}) berhasil disetujui. Akun sudah dapat digunakan dengan kredensial baru.");
+    }
+
+    /**
+     * Tolak Permohonan Reset Password / PIN Karyawan.
+     */
+    public function rejectPasswordReset(Request $request, PasswordResetRequest $resetRequest): RedirectResponse
+    {
+        if ($resetRequest->status !== 'pending') {
+            return back()->with('error', 'Permohonan reset ini sudah diproses sebelumnya.');
+        }
+
+        $validated = $request->validate([
+            'rejection_reason' => ['required', 'string', 'min:3', 'max:500'],
+        ], [
+            'rejection_reason.required' => 'Wajib memberikan alasan penolakan permohonan reset.',
+            'rejection_reason.min' => 'Alasan penolakan minimal 3 karakter.',
+        ]);
+
+        $adminUser = Auth::user();
+
+        $resetRequest->update([
+            'status' => 'rejected',
+            'rejection_reason' => $validated['rejection_reason'],
+            'approved_by' => $adminUser?->id,
+            'approved_at' => now(),
+        ]);
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => $adminUser?->id,
+            'action' => 'EMPLOYEE_PASSWORD_RESET_REJECTED',
+            'auditable_type' => PasswordResetRequest::class,
+            'auditable_id' => $resetRequest->id,
+            'new_values' => [
+                'employee_id' => $resetRequest->employee_id,
+                'employee_name' => $resetRequest->employee_name,
+                'status' => 'rejected',
+                'reason' => $validated['rejection_reason'],
+            ],
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'created_at' => now(),
+        ]));
+
+        return redirect()->route('admin.karyawan.reset-password')
+            ->with('info', "Permohonan reset password/PIN untuk {$resetRequest->employee_name} telah ditolak.");
+    }
+
+    /**
+     * Edit / Perbarui Catatan atau Informasi Permohonan Reset Password (CRUD - Update).
+     */
+    public function updatePasswordReset(Request $request, PasswordResetRequest $resetRequest): RedirectResponse
+    {
+        $validated = $request->validate([
+            'notes' => ['nullable', 'string', 'max:500'],
+            'rejection_reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $adminUser = Auth::user();
+        $oldNotes = $resetRequest->notes;
+        $oldReason = $resetRequest->rejection_reason;
+
+        $updateData = [];
+        if ($request->has('notes')) {
+            $updateData['notes'] = $validated['notes'];
+        }
+        if ($request->has('rejection_reason')) {
+            $updateData['rejection_reason'] = $validated['rejection_reason'];
+        }
+
+        $resetRequest->update($updateData);
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => $adminUser?->id,
+            'action' => 'EMPLOYEE_PASSWORD_RESET_UPDATED',
+            'auditable_type' => PasswordResetRequest::class,
+            'auditable_id' => $resetRequest->id,
+            'old_values' => [
+                'notes' => $oldNotes,
+                'rejection_reason' => $oldReason,
+            ],
+            'new_values' => $updateData,
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'created_at' => now(),
+        ]));
+
+        return redirect()->route('admin.karyawan.reset-password')
+            ->with('success', "Catatan permohonan reset untuk {$resetRequest->employee_name} berhasil diperbarui.");
+    }
+
+    /**
+     * Hapus Data / Arsip Permohonan Reset Password (CRUD - Delete).
+     */
+    public function destroyPasswordReset(Request $request, PasswordResetRequest $resetRequest): RedirectResponse
+    {
+        $adminUser = Auth::user();
+        $employeeName = $resetRequest->employee_name;
+        $status = $resetRequest->status;
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => $adminUser?->id,
+            'action' => 'EMPLOYEE_PASSWORD_RESET_DELETED',
+            'auditable_type' => PasswordResetRequest::class,
+            'auditable_id' => $resetRequest->id,
+            'old_values' => [
+                'employee_id' => $resetRequest->employee_id,
+                'employee_name' => $employeeName,
+                'status' => $status,
+                'phone' => $resetRequest->phone,
+            ],
+            'new_values' => ['status' => 'DELETED'],
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'created_at' => now(),
+        ]));
+
+        $resetRequest->delete();
+
+        return redirect()->route('admin.karyawan.reset-password')
+            ->with('success', "Data permohonan reset password/PIN {$employeeName} telah berhasil dihapus.");
+    }
+
+    /**
+     * Tampilkan Halaman Persetujuan Pembukaan Blokir (Unlock Approval) Akun Karyawan yang terkunci akibat 3x gagal login.
+     */
+    public function showUnlockApproval(Request $request, Employee $employee): View
+    {
+        $ip = (string) $request->query('ip', '');
+        $expires = (int) $request->query('expires', 0);
+        $token = (string) $request->query('token', '');
+
+        $expectedToken = hash_hmac('sha256', $employee->id.'|'.$ip.'|'.$expires, config('app.key'));
+
+        $isExpired = $expires < now()->timestamp;
+        $isValidToken = hash_equals($expectedToken, $token);
+
+        // Ambil riwayat audit log lockout terbaru untuk employee ini
+        $lastLockoutLog = AuditLog::where('auditable_type', Employee::class)
+            ->where('auditable_id', $employee->id)
+            ->where('action', 'portal_login_lockout')
+            ->latest()
+            ->first();
+
+        return view('admin.karyawan.unlock-approval', [
+            'employee' => $employee,
+            'ip' => $ip,
+            'expires' => $expires,
+            'token' => $token,
+            'isValidToken' => $isValidToken,
+            'isExpired' => $isExpired,
+            'lastLockoutLog' => $lastLockoutLog,
+        ]);
+    }
+
+    /**
+     * Proses Persetujuan Pembukaan Blokir Akun Karyawan (Maker-Checker Approval).
+     */
+    public function processUnlockApproval(Request $request, Employee $employee): RedirectResponse
+    {
+        $ip = (string) $request->input('ip', '');
+        $expires = (int) $request->input('expires', 0);
+        $token = (string) $request->input('token', '');
+
+        $expectedToken = hash_hmac('sha256', $employee->id.'|'.$ip.'|'.$expires, config('app.key'));
+
+        if (! hash_equals($expectedToken, $token) || $expires < now()->timestamp) {
+            return redirect()->route('admin.karyawan.unlock.show', [
+                'employee' => $employee->id,
+                'ip' => $ip,
+                'expires' => $expires,
+                'token' => $token,
+            ])->with('error', 'Token persetujuan tidak valid atau telah kedaluwarsa.');
+        }
+
+        // 1. Reset RateLimiter & Tier Cache untuk membuka blokir
+        $userKey = 'emp_'.$employee->id;
+        RateLimiter::clear('presensi2_login:'.$userKey.'|'.$ip);
+        cache()->forget('presensi2_login_tier:'.$userKey.'|'.$ip);
+
+        // Reset juga untuk IP saat ini dan 127.0.0.1
+        RateLimiter::clear('presensi2_login:'.$userKey.'|'.request()->ip());
+        cache()->forget('presensi2_login_tier:'.$userKey.'|'.request()->ip());
+
+        // Reset juga jika throttleKey menggunakan identifier username
+        if ($employee->username) {
+            RateLimiter::clear('presensi2_login:'.$employee->username.'|'.$ip);
+            cache()->forget('presensi2_login_tier:'.$employee->username.'|'.$ip);
+        }
+
+        $adminUser = Auth::user();
+
+        // 2. Catat Audit Log ISO 27001 (WORM)
+        rescue(fn () => AuditLog::create([
+            'user_id' => $adminUser?->id,
+            'action' => 'EMPLOYEE_LOCKOUT_UNLOCKED_BY_ADMIN',
+            'auditable_type' => Employee::class,
+            'auditable_id' => $employee->id,
+            'old_values' => [
+                'status' => 'LOCKED_OUT',
+                'target_ip' => $ip,
+            ],
+            'new_values' => [
+                'status' => 'UNLOCKED',
+                'unlocked_by' => $adminUser?->name ?? 'Admin',
+                'unlocked_at' => now()->toDateTimeString(),
+                'target_ip' => $ip,
+                'notes' => $request->input('notes', 'Pembukaan blokir akun disetujui oleh Admin melalui tautan WhatsApp Alert.'),
+            ],
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'created_at' => now(),
+        ]));
+
+        // 3. Notifikasi konfirmasi ke WhatsApp Karyawan jika nomor tersedia
+        if ($employee->phone) {
+            $msg = "✅ *[AKUN TELAH DIAKTIFKAN KEMBALI]*\n\n"
+                ."Halo *{$employee->name}* ({$employee->code}),\n"
+                ."Permohonan pembukaan blokir akun Anda telah disetujui (Approved) oleh Admin HRD/IT.\n\n"
+                ."Status akun Anda saat ini sudah *Aktif Kembali*.\n"
+                ."Silakan login ke portal presensi menggunakan username dan PIN/Password yang benar:\n"
+                .'http://192.168.5.10:8086/bagus/presensi2/login';
+
+            rescue(fn () => app(EarlyWarningNotificationService::class)->sendWhatsApp($employee->phone, $msg));
+        }
+
+        return redirect()->route('admin.karyawan')
+            ->with('success', "Akun karyawan {$employee->name} ({$employee->code}) berhasil dibuka blokirnya! Karyawan sudah dapat login kembali.");
     }
 }

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Domains\Attendance\Models\AuditLog;
 use App\Models\EmployeeRegistration;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -283,5 +284,234 @@ class EmployeeRegistrationMakerCheckerTest extends TestCase
         $response->assertOk();
         $response->assertDontSee('Admin Manager');
         $response->assertSee('Bagus Satoto');
+    }
+
+    public function test_rejected_registration_can_check_status_and_receive_signed_re_registration_url(): void
+    {
+        $registration = EmployeeRegistration::create([
+            'full_name' => 'Doni Tata',
+            'username' => 'doni_tata',
+            'phone' => '081234567899',
+            'email' => 'doni@wisata.id',
+            'password' => Hash::make('582914'),
+            'pin' => Hash::make('582914'),
+            'status' => 'rejected',
+            'rejection_reason' => 'Nomor WhatsApp salah 1 digit, mohon perbaiki.',
+        ]);
+
+        $response = $this->post(route('presensi2.check-status.query'), [
+            'keyword' => 'doni_tata',
+        ]);
+
+        $response->assertOk();
+        $response->assertSee('Perlu Perbaikan / Ditolak');
+        $response->assertSee('Nomor WhatsApp salah 1 digit, mohon perbaiki.');
+        $response->assertSee('Daftar Ulang Sekarang');
+
+        $expectedToken = hash_hmac('sha256', $registration->id.'|'.$registration->username.'|'.($registration->created_at?->timestamp ?? 0), config('app.key'));
+        $expectedUrl = route('presensi2.register', ['re_reg' => $registration->id, 'token' => $expectedToken]);
+        $response->assertSee(e($expectedUrl), false);
+    }
+
+    public function test_re_registration_form_loads_with_prefilled_data_and_rejection_reason(): void
+    {
+        $registration = EmployeeRegistration::create([
+            'full_name' => 'Doni Tata',
+            'username' => 'doni_tata',
+            'phone' => '081234567899',
+            'email' => 'doni@wisata.id',
+            'password' => Hash::make('582914'),
+            'pin' => Hash::make('582914'),
+            'status' => 'rejected',
+            'rejection_reason' => 'Nomor WhatsApp salah 1 digit, mohon perbaiki.',
+        ]);
+
+        $token = hash_hmac('sha256', $registration->id.'|'.$registration->username.'|'.($registration->created_at?->timestamp ?? 0), config('app.key'));
+
+        $response = $this->get(route('presensi2.register', ['re_reg' => $registration->id, 'token' => $token]));
+
+        $response->assertOk();
+        $response->assertSee('MODE DAFTAR ULANG &amp; PERBAIKAN DATA', false);
+        $response->assertSee('Nomor WhatsApp salah 1 digit, mohon perbaiki.');
+        $response->assertSee('value="Doni Tata"', false);
+        $response->assertSee('value="doni_tata"', false);
+        $response->assertSee('value="081234567899"', false);
+        $response->assertSee('value="doni@wisata.id"', false);
+        $response->assertSee('⚠️ Perlu Koreksi');
+        $response->assertSee('Pastikan nomor WhatsApp aktif agar dapat dihubungi oleh tim Admin.');
+        $response->assertSee('Perbarui &amp; Ajukan Ulang Pendaftaran', false);
+    }
+
+    public function test_submitting_re_registration_performs_in_place_update_and_sets_status_back_to_pending(): void
+    {
+        $registration = EmployeeRegistration::create([
+            'full_name' => 'Doni Tata',
+            'username' => 'doni_tata',
+            'phone' => '081234567899',
+            'email' => 'doni@wisata.id',
+            'password' => Hash::make('582914'),
+            'pin' => Hash::make('582914'),
+            'status' => 'rejected',
+            'rejection_reason' => 'Nomor WhatsApp salah 1 digit, mohon perbaiki.',
+        ]);
+
+        $token = hash_hmac('sha256', $registration->id.'|'.$registration->username.'|'.($registration->created_at?->timestamp ?? 0), config('app.key'));
+
+        $initialId = $registration->id;
+
+        $response = $this->post(route('presensi2.register.post'), [
+            're_registration_id' => $registration->id,
+            're_registration_token' => $token,
+            'full_name' => 'Doni Tata Wijaya',
+            'username' => 'doni_tata',
+            'credential' => '693821',
+            'confirm_credential' => '693821',
+            'phone' => '081234567800',
+            'email' => 'doni.tata@wisata.id',
+        ]);
+
+        $response->assertRedirect(route('presensi2.login'));
+        $response->assertSessionHas('success');
+
+        // Pastikan TIDAK membuat row baru (In-Place Update Opsi B)
+        $this->assertEquals(1, EmployeeRegistration::where('username', 'doni_tata')->count());
+
+        $registration->refresh();
+        $this->assertEquals($initialId, $registration->id);
+        $this->assertEquals('Doni Tata Wijaya', $registration->full_name);
+        $this->assertEquals('081234567800', $registration->phone);
+        $this->assertEquals('doni.tata@wisata.id', $registration->email);
+        $this->assertEquals('pending', $registration->status);
+        $this->assertStringContainsString('[Sebelumnya Ditolak]', (string) $registration->rejection_reason);
+        $this->assertTrue(Hash::check('693821', $registration->pin));
+
+        // Verifikasi Jejak Audit ISO 27001
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'employee_registration_resubmitted',
+            'auditable_type' => EmployeeRegistration::class,
+            'auditable_id' => $initialId,
+        ]);
+    }
+
+    public function test_admin_verification_table_displays_re_registration_badge_for_resubmitted_applications(): void
+    {
+        $registration = EmployeeRegistration::create([
+            'full_name' => 'Rina Kartika',
+            'username' => 'rina_k',
+            'phone' => '081234567855',
+            'email' => 'rina@wisata.id',
+            'password' => Hash::make('582914'),
+            'pin' => Hash::make('582914'),
+            'status' => 'pending',
+            'rejection_reason' => '[Sebelumnya Ditolak]: Nama tidak sesuai KTP.',
+        ]);
+
+        $admin = User::factory()->create();
+
+        $response = $this->actingAs($admin)->get(route('admin.karyawan.verifikasi'));
+
+        $response->assertOk();
+        $response->assertSee('Rina Kartika');
+        $response->assertSee('🔄 Daftar Ulang');
+        $response->assertSee('BERKAS DAFTAR ULANG / PERBAIKAN');
+        $response->assertSee('Catatan Penolakan Sebelumnya:');
+        $response->assertSee('Daftar Ulang (Prioritas)');
+        $response->assertSee('Pendaftar Baru');
+    }
+
+    public function test_admin_verification_prioritizes_re_registrations_at_top_of_queue(): void
+    {
+        // 1. Pendaftar baru biasa (ID lebih besar, didaftarkan belakangan)
+        $regNew = EmployeeRegistration::create([
+            'full_name' => 'Karyawan Baru Biasa',
+            'username' => 'karyawan_baru',
+            'phone' => '081234567811',
+            'email' => 'baru@wisata.id',
+            'password' => Hash::make('582914'),
+            'pin' => Hash::make('582914'),
+            'status' => 'pending',
+            'rejection_reason' => null,
+            'updated_at' => now(),
+        ]);
+
+        // 2. Pendaftar ulang (revisi dari penolakan)
+        $regRereg = EmployeeRegistration::create([
+            'full_name' => 'Pendaftar Ulang Prioritas',
+            'username' => 'pendaftar_prioritas',
+            'phone' => '081234567822',
+            'email' => 'prioritas@wisata.id',
+            'password' => Hash::make('582914'),
+            'pin' => Hash::make('582914'),
+            'status' => 'pending',
+            'rejection_reason' => '[Sebelumnya Ditolak]: Perbaiki nomor kontak.',
+            'updated_at' => now()->subMinute(),
+        ]);
+
+        $admin = User::factory()->create();
+
+        $response = $this->actingAs($admin)->get(route('admin.karyawan.verifikasi'));
+
+        $response->assertOk();
+
+        // Pastikan Pendaftar Ulang muncul LEBIH DAHULU di HTML daripada Pendaftar Baru (Prioritas Teratas)
+        $content = $response->getContent();
+        $posRereg = strpos($content, 'Pendaftar Ulang Prioritas');
+        $posNew = strpos($content, 'Karyawan Baru Biasa');
+
+        $this->assertNotFalse($posRereg);
+        $this->assertNotFalse($posNew);
+        $this->assertLessThan($posNew, $posRereg, 'Pendaftar ulang harus berada di urutan atas mendahului pendaftar baru.');
+    }
+
+    public function test_max_three_re_registration_limit_locks_online_retry_and_instructs_in_person_hr_visit(): void
+    {
+        $registration = EmployeeRegistration::create([
+            'full_name' => 'Agus Kuncoro',
+            'username' => 'agus_kuncoro',
+            'phone' => '081234567833',
+            'email' => 'agus@wisata.id',
+            'password' => Hash::make('582914'),
+            'pin' => Hash::make('582914'),
+            'status' => 'rejected',
+            'rejection_reason' => 'Identitas tidak valid untuk ketiga kalinya.',
+        ]);
+
+        // Simulasikan sudah 3 kali resubmit sebelumnya tercatat di AuditLog
+        for ($i = 1; $i <= 3; $i++) {
+            AuditLog::create([
+                'user_id' => null,
+                'action' => 'employee_registration_resubmitted',
+                'auditable_type' => EmployeeRegistration::class,
+                'auditable_id' => $registration->id,
+                'new_values' => ['attempt' => $i],
+            ]);
+        }
+
+        // 1. Saat cek status, tombol daftar ulang dimatikan dan muncul arahan tatap muka
+        $checkRes = $this->post(route('presensi2.check-status.query'), [
+            'keyword' => 'agus_kuncoro',
+        ]);
+
+        $checkRes->assertOk();
+        $checkRes->assertSee('Batas Perbaikan Tercapai ⚠️');
+        $checkRes->assertSee('batas perbaikan mandiri secara online telah ditutup');
+        $checkRes->assertDontSee('Daftar Ulang Sekarang');
+
+        // 2. Jika mencoba submit paksa melalui register.post dengan id permohonan tersebut, ditolak
+        $token = hash_hmac('sha256', $registration->id.'|'.$registration->username.'|'.($registration->created_at?->timestamp ?? 0), config('app.key'));
+
+        $submitRes = $this->from(route('presensi2.register'))->post(route('presensi2.register.post'), [
+            're_registration_id' => $registration->id,
+            're_registration_token' => $token,
+            'full_name' => 'Agus Kuncoro Baru',
+            'username' => 'agus_kuncoro',
+            'credential' => '582914',
+            'confirm_credential' => '582914',
+            'phone' => '081234567833',
+            'email' => 'agus@wisata.id',
+        ]);
+
+        $submitRes->assertRedirect(route('presensi2.register'));
+        $submitRes->assertSessionHasErrors(['registration']);
     }
 }

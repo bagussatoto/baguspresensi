@@ -81,7 +81,7 @@ Route::prefix('presensi')->name('presensi.')->group(function () {
 // Portal Presensi Karyawan v2 (Verifikasi Password / PIN 6-Digit)
 Route::prefix('presensi2')->name('presensi2.')->group(function () {
     Route::get('/login', [AttendanceWebV2Controller::class, 'showLogin'])->name('login');
-    Route::post('/login', [AttendanceWebV2Controller::class, 'login'])->middleware('throttle:5,1')->name('login.post');
+    Route::post('/login', [AttendanceWebV2Controller::class, 'login'])->middleware('throttle:30,1')->name('login.post');
     Route::get('/register', [AttendanceWebV2Controller::class, 'showRegister'])->name('register');
     Route::post('/register/check-availability', [AttendanceWebV2Controller::class, 'checkAvailability'])->middleware('throttle:30,1')->name('register.check');
     Route::post('/register', [AttendanceWebV2Controller::class, 'register'])->middleware('throttle:6,1')->name('register.post');
@@ -89,6 +89,8 @@ Route::prefix('presensi2')->name('presensi2.')->group(function () {
     Route::post('/lupa-password', [AttendanceWebV2Controller::class, 'resetPassword'])->middleware('throttle:5,1')->name('forgot-password.post');
     Route::get('/cek-status', [AttendanceWebV2Controller::class, 'showCheckStatus'])->name('check-status');
     Route::post('/cek-status', [AttendanceWebV2Controller::class, 'checkStatusQuery'])->middleware('throttle:20,1')->name('check-status.query');
+    Route::get('/cek-status-reset', [AttendanceWebV2Controller::class, 'showCheckResetStatus'])->name('check-reset-status');
+    Route::post('/cek-status-reset', [AttendanceWebV2Controller::class, 'checkResetStatusQuery'])->middleware('throttle:20,1')->name('check-reset-status.query');
     Route::match(['get', 'post'], '/logout', [AttendanceWebV2Controller::class, 'logout'])->name('logout');
 
     Route::get('/', [AttendanceWebV2Controller::class, 'index'])->name('index');
@@ -253,6 +255,17 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::post('/karyawan-verifikasi/{registration}/reset', [AdminEmployeeController::class, 'resetRegistrationToPending'])->name('admin.karyawan.verifikasi.reset');
     Route::put('/karyawan-verifikasi/{registration}', [AdminEmployeeController::class, 'updateRegistrationNote'])->name('admin.karyawan.verifikasi.update');
     Route::delete('/karyawan-verifikasi/{registration}', [AdminEmployeeController::class, 'destroyRegistration'])->name('admin.karyawan.verifikasi.destroy');
+
+    // Verifikasi & Persetujuan Reset Password / PIN Karyawan (Maker-Checker & SoD)
+    Route::get('/karyawan-reset-password', [AdminEmployeeController::class, 'resetPasswordIndex'])->name('admin.karyawan.reset-password');
+    Route::post('/karyawan-reset-password/{resetRequest}/approve', [AdminEmployeeController::class, 'approvePasswordReset'])->name('admin.karyawan.reset-password.approve');
+    Route::post('/karyawan-reset-password/{resetRequest}/reject', [AdminEmployeeController::class, 'rejectPasswordReset'])->name('admin.karyawan.reset-password.reject');
+    Route::put('/karyawan-reset-password/{resetRequest}', [AdminEmployeeController::class, 'updatePasswordReset'])->name('admin.karyawan.reset-password.update');
+    Route::delete('/karyawan-reset-password/{resetRequest}', [AdminEmployeeController::class, 'destroyPasswordReset'])->name('admin.karyawan.reset-password.destroy');
+
+    // Persetujuan Pembukaan Blokir (Unlock Approval) Akun Karyawan Akibat 3x Gagal Login
+    Route::get('/karyawan-unlock/{employee}', [AdminEmployeeController::class, 'showUnlockApproval'])->name('admin.karyawan.unlock.show');
+    Route::post('/karyawan-unlock/{employee}', [AdminEmployeeController::class, 'processUnlockApproval'])->name('admin.karyawan.unlock.process');
 
     // Tinjauan Hak Akses Pengguna & De-provisioning (ISO/IEC 27001:2022 Klausul A.8.5)
     Route::get('/karyawan-access-review', [AdminEmployeeController::class, 'accessReviewIndex'])->name('admin.karyawan.access-review');

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Database\Factories\EmployeeRegistrationFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -40,6 +41,8 @@ class EmployeeRegistration extends Model
         'approved_at' => 'datetime',
     ];
 
+    public const EXPIRATION_DAYS = 3;
+
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
@@ -48,5 +51,37 @@ class EmployeeRegistration extends Model
     public function createdEmployee(): BelongsTo
     {
         return $this->belongsTo(Employee::class, 'created_employee_id');
+    }
+
+    /**
+     * Scope untuk mengambil pendaftaran berstatus pending yang masih aktif (belum melebihi masa berlaku).
+     *
+     * @param  Builder  $query
+     * @return Builder
+     */
+    public function scopeActivePending($query, ?int $days = null)
+    {
+        $limitDays = $days ?? self::EXPIRATION_DAYS;
+
+        return $query->where('status', 'pending')
+            ->where('created_at', '>=', now()->subDays($limitDays));
+    }
+
+    /**
+     * Cek apakah pendaftaran pending sudah melewati batas masa berlaku.
+     */
+    public function isExpired(?int $days = null): bool
+    {
+        if ($this->status === 'expired') {
+            return true;
+        }
+
+        if ($this->status !== 'pending') {
+            return false;
+        }
+
+        $limitDays = $days ?? self::EXPIRATION_DAYS;
+
+        return $this->created_at ? $this->created_at->lt(now()->subDays($limitDays)) : false;
     }
 }

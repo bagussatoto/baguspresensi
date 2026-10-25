@@ -336,12 +336,28 @@
             </div>
         @endif
 
-        @if(session('error'))
-            <div style="background: rgba(239, 68, 68, 0.14); border: 1px solid rgba(239, 68, 68, 0.35); color: #fca5a5; padding: 12px 16px; border-radius: 12px; font-size: 13px; margin-bottom: 18px; text-align: left; display: flex; align-items: flex-start; gap: 10px; line-height: 1.5;">
-                <span style="font-size: 16px; flex-shrink: 0;">❌</span>
-                <div>
-                    <strong style="color: #ef4444; display: block; margin-bottom: 2px;">Pendaftaran Gagal:</strong>
-                    <span>{{ session('error') }}</span>
+        @if(session('lockout_seconds'))
+            <div class="auth-alert-box auth-alert-error" id="lockout-alert-box" style="background: rgba(239, 68, 68, 0.18); border: 2px solid #ef4444; border-radius: 16px; color: #fca5a5; padding: 16px; display: flex; flex-direction: column; align-items: stretch; gap: 10px; box-shadow: 0 0 25px rgba(239, 68, 68, 0.35); margin-bottom: 18px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; color: #ef4444; font-size: 15px;">
+                        <span style="font-size: 20px;">🛡️</span>
+                        <span>FORMULIR PENDAFTARAN DIBEKUKAN</span>
+                    </div>
+                    <span style="background: rgba(239, 68, 68, 0.3); color: #fecaca; font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: bold;">
+                        Anti Brute-Force
+                    </span>
+                </div>
+                <div style="font-size: 13px; line-height: 1.5; color: #fee2e2;">
+                    {{ $errors->first('registration') ?? $errors->first() }}
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 10px;">
+                    <span style="font-size: 12px; color: #cbd5e1; font-weight: 600;">Waktu tunggu tersisa:</span>
+                    <div style="display: flex; align-items: baseline; gap: 4px;">
+                        <span id="lockout-timer" data-seconds="{{ session('lockout_seconds') }}" style="font-size: 24px; font-weight: 900; font-family: monospace; color: #fde047;">
+                            {{ session('lockout_seconds') }}
+                        </span>
+                        <span id="lockout-timer-unit" style="font-size: 12px; color: #fef08a; font-weight: bold;">detik</span>
+                    </div>
                 </div>
             </div>
         @endif
@@ -369,6 +385,46 @@
         <form action="{{ route('presensi2.register.post') }}" method="POST" id="form-register">
             @csrf
 
+            @if(isset($reRegistration) && isset($reRegToken))
+                @php
+                    $reasonLower = strtolower($reRegistration->rejection_reason ?? '');
+                    $highlightName = str_contains($reasonLower, 'nama') || str_contains($reasonLower, 'ktp') || str_contains($reasonLower, 'identitas');
+                    $highlightUsername = str_contains($reasonLower, 'username') || str_contains($reasonLower, 'user');
+                    $highlightPhone = str_contains($reasonLower, 'telepon') || str_contains($reasonLower, 'nomor') || str_contains($reasonLower, 'wa') || str_contains($reasonLower, 'whatsapp') || str_contains($reasonLower, 'hp') || str_contains($reasonLower, 'ponsel');
+                    $highlightEmail = str_contains($reasonLower, 'email') || str_contains($reasonLower, 'surel');
+                @endphp
+
+                <input type="hidden" name="re_registration_id" value="{{ $reRegistration->id }}">
+                <input type="hidden" name="re_registration_token" value="{{ $reRegToken }}">
+
+                <div style="background: rgba(14, 165, 233, 0.12); border: 1.5px solid #0284c7; border-radius: 16px; padding: 16px; margin-bottom: 20px; text-align: left;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: #38bdf8; font-size: 14px;">
+                            <span>📝</span>
+                            <span>MODE DAFTAR ULANG &amp; PERBAIKAN DATA</span>
+                        </div>
+                        <span style="background: rgba(2, 132, 199, 0.25); color: #7dd3fc; font-size: 11px; padding: 2px 10px; border-radius: 999px; font-weight: 600;">
+                            Pembaruan Langsung
+                        </span>
+                    </div>
+                    @if(!empty($reRegistration->rejection_reason))
+                        <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; color: #fca5a5; font-size: 12px; line-height: 1.4;">
+                            <strong>Catatan dari Admin/HR Sebelumnya:</strong> {{ $reRegistration->rejection_reason }}
+                        </div>
+                    @endif
+                    <div style="font-size: 12.5px; color: var(--reg-text-body); line-height: 1.4;">
+                        Data pengajuan Anda sebelumnya telah dimuat otomatis. Kolom dengan bingkai <strong style="color: #fbbf24;">kuning</strong> menandakan bagian yang disarankan untuk diperiksa dan disesuaikan ulang.
+                    </div>
+                </div>
+            @else
+                @php
+                    $highlightName = false;
+                    $highlightUsername = false;
+                    $highlightPhone = false;
+                    $highlightEmail = false;
+                @endphp
+            @endif
+
             <!-- Proteksi Honeypot Anti-Spam Bot (Tersembunyi bagi pengguna manusia, jebakan untuk bot otomatis) -->
             <div style="display: none !important; position: absolute !important; left: -9999px !important; top: -9999px !important; width: 0 !important; height: 0 !important; overflow: hidden !important;" aria-hidden="true">
                 <label for="honeypot_website">Website / Profil Perusahaan (Kosongkan):</label>
@@ -380,6 +436,9 @@
                 <label for="full_name" class="form-label-custom">
                     <span>1. Nama Lengkap</span>
                     <span style="font-size: 11px; color: var(--reg-text-body); font-weight: normal;">(Sesuai KTP / Identitas)</span>
+                    @if($highlightName)
+                        <span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 6px; padding: 1px 6px; font-size: 10.5px; font-weight: 700; margin-left: 6px;">⚠️ Perlu Koreksi</span>
+                    @endif
                 </label>
                 <div class="input-field-wrap">
                     <span class="input-leading-icon">📝</span>
@@ -388,13 +447,19 @@
                         name="full_name" 
                         id="full_name" 
                         class="form-control-custom" 
+                        style="{{ $highlightName ? 'border-color: #f59e0b; box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);' : '' }}"
                         placeholder="Contoh: Budi Santoso"
-                        value="{{ old('full_name') }}" 
+                        value="{{ old('full_name', $reRegistration->full_name ?? '') }}" 
                         required 
                         minlength="3"
                         autofocus
                     >
                 </div>
+                @if($highlightName)
+                    <div style="font-size: 11px; color: #fbbf24; margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+                        <span>⚠️</span> <span>Periksa kembali ejaan nama lengkap agar sesuai instruksi Admin.</span>
+                    </div>
+                @endif
                 <div id="full_name-feedback" style="font-size: 12px; margin-top: 5px; display: none; line-height: 1.4;"></div>
             </div>
 
@@ -403,6 +468,9 @@
                 <label for="username" class="form-label-custom">
                     <span>2. Username Pilihan</span>
                     <span style="font-size: 11px; color: var(--reg-text-body); font-weight: normal;">(Huruf, angka, titik, strip, garis bawah)</span>
+                    @if($highlightUsername)
+                        <span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 6px; padding: 1px 6px; font-size: 10.5px; font-weight: 700; margin-left: 6px;">⚠️ Perlu Koreksi</span>
+                    @endif
                 </label>
                 <div class="input-field-wrap">
                     <span class="input-leading-icon">👤</span>
@@ -411,14 +479,20 @@
                         name="username" 
                         id="username" 
                         class="form-control-custom" 
+                        style="{{ $highlightUsername ? 'border-color: #f59e0b; box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);' : '' }}"
                         placeholder="Contoh: budi_s"
-                        value="{{ old('username') }}" 
+                        value="{{ old('username', $reRegistration->username ?? '') }}" 
                         required 
                         minlength="3"
                         autocomplete="off"
                     >
                     <span id="username-spinner" style="position: absolute; right: 14px; display: none; font-size: 13px;">⏳</span>
                 </div>
+                @if($highlightUsername)
+                    <div style="font-size: 11px; color: #fbbf24; margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+                        <span>⚠️</span> <span>Username ini disarankan untuk disesuaikan kembali.</span>
+                    </div>
+                @endif
                 <div id="username-feedback" style="font-size: 12px; margin-top: 5px; display: none; line-height: 1.4;"></div>
                 <div id="username-suggestions" style="margin-top: 6px; display: none;"></div>
             </div>
@@ -504,7 +578,7 @@
                         onclick="toggleConfirmVisibility()" 
                         title="Tampilkan / Sembunyikan"
                     >
-                        <span id="eye-icon-confirm">👁️</span>
+                        <!-- <span id="eye-icon-confirm">👁️</span> -->
                     </button>
                 </div>
                 <div id="confirm_credential-feedback" style="font-size: 12px; margin-top: 5px; display: none; line-height: 1.4;"></div>
@@ -515,6 +589,9 @@
                 <label for="phone" class="form-label-custom">
                     <span>4. Nomor HP / WhatsApp</span>
                     <span style="font-size: 11px; color: var(--reg-text-body); font-weight: normal;">(Nomor ponsel aktif, cth: 081234567890)</span>
+                    @if($highlightPhone)
+                        <span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 6px; padding: 1px 6px; font-size: 10.5px; font-weight: 700; margin-left: 6px;">⚠️ Perlu Koreksi</span>
+                    @endif
                 </label>
                 <div class="input-field-wrap">
                     <span class="input-leading-icon">📱</span>
@@ -523,8 +600,9 @@
                         name="phone" 
                         id="phone" 
                         class="form-control-custom" 
+                        style="{{ $highlightPhone ? 'border-color: #f59e0b; box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);' : '' }}"
                         placeholder="Contoh: 081234567890" 
-                        value="{{ old('phone') }}" 
+                        value="{{ old('phone', $reRegistration->phone ?? '') }}" 
                         required
                         minlength="10"
                         maxlength="16"
@@ -532,6 +610,11 @@
                     >
                     <span id="phone-spinner" style="position: absolute; right: 14px; display: none; font-size: 13px;">⏳</span>
                 </div>
+                @if($highlightPhone)
+                    <div style="font-size: 11px; color: #fbbf24; margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+                        <span>⚠️</span> <span>Pastikan nomor WhatsApp aktif agar dapat dihubungi oleh tim Admin.</span>
+                    </div>
+                @endif
                 <div id="phone-feedback" style="font-size: 12px; margin-top: 5px; display: none; line-height: 1.4;"></div>
             </div>
 
@@ -540,6 +623,9 @@
                 <label for="email" class="form-label-custom">
                     <span>5. Alamat Email</span>
                     <span style="font-size: 11px; color: #10b981; font-weight: normal;">(Wajib &amp; Unik)</span>
+                    @if($highlightEmail)
+                        <span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 6px; padding: 1px 6px; font-size: 10.5px; font-weight: 700; margin-left: 6px;">⚠️ Perlu Koreksi</span>
+                    @endif
                 </label>
                 <div class="input-field-wrap">
                     <span class="input-leading-icon">✉️</span>
@@ -548,13 +634,19 @@
                         name="email" 
                         id="email" 
                         class="form-control-custom" 
+                        style="{{ $highlightEmail ? 'border-color: #f59e0b; box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);' : '' }}"
                         placeholder="Contoh: nama@domain.com" 
-                        value="{{ old('email') }}"
+                        value="{{ old('email', $reRegistration->email ?? '') }}"
                         required
                         autocomplete="off"
                     >
                     <span id="email-spinner" style="position: absolute; right: 14px; display: none; font-size: 13px;">⏳</span>
                 </div>
+                @if($highlightEmail)
+                    <div style="font-size: 11px; color: #fbbf24; margin-top: 4px; display: flex; align-items: center; gap: 4px;">
+                        <span>⚠️</span> <span>Periksa kembali penulisan alamat email yang aktif.</span>
+                    </div>
+                @endif
                 <div id="email-feedback" style="font-size: 12px; margin-top: 5px; display: none; line-height: 1.4;"></div>
             </div>
 
@@ -562,7 +654,6 @@
             <div id="checklist-card" style="background: var(--reg-info-bg); border: 1.5px solid var(--reg-info-border); border-radius: 14px; padding: 14px 16px; margin-bottom: 18px; text-align: left;">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
                     <div style="font-size: 13px; font-weight: 700; color: var(--reg-text-heading); display: flex; align-items: center; gap: 6px;">
-                        
                         <span>Status Data Daftar Ulang</span>
                     </div>
                     <span id="checklist-counter" style="font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: rgba(239, 68, 68, 0.15); color: #ef4444;">
@@ -575,8 +666,7 @@
                     <div id="checklist-progress" style="width: 0%; height: 100%; background: linear-gradient(90deg, #f59e0b, #10b981); transition: width 0.3s ease; border-radius: 999px;"></div>
                 </div>
 
-                
-
+            
                 <!-- Notifikasi Keseluruhan & Satu Persatu (Dynamic Alert) -->
                 <div id="validation-missing-summary" style="display: none; margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: rgba(239, 68, 68, 0.12); border: 1.5px solid rgba(239, 68, 68, 0.35); font-size: 12px;">
                     <div style="color: #ef4444; font-weight: 700; margin-bottom: 5px; display: flex; align-items: center; gap: 6px;">
@@ -600,12 +690,12 @@
 
             <button type="submit" class="btn-reg-submit" id="btn-submit-reg">
                 <span>🚀</span>
-                <span id="btn-text">Daftar / Daftar Ulang</span>
+                <span id="btn-text">{{ isset($reRegistration) ? 'Perbarui & Ajukan Ulang Pendaftaran' : 'Daftar / Daftar Ulang' }}</span>
             </button>
         </form>
 
         <div class="reg-info-box">
-            ⏱️ <strong>Estimasi Verifikasi (Alur Maker-Checker):</strong> Estimasi waktu verifikasi oleh Admin/HR adalah <strong>1x24 jam kerja</strong> (Senin – Sabtu). Anda dapat langsung login dan presensi setelah akun disetujui.
+            ⏱️ <strong>Estimasi Verifikasi (Alur Maker-Checker):</strong> Estimasi waktu verifikasi oleh Admin/HR adalah <strong>1x24 jam kerja (maksimal 3 hari)</strong>. Anda dapat langsung login dan presensi setelah akun disetujui.
         </div>
 
         <div style="margin-top: 18px; text-align: center;">
@@ -1330,6 +1420,62 @@
         }
 
         updateChecklistUI(false);
+
+        // Lockout countdown timer handler
+        const timerEl = document.getElementById('lockout-timer');
+        if (timerEl) {
+            let initialSeconds = parseInt(timerEl.getAttribute('data-seconds'), 10);
+            let seconds = initialSeconds;
+            const btn = document.getElementById('btn-submit-reg');
+            const btnText = document.getElementById('btn-text');
+            const unitEl = document.getElementById('lockout-timer-unit');
+
+            function formatTimeDisplay(totalSec) {
+                if (totalSec >= 60) {
+                    const m = Math.floor(totalSec / 60);
+                    const s = totalSec % 60;
+                    return `${m}m ${s < 10 ? '0' : ''}${s}s`;
+                }
+                return `${totalSec}`;
+            }
+
+            if (btn) {
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+                btn.style.cursor = 'not-allowed';
+                btn.style.filter = 'grayscale(100%)';
+                if (btnText) btnText.textContent = `Pendaftaran Dibekukan (${formatTimeDisplay(seconds)})`;
+            }
+
+            if (seconds >= 60 && unitEl) {
+                unitEl.textContent = '';
+            }
+
+            const interval = setInterval(() => {
+                seconds--;
+                if (timerEl) timerEl.textContent = formatTimeDisplay(seconds);
+                if (unitEl) unitEl.textContent = seconds < 60 ? 'detik' : '';
+                if (btnText) btnText.textContent = `Pendaftaran Dibekukan (${formatTimeDisplay(seconds)})`;
+
+                if (seconds <= 0) {
+                    clearInterval(interval);
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.style.opacity = '1';
+                        btn.style.cursor = 'pointer';
+                        btn.style.filter = 'none';
+                        if (btnText) btnText.textContent = 'Daftar Karyawan Sekarang';
+                    }
+                    const box = document.getElementById('lockout-alert-box');
+                    if (box) {
+                        box.style.background = 'rgba(34, 197, 94, 0.15)';
+                        box.style.borderColor = 'rgba(34, 197, 94, 0.4)';
+                        box.style.color = '#86efac';
+                        box.innerHTML = '<div style="display: flex; align-items: center; gap: 8px; font-weight: bold; color: #4ade80;"><span>✅</span><span>Masa pembekuan berakhir. Silakan periksa kembali data Anda dan ajukan ulang.</span></div>';
+                    }
+                }
+            }, 1000);
+        }
     });
 </script>
 @endpush

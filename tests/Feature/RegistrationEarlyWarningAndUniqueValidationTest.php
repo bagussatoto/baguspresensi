@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Domains\Attendance\Services\EarlyWarningNotificationService;
 use App\Models\EmployeeRegistration;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
+use Illuminate\Support\Facades\RateLimiter;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\Employee;
 use Tests\TestCase;
@@ -486,5 +488,190 @@ class RegistrationEarlyWarningAndUniqueValidationTest extends TestCase
             'status' => 'pending',
             'username' => 'user_pending_cek',
         ]);
+    }
+
+    public function test_pending_registration_expires_after_3_days_allowing_reregistration(): void
+    {
+        $oldRegistration = EmployeeRegistration::create([
+            'full_name' => 'Budi Lama',
+            'username' => 'budi_lama',
+            'phone' => '081299887766',
+            'email' => 'budi_lama@example.com',
+            'password' => bcrypt('582914'),
+            'pin' => bcrypt('582914'),
+            'status' => 'pending',
+        ]);
+
+        // Manipulasi tanggal pendaftaran menjadi 4 hari yang lalu (> 3 hari)
+        $oldRegistration->created_at = now()->subDays(4);
+        $oldRegistration->save();
+
+        $this->assertTrue($oldRegistration->isExpired(3));
+
+        // 1. Cek availability: Harus available karena pendaftaran lama sudah kedaluwarsa (> 3 hari)
+        $responseAvail = $this->postJson(route('presensi2.register.check'), [
+            'field' => 'username',
+            'value' => 'budi_lama',
+        ]);
+        $responseAvail->assertOk();
+        $responseAvail->assertJson([
+            'valid' => true,
+            'available' => true,
+        ]);
+
+        // 2. Cek status pendaftaran mandiri: Menampilkan status expired
+        $respStatus = $this->post(route('presensi2.check-status.query'), [
+            'keyword' => 'budi_lama',
+        ]);
+        $respStatus->assertOk();
+        $respStatus->assertSee('Kedaluwarsa');
+        $respStatus->assertSee('Daftar Ulang Sekarang');
+
+        // 3. Jalankan artisan command prune-expired
+        $this->artisan('registrations:prune-expired')
+            ->expectsOutputToContain('Berhasil memperbarui 1 pendaftaran yang kedaluwarsa (> 3 hari).')
+            ->assertSuccessful();
+
+        $this->assertDatabaseHas('employee_registrations', [
+            'id' => $oldRegistration->id,
+            'status' => 'expired',
+        ]);
+
+        // 4. Submit registrasi ulang dengan username yang sama berhasil
+        $respRegister = $this->post(route('presensi2.register.post'), [
+            'full_name' => 'Budi Pendaftaran Baru',
+            'username' => 'budi_lama',
+            'credential' => '719382',
+            'confirm_credential' => '719382',
+            'phone' => '081299887766',
+            'email' => 'budi_lama@example.com',
+        ]);
+
+        $respRegister->assertRedirect(route('presensi2.login'));
+        $respRegister->assertSessionHas('success');
+    }
+
+    public function test_registration_attempt_tracker_locks_out_after_three_repeated_conflict_failures(): void
+    {
+        // Siapkan karyawan aktif
+        Employee::create([
+            'branch_id' => 1,
+            'name' => 'Target Karyawan',
+            'code' => 'EMP-TRG-1',
+            'username' => 'targetuser',
+            'phone' => '081234567999',
+            'email' => 'target@company.com',
+            'is_active' => true,
+        ]);
+
+        RateLimiter::clear('reg_attempt_ip:127.0.0.1');
+
+        // Percobaan 1 gagal
+        $res1 = $this->from(route('presensi2.register'))->post(route('presensi2.register.post'), [
+            'full_name' => 'Imposter',
+            'username' => 'targetuser',
+            'credential' => '719382',
+            'confirm_credential' => '719382',
+            'phone' => '081234567111',
+            'email' => 'imposter1@example.com',
+        ]);
+        $res1->assertSessionHasErrors(['username']);
+        $this->assertStringContainsString('Kesempatan tersisa: 2x', session('errors')->first('username'));
+
+        // Percobaan 2 gagal
+        $res2 = $this->from(route('presensi2.register'))->post(route('presensi2.register.post'), [
+            'full_name' => 'Imposter',
+            'username' => 'targetuser',
+            'credential' => '719382',
+            'confirm_credential' => '719382',
+            'phone' => '081234567222',
+            'email' => 'imposter2@example.com',
+        ]);
+        $res2->assertSessionHasErrors(['username']);
+        $this->assertStringContainsString('Kesempatan tersisa: 1x', session('errors')->first('username'));
+
+        // Percobaan 3 gagal -> Kunci pendaftaran dan simpan session lockout_seconds
+        $res3 = $this->from(route('presensi2.register'))->post(route('presensi2.register.post'), [
+            'full_name' => 'Imposter',
+            'username' => 'targetuser',
+            'credential' => '719382',
+            'confirm_credential' => '719382',
+            'phone' => '081234567333',
+            'email' => 'imposter3@example.com',
+        ]);
+        $res3->assertSessionHas('lockout_seconds');
+        $res3->assertSessionHasErrors(['registration']);
+        $this->assertStringContainsString('dibekukan selama 5 menit', session('errors')->first('registration'));
+
+        // Percobaan ke-4 langsung ditolak oleh RateLimiter sebelum validasi
+        $res4 = $this->from(route('presensi2.register'))->post(route('presensi2.register.post'), [
+            'full_name' => 'Orang Lain',
+            'username' => 'userbebas',
+            'credential' => '719382',
+            'confirm_credential' => '719382',
+            'phone' => '081234567444',
+            'email' => 'bebas@example.com',
+        ]);
+        $res4->assertSessionHas('lockout_seconds');
+        $res4->assertSessionHasErrors(['registration']);
+    }
+
+    public function test_early_warning_service_is_invoked_on_registration_breach_and_approval(): void
+    {
+        $mockService = $this->createMock(EarlyWarningNotificationService::class);
+
+        // Pastikan dipanggil saat breach 3x
+        $mockService->expects($this->once())
+            ->method('sendRegistrationBreachAlert')
+            ->with($this->callback(function (array $details) {
+                return $details['target_name'] === 'Target Staf'
+                    && $details['target_phone'] === '081234567777'
+                    && $details['duration_minutes'] === 5;
+            }))
+            ->willReturn(['whatsapp' => true, 'telegram' => true]);
+
+        // Pastikan dipanggil saat registrasi baru sukses disubmit
+        $mockService->expects($this->once())
+            ->method('sendNewRegistrationApprovalAlert')
+            ->with(
+                $this->equalTo('Budi Baru Sukses'),
+                $this->equalTo('budisukses'),
+                $this->equalTo('081234567888')
+            )
+            ->willReturn(true);
+
+        $this->app->instance(EarlyWarningNotificationService::class, $mockService);
+
+        Employee::create([
+            'branch_id' => 1,
+            'name' => 'Target Staf',
+            'code' => 'EMP-STF-1',
+            'username' => 'targetstaf',
+            'phone' => '081234567777',
+            'email' => 'targetstaf@company.com',
+            'is_active' => true,
+        ]);
+
+        RateLimiter::clear('reg_attempt_ip:127.0.0.1');
+
+        // Picu 3 kali kegagalan menggunakan targetstaf dengan payload lengkap
+        $this->post(route('presensi2.register.post'), ['full_name' => 'Budi X', 'username' => 'targetstaf', 'credential' => '719382', 'confirm_credential' => '719382', 'phone' => '081299990001', 'email' => 'x1@company.com']);
+        $this->post(route('presensi2.register.post'), ['full_name' => 'Budi X', 'username' => 'targetstaf', 'credential' => '719382', 'confirm_credential' => '719382', 'phone' => '081299990002', 'email' => 'x2@company.com']);
+        $this->post(route('presensi2.register.post'), ['full_name' => 'Budi X', 'username' => 'targetstaf', 'credential' => '719382', 'confirm_credential' => '719382', 'phone' => '081299990003', 'email' => 'x3@company.com']);
+
+        // Bersihkan kunci untuk menguji pendaftaran sukses
+        RateLimiter::clear('reg_attempt_ip:127.0.0.1');
+
+        $resSuccess = $this->post(route('presensi2.register.post'), [
+            'full_name' => 'Budi Baru Sukses',
+            'username' => 'budisukses',
+            'credential' => '719382',
+            'confirm_credential' => '719382',
+            'phone' => '081234567888',
+            'email' => 'budisukses@company.com',
+        ]);
+
+        $resSuccess->assertRedirect(route('presensi2.login'));
+        $resSuccess->assertSessionHas('success');
     }
 }

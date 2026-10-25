@@ -18,10 +18,12 @@ use App\Domains\Attendance\Models\ActivityAttendance;
 use App\Domains\Attendance\Models\AttendanceCorrection;
 use App\Domains\Attendance\Models\AttendanceRecord;
 use App\Domains\Attendance\Models\AuditLog;
+use App\Domains\Attendance\Services\EarlyWarningNotificationService;
 use App\Domains\Attendance\Services\ShiftResolverService;
 use App\Domains\Employee\Models\Shift;
 use App\Domains\Leave\Models\LeaveRequest;
 use App\Models\EmployeeRegistration;
+use App\Models\PasswordResetRequest;
 use App\Models\ShiftHandoverChecklist;
 use App\Models\ShiftSalesSummary;
 use App\Models\ShiftStockRequest;
@@ -59,7 +61,8 @@ class AttendanceWebV2Controller extends Controller
     public function __construct(
         protected ClockInAction $clockInAction,
         protected ClockOutAction $clockOutAction,
-        protected ShiftResolverService $shiftResolverService
+        protected ShiftResolverService $shiftResolverService,
+        protected EarlyWarningNotificationService $earlyWarningNotificationService
     ) {}
 
     /**
@@ -263,7 +266,7 @@ class AttendanceWebV2Controller extends Controller
     /**
      * Halaman Pendaftaran & Daftar Ulang Karyawan (Username, PIN/Password, Email, No HP, Cabang).
      */
-    public function showRegister(): View|RedirectResponse
+    public function showRegister(Request $request): View|RedirectResponse
     {
         if ($this->getAuthenticatedEmployee()) {
             return redirect()->route('presensi2.index');
@@ -273,7 +276,21 @@ class AttendanceWebV2Controller extends Controller
             ->orderBy('name', 'asc')
             ->get();
 
-        return view('presensi2.register', compact('branches'));
+        $reRegistration = null;
+        $reRegToken = null;
+
+        if ($request->filled('re_reg') && $request->filled('token')) {
+            $candidate = EmployeeRegistration::find($request->input('re_reg'));
+            if ($candidate && in_array($candidate->status, ['rejected', 'expired'])) {
+                $expectedToken = hash_hmac('sha256', $candidate->id.'|'.$candidate->username.'|'.($candidate->created_at?->timestamp ?? 0), config('app.key'));
+                if (hash_equals($expectedToken, (string) $request->input('token'))) {
+                    $reRegistration = $candidate;
+                    $reRegToken = (string) $request->input('token');
+                }
+            }
+        }
+
+        return view('presensi2.register', compact('branches', 'reRegistration', 'reRegToken'));
     }
 
     /**
@@ -309,7 +326,7 @@ class AttendanceWebV2Controller extends Controller
             }
 
             $existingEmployee = Employee::whereRaw('LOWER(username) = ?', [strtolower($value)])->first();
-            $existingRegistration = EmployeeRegistration::where('status', 'pending')
+            $existingRegistration = EmployeeRegistration::activePending()
                 ->whereRaw('LOWER(username) = ?', [strtolower($value)])
                 ->first();
 
@@ -360,7 +377,7 @@ class AttendanceWebV2Controller extends Controller
             }
 
             $inEmployee = Employee::where('phone', $value)->orWhere('phone', $cleaned)->exists();
-            $inRegistration = EmployeeRegistration::where('status', 'pending')
+            $inRegistration = EmployeeRegistration::activePending()
                 ->where(function ($q) use ($value, $cleaned) {
                     $q->where('phone', $value)->orWhere('phone', $cleaned);
                 })
@@ -393,7 +410,7 @@ class AttendanceWebV2Controller extends Controller
             }
 
             $inEmployee = Employee::whereRaw('LOWER(email) = ?', [strtolower($value)])->exists();
-            $inRegistration = EmployeeRegistration::where('status', 'pending')
+            $inRegistration = EmployeeRegistration::activePending()
                 ->whereRaw('LOWER(email) = ?', [strtolower($value)])
                 ->exists();
 
@@ -433,7 +450,7 @@ class AttendanceWebV2Controller extends Controller
         $results = [];
         foreach ($candidates as $cand) {
             $inEmp = Employee::whereRaw('LOWER(username) = ?', [$cand])->exists();
-            $inReg = EmployeeRegistration::where('status', 'pending')->whereRaw('LOWER(username) = ?', [$cand])->exists();
+            $inReg = EmployeeRegistration::activePending()->whereRaw('LOWER(username) = ?', [$cand])->exists();
             if (! $inEmp && ! $inReg && ! in_array($cand, $results)) {
                 $results[] = $cand;
             }
@@ -460,6 +477,19 @@ class AttendanceWebV2Controller extends Controller
 
             return redirect()->route('presensi2.login')
                 ->with('success', 'Permohonan pendaftaran akun Anda berhasil diajukan dan sedang menunggu verifikasi Admin/HR.');
+        }
+
+        // --- ATTEMPT TRACKER & RATE LIMITER CEK REGISTRASI (MAX 3 KALI GAGAL) ---
+        $clientIp = $request->ip() ?? '127.0.0.1';
+        $ipAttemptKey = 'reg_attempt_ip:'.$clientIp;
+
+        if (RateLimiter::tooManyAttempts($ipAttemptKey, 3)) {
+            $seconds = RateLimiter::availableIn($ipAttemptKey);
+            $minutes = (int) ceil($seconds / 60);
+
+            return back()->withInput()->with('lockout_seconds', $seconds)->withErrors([
+                'registration' => "Terlalu banyak percobaan pendaftaran gagal dari perangkat ini (3x berturut-turut). Demi keamanan, akses dibekukan selama {$minutes} menit ({$seconds} detik).",
+            ]);
         }
 
         $validationRules = [
@@ -542,37 +572,176 @@ class AttendanceWebV2Controller extends Controller
                 $msg = 'Email sudah digunakan oleh karyawan terdaftar.';
             }
 
-            return back()->withInput()->withErrors([$errorField => $msg]);
+            // Catat kegagalan dan hitung batas 3 kali percobaan
+            RateLimiter::hit($ipAttemptKey, 300); // Kunci 5 menit jika mencapai 3
+            $remaining = RateLimiter::remaining($ipAttemptKey, 3);
+
+            if ($remaining === 0) {
+                $seconds = RateLimiter::availableIn($ipAttemptKey);
+
+                // Kirim notifikasi Early Warning WhatsApp & Telegram via Service
+                rescue(fn () => app(EarlyWarningNotificationService::class)->sendRegistrationBreachAlert([
+                    'target_name' => $employeeConflict->name,
+                    'target_phone' => $employeeConflict->phone,
+                    'target_code' => $employeeConflict->code,
+                    'attempted_username' => $username,
+                    'ip_address' => $clientIp,
+                    'duration_minutes' => 5,
+                ]));
+
+                return back()->withInput()->with('lockout_seconds', $seconds)->withErrors([
+                    'registration' => 'Peringatan Keamanan: Terdeteksi 3 kali percobaan pendaftaran menggunakan identitas yang sudah terdaftar. Akses pendaftaran dari perangkat Anda dibekukan selama 5 menit.',
+                ]);
+            }
+
+            return back()->withInput()->withErrors([
+                $errorField => $msg." (Kesempatan tersisa: {$remaining}x sebelum dibekukan)",
+            ]);
         }
 
-        // 2. Cek di Titik 2: Antrean Pendaftaran / Staging Table (Maker-Checker)
-        $pendingConflict = EmployeeRegistration::where('status', 'pending')
+        // Deteksi Pendaftaran Ulang (Opsi B: In-Place Update)
+        $reRegistration = null;
+        if ($request->filled('re_registration_id') && $request->filled('re_registration_token')) {
+            $candidate = EmployeeRegistration::find($request->input('re_registration_id'));
+            if ($candidate && in_array($candidate->status, ['rejected', 'expired'])) {
+                $expectedToken = hash_hmac('sha256', $candidate->id.'|'.$candidate->username.'|'.($candidate->created_at?->timestamp ?? 0), config('app.key'));
+                if (hash_equals($expectedToken, (string) $request->input('re_registration_token'))) {
+                    $reRegistration = $candidate;
+                }
+            }
+        }
+
+        if (! $reRegistration) {
+            $candidate = EmployeeRegistration::whereIn('status', ['rejected', 'expired'])
+                ->whereRaw('LOWER(username) = ?', [strtolower($username)])
+                ->where(function ($q) use ($phone, $cleanedPhone) {
+                    $q->where('phone', $phone)->orWhere('phone', $cleanedPhone);
+                })
+                ->latest()
+                ->first();
+            if ($candidate) {
+                $reRegistration = $candidate;
+            }
+        }
+
+        // 2. Cek di Titik 2: Antrean Pendaftaran / Staging Table (Maker-Checker - Aktif dalam 3 hari)
+        $pendingConflictQuery = EmployeeRegistration::activePending()
             ->where(function ($q) use ($username, $phone, $cleanedPhone, $email) {
                 $q->whereRaw('LOWER(username) = ?', [strtolower($username)])
                     ->orWhere('phone', $phone)
                     ->orWhere('phone', $cleanedPhone)
                     ->orWhereRaw('LOWER(email) = ?', [strtolower($email)]);
-            })->first();
+            });
+
+        if ($reRegistration) {
+            $pendingConflictQuery->where('id', '!=', $reRegistration->id);
+        }
+
+        $pendingConflict = $pendingConflictQuery->first();
 
         if ($pendingConflict) {
             $errorField = 'username';
             $msg = 'Data sudah pernah diajukan dan sedang menunggu persetujuan Admin/HR.';
             if (strtolower($pendingConflict->username) === strtolower($username)) {
                 $errorField = 'username';
-                $msg = "Username '{$username}' sedang menunggu persetujuan verifikasi Admin/HR.";
+                $msg = "Username '{$username}' sedang menunggu persetujuan verifikasi Admin/HR (Masa aktif 3 hari kerja).";
             } elseif ($pendingConflict->phone === $phone || $pendingConflict->phone === $cleanedPhone) {
                 $errorField = 'phone';
-                $msg = 'Nomor HP tersebut sedang menunggu persetujuan verifikasi Admin/HR.';
+                $msg = 'Nomor HP tersebut sedang menunggu persetujuan verifikasi Admin/HR (Masa aktif 3 hari kerja).';
             } elseif ($pendingConflict->email && strtolower($pendingConflict->email) === strtolower($email)) {
                 $errorField = 'email';
-                $msg = 'Email tersebut sedang menunggu persetujuan verifikasi Admin/HR.';
+                $msg = 'Email tersebut sedang menunggu persetujuan verifikasi Admin/HR (Masa aktif 3 hari kerja).';
             }
 
-            return back()->withInput()->withErrors([$errorField => $msg]);
+            RateLimiter::hit($ipAttemptKey, 300);
+            $remaining = RateLimiter::remaining($ipAttemptKey, 3);
+
+            if ($remaining === 0) {
+                $seconds = RateLimiter::availableIn($ipAttemptKey);
+
+                return back()->withInput()->with('lockout_seconds', $seconds)->withErrors([
+                    'registration' => 'Terlalu banyak percobaan pendaftaran menggunakan data antrean pending (3x). Akses dibekukan sementara selama 5 menit.',
+                ]);
+            }
+
+            return back()->withInput()->withErrors([
+                $errorField => $msg." (Kesempatan tersisa: {$remaining}x sebelum dibekukan)",
+            ]);
         }
 
-        // 3. Simpan ke Staging Table (Maker)
-        EmployeeRegistration::create([
+        // Jika pendaftaran valid dan berhasil, bersihkan tracker IP
+        RateLimiter::clear($ipAttemptKey);
+
+        if ($reRegistration) {
+            $resubmitCount = AuditLog::where('action', 'employee_registration_resubmitted')
+                ->where('auditable_id', $reRegistration->id)
+                ->count();
+
+            if ($resubmitCount >= 3) {
+                return back()->withInput()->withErrors([
+                    'registration' => 'Batas maksimal perbaikan mandiri online (3 kali) telah tercapai untuk berkas ini. Silakan hubungi langsung tim Personalia / HRD di kantor.',
+                ]);
+            }
+
+            // Opsi B: In-place Direct Update pada baris pendaftaran yang ditolak / kedaluwarsa
+            $oldValues = [
+                'full_name' => $reRegistration->full_name,
+                'phone' => $reRegistration->phone,
+                'email' => $reRegistration->email,
+                'username' => $reRegistration->username,
+                'status' => $reRegistration->status,
+                'rejection_reason' => $reRegistration->rejection_reason,
+            ];
+
+            $reRegistration->update([
+                'full_name' => $fullName,
+                'phone' => $phone,
+                'email' => $email,
+                'username' => $username,
+                'password' => Hash::make($credential),
+                'pin' => Hash::make($credential),
+                'status' => 'pending',
+                'rejection_reason' => $reRegistration->rejection_reason ? '[Sebelumnya Ditolak]: '.$reRegistration->rejection_reason : null,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'created_at' => now(),
+            ]);
+
+            rescue(fn () => AuditLog::create([
+                'user_id' => null,
+                'action' => 'employee_registration_resubmitted',
+                'auditable_type' => EmployeeRegistration::class,
+                'auditable_id' => $reRegistration->id,
+                'old_values' => $oldValues,
+                'new_values' => [
+                    'full_name' => $fullName,
+                    'phone' => $phone,
+                    'email' => $email,
+                    'username' => $username,
+                    'status' => 'pending',
+                ],
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]));
+
+            // Notifikasi ke Telegram Admin untuk segera Approve pendaftaran ulang
+            rescue(fn () => app(EarlyWarningNotificationService::class)->sendNewRegistrationApprovalAlert(
+                $fullName.' (DAFTAR ULANG)',
+                $username,
+                $phone
+            ));
+
+            return redirect()->route('presensi2.login')
+                ->with('success', 'Pendaftaran ulang mandiri berhasil diajukan! Akun Anda (Username: '.$username.') sedang menunggu verifikasi ulang Admin/HR. Estimasi waktu verifikasi adalah 1x24 jam kerja (maksimal 3 hari).')
+                ->with('registration_submitted', [
+                    'username' => $username,
+                    'full_name' => $fullName,
+                    'estimated_time' => '1x24 Jam Kerja (Maksimal 3 Hari - Prioritas Daftar Ulang)',
+                ]);
+        }
+
+        // 3. Simpan ke Staging Table (Maker) untuk pendaftaran baru biasa
+        $regRecord = EmployeeRegistration::create([
             'full_name' => $fullName,
             'phone' => $phone,
             'email' => $email,
@@ -584,12 +753,19 @@ class AttendanceWebV2Controller extends Controller
             'user_agent' => $request->userAgent(),
         ]);
 
+        // Notifikasi ke Telegram Admin untuk segera Approve pendaftaran baru
+        rescue(fn () => app(EarlyWarningNotificationService::class)->sendNewRegistrationApprovalAlert(
+            $fullName,
+            $username,
+            $phone
+        ));
+
         return redirect()->route('presensi2.login')
-            ->with('success', 'Pendaftaran mandiri berhasil diajukan! Akun Anda (Username: '.$username.') sedang menunggu verifikasi dan persetujuan Admin/HR. Estimasi waktu verifikasi adalah 1x24 jam kerja.')
+            ->with('success', 'Pendaftaran mandiri berhasil diajukan! Akun Anda (Username: '.$username.') sedang menunggu verifikasi dan persetujuan Admin/HR. Estimasi waktu verifikasi adalah 1x24 jam kerja (maksimal 3 hari).')
             ->with('registration_submitted', [
                 'username' => $username,
                 'full_name' => $fullName,
-                'estimated_time' => '1x24 Jam Kerja (Senin - Sabtu)',
+                'estimated_time' => '1x24 Jam Kerja (Maksimal 3 Hari)',
             ]);
     }
 
@@ -706,13 +882,49 @@ class AttendanceWebV2Controller extends Controller
             ]);
         }
 
-        $employee->update([
-            'pin' => Hash::make($newCredential),
-            'password' => Hash::make($newCredential),
+        // Simpan permohonan ke Antrean Maker-Checker (Status: Pending)
+        $resetReq = PasswordResetRequest::create([
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->name,
+            'employee_code' => $employee->code,
+            'phone' => $employee->phone,
+            'requested_type' => (ctype_digit($newCredential) && strlen($newCredential) === 6) ? 'pin' : 'password',
+            'new_credential' => Hash::make($newCredential),
+            'status' => 'pending',
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
         ]);
 
+        // Catat AuditLog
+        rescue(fn () => AuditLog::create([
+            'user_id' => Auth::id(),
+            'action' => 'EMPLOYEE_PASSWORD_RESET_REQUESTED',
+            'auditable_type' => PasswordResetRequest::class,
+            'auditable_id' => $resetReq->id,
+            'new_values' => [
+                'employee_name' => $employee->name,
+                'employee_code' => $employee->code,
+                'status' => 'pending',
+                'requested_at' => now()->toDateTimeString(),
+            ],
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'created_at' => now(),
+        ]));
+
+        // Kirim Notifikasi Early Warning Alert ke Telegram Admin
+        rescue(fn () => $this->earlyWarningNotificationService->sendTelegramAlert(
+            "🔑 *[REQUEST RESET PIN/PASSWORD]*\n"
+            ."Karyawan mengajukan reset kredensial:\n"
+            ."• Nama: *{$employee->name}* ({$employee->code})\n"
+            .'• Cabang: *'.($employee->branch?->name ?? 'Pusat')."*\n"
+            ."• Status: *Menunggu Otorisasi Admin*\n"
+            .'• Waktu: '.now()->toDateTimeString()."\n\n"
+            .'Mohon buka menu Admin: `/karyawan-reset-password` untuk memverifikasi.'
+        ));
+
         return redirect()->route('presensi2.login')
-            ->with('success', 'Kata sandi / PIN untuk '.$employee->name.' berhasil diperbarui! Silakan masuk dengan PIN baru Anda.');
+            ->with('success', 'Permohonan reset password/PIN untuk '.$employee->name.' berhasil diajukan! Kredensial baru akan aktif setelah diverifikasi dan disetujui oleh Supervisor/Admin Cabang Anda.');
     }
 
     /**
@@ -814,7 +1026,21 @@ class AttendanceWebV2Controller extends Controller
                 'action_url' => route('presensi2.login'),
             ];
         } elseif ($registration) {
-            if ($registration->status === 'pending') {
+            if ($registration->status === 'expired' || ($registration->status === 'pending' && $registration->isExpired())) {
+                $reRegToken = hash_hmac('sha256', $registration->id.'|'.$registration->username.'|'.($registration->created_at?->timestamp ?? 0), config('app.key'));
+                $result = [
+                    'found' => true,
+                    'status' => 'expired',
+                    'badge' => 'Kedaluwarsa ⌛ (Melebihi 3 Hari)',
+                    'badge_color' => '#f59e0b',
+                    'full_name' => $registration->full_name,
+                    'username' => $registration->username,
+                    'registered_at' => $registration->created_at?->format('d M Y, H:i') ?? '-',
+                    'message' => 'Pengajuan pendaftaran Anda telah kedaluwarsa karena tidak diverifikasi oleh Admin/HR dalam batas waktu 3 hari. Silakan ajukan pendaftaran ulang.',
+                    'action_label' => 'Daftar Ulang Sekarang',
+                    'action_url' => route('presensi2.register', ['re_reg' => $registration->id, 'token' => $reRegToken]),
+                ];
+            } elseif ($registration->status === 'pending') {
                 $result = [
                     'found' => true,
                     'status' => 'pending',
@@ -823,7 +1049,7 @@ class AttendanceWebV2Controller extends Controller
                     'full_name' => $registration->full_name,
                     'username' => $registration->username,
                     'registered_at' => $registration->created_at?->format('d M Y, H:i') ?? '-',
-                    'estimated_time' => '1x24 Jam Kerja (Senin - Sabtu)',
+                    'estimated_time' => '1x24 Jam Kerja (Batas Maksimal 3 Hari)',
                     'message' => 'Pengajuan Anda sedang dalam antrean verifikasi Admin / HR. Mohon tunggu proses approval.',
                     'action_label' => 'Kembali ke Halaman Login',
                     'action_url' => route('presensi2.login'),
@@ -842,18 +1068,39 @@ class AttendanceWebV2Controller extends Controller
                     'action_url' => route('presensi2.login'),
                 ];
             } elseif ($registration->status === 'rejected') {
-                $result = [
-                    'found' => true,
-                    'status' => 'rejected',
-                    'badge' => 'Perlu Perbaikan / Ditolak ⚠️',
-                    'badge_color' => '#ef4444',
-                    'full_name' => $registration->full_name,
-                    'username' => $registration->username,
-                    'rejection_reason' => $registration->rejection_reason ?: 'Data tidak sesuai atau berkas identitas belum memenuhi syarat.',
-                    'message' => 'Pengajuan Anda belum disetujui oleh Admin / HR.',
-                    'action_label' => 'Daftar Ulang Sekarang',
-                    'action_url' => route('presensi2.register'),
-                ];
+                $resubmitCount = AuditLog::where('action', 'employee_registration_resubmitted')
+                    ->where('auditable_id', $registration->id)
+                    ->count();
+
+                if ($resubmitCount >= 3) {
+                    $result = [
+                        'found' => true,
+                        'status' => 'rejected',
+                        'badge' => 'Batas Perbaikan Tercapai ⚠️',
+                        'badge_color' => '#ef4444',
+                        'full_name' => $registration->full_name,
+                        'username' => $registration->username,
+                        'rejection_reason' => $registration->rejection_reason ?: 'Batas maksimal 3 kali perbaikan mandiri telah tercapai.',
+                        'message' => 'Pengajuan pendaftaran Anda telah ditolak 3 kali berturut-turut. Demi keamanan, batas perbaikan mandiri secara online telah ditutup. Silakan datang langsung ke kantor untuk verifikasi data dengan tim HRD / Personalia.',
+                        'action_label' => 'Kembali ke Halaman Login',
+                        'action_url' => route('presensi2.login'),
+                    ];
+                } else {
+                    $reRegToken = hash_hmac('sha256', $registration->id.'|'.$registration->username.'|'.($registration->created_at?->timestamp ?? 0), config('app.key'));
+                    $remainingTries = 3 - $resubmitCount;
+                    $result = [
+                        'found' => true,
+                        'status' => 'rejected',
+                        'badge' => 'Perlu Perbaikan / Ditolak ⚠️',
+                        'badge_color' => '#ef4444',
+                        'full_name' => $registration->full_name,
+                        'username' => $registration->username,
+                        'rejection_reason' => $registration->rejection_reason ?: 'Data tidak sesuai atau berkas identitas belum memenuhi syarat.',
+                        'message' => "Pengajuan Anda belum disetujui oleh Admin / HR (Sisa kesempatan perbaikan mandiri: {$remainingTries}x).",
+                        'action_label' => 'Daftar Ulang Sekarang',
+                        'action_url' => route('presensi2.register', ['re_reg' => $registration->id, 'token' => $reRegToken]),
+                    ];
+                }
             }
         } else {
             $result = [
@@ -872,6 +1119,131 @@ class AttendanceWebV2Controller extends Controller
         }
 
         return view('presensi2.check-status', [
+            'keyword' => $keyword,
+            'result' => $result,
+        ]);
+    }
+
+    /**
+     * Halaman Cek Status Permohonan Reset Password / PIN Mandiri.
+     */
+    public function showCheckResetStatus(): View
+    {
+        return view('presensi2.check-reset-status');
+    }
+
+    /**
+     * Proses Cek Status Permohonan Reset Password / PIN (via Form / AJAX).
+     */
+    public function checkResetStatusQuery(Request $request): View|JsonResponse
+    {
+        $request->validate([
+            'keyword' => 'required|string|min:3|max:100',
+        ], [
+            'keyword.required' => 'Masukkan nama lengkap, kode karyawan, atau nomor WhatsApp Anda.',
+            'keyword.min' => 'Pencarian minimal 3 karakter.',
+        ]);
+
+        $keyword = trim((string) $request->input('keyword'));
+        $cleanedPhone = preg_replace('/[^0-9]/', '', $keyword);
+
+        // Cari permohonan reset password terbaru berdasarkan nama, kode karyawan, atau nomor hp
+        $resetReq = PasswordResetRequest::with(['employee.branch', 'approver'])
+            ->where(function ($q) use ($keyword, $cleanedPhone) {
+                $q->whereRaw('LOWER(employee_name) = ?', [strtolower($keyword)])
+                    ->orWhere('employee_name', 'like', "%{$keyword}%")
+                    ->orWhere('employee_code', $keyword)
+                    ->orWhere('phone', $keyword);
+
+                if (! empty($cleanedPhone) && strlen($cleanedPhone) >= 8) {
+                    $q->orWhere('phone', $cleanedPhone)
+                        ->orWhereHas('employee', function ($sub) use ($cleanedPhone) {
+                            $sub->where('phone', $cleanedPhone);
+                        });
+                }
+            })
+            ->latest('id')
+            ->first();
+
+        $result = null;
+
+        if ($resetReq) {
+            $empName = $resetReq->employee_name ?: ($resetReq->employee?->name ?? 'Karyawan');
+            $empCode = $resetReq->employee_code ?: ($resetReq->employee?->code ?? '-');
+            $branchName = $resetReq->employee?->branch?->name ?? 'Semua Cabang';
+            $submittedAt = $resetReq->created_at ? $resetReq->created_at->format('d M Y, H:i').' WIB' : '-';
+
+            if ($resetReq->status === 'pending') {
+                $result = [
+                    'found' => true,
+                    'status' => 'pending',
+                    'badge' => 'Menunggu Otorisasi Admin ⏳',
+                    'badge_color' => '#f59e0b',
+                    'employee_name' => $empName,
+                    'employee_code' => $empCode,
+                    'branch_name' => $branchName,
+                    'submitted_at' => $submittedAt,
+                    'estimated_time' => '1x24 Jam Kerja',
+                    'message' => 'Permohonan reset kredensial Anda sedang menunggu verifikasi & persetujuan dari Admin/HRD demi keamanan akun.',
+                    'action_label' => '← Kembali ke Halaman Login',
+                    'action_url' => route('presensi2.login'),
+                ];
+            } elseif ($resetReq->status === 'approved') {
+                $approvedAt = $resetReq->approved_at ? $resetReq->approved_at->format('d M Y, H:i').' WIB' : ($resetReq->updated_at ? $resetReq->updated_at->format('d M Y, H:i').' WIB' : '-');
+                $approverName = $resetReq->approver?->name ?? 'Admin Sistem';
+
+                $result = [
+                    'found' => true,
+                    'status' => 'approved',
+                    'badge' => 'Telah Disetujui & Aktif ✅',
+                    'badge_color' => '#10b981',
+                    'employee_name' => $empName,
+                    'employee_code' => $empCode,
+                    'branch_name' => $branchName,
+                    'submitted_at' => $submittedAt,
+                    'approved_at' => $approvedAt,
+                    'approver_name' => $approverName,
+                    'message' => 'Permohonan reset kredensial Anda telah disetujui oleh Admin. PIN / Password baru Anda telah resmi AKTIF dan dapat langsung digunakan.',
+                    'action_label' => '👉 Masuk ke Portal Login Sekarang',
+                    'action_url' => route('presensi2.login'),
+                ];
+            } elseif ($resetReq->status === 'rejected') {
+                $rejectedAt = $resetReq->updated_at ? $resetReq->updated_at->format('d M Y, H:i').' WIB' : '-';
+                $rejectionReason = $resetReq->rejection_reason ?: 'Verifikasi identitas tidak sesuai atau dibatalkan.';
+
+                $result = [
+                    'found' => true,
+                    'status' => 'rejected',
+                    'badge' => 'Permohonan Ditolak ❌',
+                    'badge_color' => '#ef4444',
+                    'employee_name' => $empName,
+                    'employee_code' => $empCode,
+                    'branch_name' => $branchName,
+                    'submitted_at' => $submittedAt,
+                    'rejected_at' => $rejectedAt,
+                    'rejection_reason' => $rejectionReason,
+                    'message' => 'Permohonan reset kredensial Anda ditolak oleh Admin. Silakan periksa alasan di bawah atau ajukan kembali jika diperlukan.',
+                    'action_label' => '🔄 Ajukan Permohonan Reset Baru',
+                    'action_url' => route('presensi2.forgot-password'),
+                ];
+            }
+        } else {
+            $result = [
+                'found' => false,
+                'status' => 'not_found',
+                'badge' => 'Tidak Ditemukan ❓',
+                'badge_color' => '#6b7280',
+                'message' => "Tidak ditemukan riwayat permohonan reset password dengan kata kunci '{$keyword}'. Pastikan Nama Lengkap, Kode Karyawan, atau Nomor WhatsApp sudah sesuai.",
+                'action_label' => 'Ajukan Permohonan Reset',
+                'action_url' => route('presensi2.forgot-password'),
+            ];
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json($result);
+        }
+
+        return view('presensi2.check-reset-status', [
             'keyword' => $keyword,
             'result' => $result,
         ]);
@@ -933,47 +1305,64 @@ class AttendanceWebV2Controller extends Controller
                 ->withErrors(['employee_id' => 'Identitas karyawan atau NIK tidak ditemukan. Silakan periksa kembali atau pilih dari daftar.']);
         }
 
-        $throttleKey = 'presensi2_login:'.($employee ? 'emp_'.$employee->id : ($identifier ?: 'unknown')).'|'.$request->ip();
+        $userKey = $employee ? 'emp_'.$employee->id : ($identifier ?: 'unknown');
+        $throttleKey = 'presensi2_login:'.$userKey.'|'.$request->ip();
+        $tierKey = 'presensi2_login_tier:'.$userKey.'|'.$request->ip();
 
         if (RateLimiter::tooManyAttempts($throttleKey, 3)) {
             $seconds = RateLimiter::availableIn($throttleKey);
+            $minutes = (int) ceil($seconds / 60);
 
             return redirect()->route('presensi2.login')
                 ->withInput()
                 ->with('lockout_seconds', $seconds)
                 ->withErrors([
-                    'credential' => "Terlalu banyak percobaan login gagal. Demi keamanan, akses dikunci selama {$seconds} detik.",
+                    'credential' => "Terlalu banyak percobaan login gagal. Demi keamanan, akses dikunci selama {$seconds} detik (~{$minutes} menit). Silakan tunggu hingga hitung mundur selesai.",
                 ]);
         }
 
         // Verifikasi: cek password dulu, lalu PIN
         if (! $this->verifyEmployeeCredential($employee, $credential)) {
-            RateLimiter::hit($throttleKey, 60);
+            $currentTier = (int) cache()->get($tierKey, 1);
+            // Durasi lockout bertingkat: Percobaan 1-3 (Tier 1) = 60 detik (1 menit), Percobaan 4-6 (Tier 2) = 120 detik (2 menit), dst.
+            $lockoutDuration = match ($currentTier) {
+                1 => 60,
+                2 => 120,
+                default => 300, // 5 menit untuk percobaan berulang selanjutnya
+            };
+
+            RateLimiter::hit($throttleKey, $lockoutDuration);
             $remaining = RateLimiter::remaining($throttleKey, 3);
+
+            $durationMinutes = (int) ceil($lockoutDuration / 60);
 
             if ($remaining === 2) {
                 // Early warning percobaan ke-1
                 return redirect()->route('presensi2.login')
                     ->withInput()
                     ->with('remaining_attempts', 2)
-                    ->withErrors(['credential' => 'Password atau PIN salah. Anda memiliki 2 kali kesempatan lagi sebelum akses dikunci 1 menit.']);
+                    ->withErrors(['credential' => "Password atau PIN salah. Anda memiliki 2 kali kesempatan lagi sebelum akses dikunci {$durationMinutes} menit."]);
             } elseif ($remaining === 1) {
                 // Critical early warning percobaan ke-2 (peringatan terakhir)
                 return redirect()->route('presensi2.login')
                     ->withInput()
                     ->with('remaining_attempts', 1)
-                    ->withErrors(['credential' => 'PERINGATAN TERAKHIR: Percobaan ke-2 gagal! Jika salah 1 kali lagi, akun dan perangkat akan dikunci selama 1 menit.']);
+                    ->withErrors(['credential' => "PERINGATAN TERAKHIR: Percobaan ke-2 gagal! Jika salah 1 kali lagi, akun dan perangkat akan dikunci selama {$durationMinutes} menit."]);
             } else {
                 $seconds = RateLimiter::availableIn($throttleKey);
 
+                // Tingkatkan tier hukuman untuk penguncian berikutnya (disimpan selama 2 jam jika terus-menerus gagal)
+                cache()->put($tierKey, $currentTier + 1, now()->addHours(2));
+
                 // Catat Kejadian Lockout ke AuditLog (Deteksi Keamanan & Anti Brute-Force)
                 rescue(fn () => AuditLog::create([
-                    'user_id' => $employee?->id,
+                    'user_id' => Auth::id(),
                     'auditable_type' => Employee::class,
                     'auditable_id' => $employee?->id ?? 0,
                     'action' => 'portal_login_lockout',
                     'new_values' => [
                         'status' => 'LOCKED_OUT',
+                        'tier' => $currentTier,
                         'reason' => '3_FAILED_PASSWORD_ATTEMPTS',
                         'employee_name' => $employee?->name ?? 'Unknown',
                         'employee_code' => $employee?->code ?? $identifier,
@@ -987,16 +1376,29 @@ class AttendanceWebV2Controller extends Controller
                     'created_at' => now(),
                 ]));
 
+                // Kirim Early Warning Alert ke WhatsApp Karyawan & Telegram Admin
+                rescue(fn () => $this->earlyWarningNotificationService->sendLoginLockoutAlert($employee, [
+                    'employee_name' => $employee?->name ?? 'Unknown',
+                    'employee_code' => $employee?->code ?? $identifier,
+                    'username' => $employee?->username ?? $identifier,
+                    'tier' => $currentTier,
+                    'duration_seconds' => $seconds,
+                    'ip_address' => $request->ip() ?? '127.0.0.1',
+                    'user_agent' => $request->userAgent() ?? 'Web Portal Presensi v2',
+                    'occurred_at' => now()->toDateTimeString(),
+                ]));
+
                 return redirect()->route('presensi2.login')
                     ->withInput()
                     ->with('lockout_seconds', $seconds)
                     ->withErrors([
-                        'credential' => "Anda telah salah memasukkan password sebanyak 3 kali. Akses dikunci selama {$seconds} detik.",
+                        'credential' => "Anda telah salah memasukkan password/PIN sebanyak 3 kali berturut-turut. Akses dikunci selama {$durationMinutes} menit ({$seconds} detik).",
                     ]);
             }
         }
 
         RateLimiter::clear($throttleKey);
+        cache()->forget($tierKey);
 
         session(['presensi2_employee_id' => $employee->id]);
         $employee->update(['last_login_at' => now()]);

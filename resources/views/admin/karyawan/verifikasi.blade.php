@@ -89,7 +89,11 @@
 
     <!-- TABLE 1: ANTREAN MENUNGGU VERIFIKASI (PENDING) -->
     <div style="padding: 20px 24px 10px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        @php
+            $reregCount = $pendingRegistrations->filter(fn($r) => !empty($r->rejection_reason) && Str::startsWith($r->rejection_reason, '[Sebelumnya Ditolak]'))->count();
+            $newCount = $pendingRegistrations->count() - $reregCount;
+        @endphp
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
             <div style="display: flex; align-items: center; gap: 8px;">
                 <span style="font-size: 16px;">📥</span>
                 <h2 style="font-size: 15px; font-weight: 700; color: #fff; margin: 0;">Antrean Pendaftaran Mandiri Menunggu Otorisasi</h2>
@@ -97,6 +101,22 @@
             <span style="font-size: 12px; color: var(--text-sub);">
                 Total: <strong>{{ $pendingRegistrations->count() }} Permohonan</strong>
             </span>
+        </div>
+
+        <!-- Filter Tab Antrean Cepat -->
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
+            <button type="button" class="tab-filter-btn active" id="filter-all-btn" onclick="filterQueue('all')" style="background: rgba(56, 189, 248, 0.18); border: 1px solid #38bdf8; color: #fff; padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                <span>📋 Semua Antrean</span>
+                <span style="background: rgba(255, 255, 255, 0.15); border-radius: 999px; padding: 1px 7px; font-size: 11px;">{{ $pendingRegistrations->count() }}</span>
+            </button>
+            <button type="button" class="tab-filter-btn" id="filter-rereg-btn" onclick="filterQueue('rereg')" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--text-muted); padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                <span>🔄 Daftar Ulang (Prioritas)</span>
+                <span style="background: rgba(14, 165, 233, 0.25); color: #38bdf8; border-radius: 999px; padding: 1px 7px; font-size: 11px; font-weight: 700;">{{ $reregCount }}</span>
+            </button>
+            <button type="button" class="tab-filter-btn" id="filter-new-btn" onclick="filterQueue('new')" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--text-muted); padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                <span>👤 Pendaftar Baru</span>
+                <span style="background: rgba(16, 185, 129, 0.2); color: #34d399; border-radius: 999px; padding: 1px 7px; font-size: 11px; font-weight: 700;">{{ $newCount }}</span>
+            </button>
         </div>
 
         <div class="custom-table-responsive" style="border: 1px solid var(--border-glass); border-radius: 12px; overflow: hidden; background: rgba(15, 23, 42, 0.5);">
@@ -115,7 +135,10 @@
                 </thead>
                 <tbody>
                     @forelse($pendingRegistrations as $idx => $reg)
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.15s ease;" onmouseover="this.style.background='rgba(56, 189, 248, 0.04)'" onmouseout="this.style.background='transparent'">
+                        @php
+                            $isRereg = !empty($reg->rejection_reason) && Str::startsWith($reg->rejection_reason, '[Sebelumnya Ditolak]');
+                        @endphp
+                        <tr class="pending-reg-row" data-type="{{ $isRereg ? 'rereg' : 'new' }}" style="border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.15s ease;" onmouseover="this.style.background='rgba(56, 189, 248, 0.04)'" onmouseout="this.style.background='transparent'">
                             <td style="padding: 12px 16px; color: var(--text-sub); font-weight: 600;">{{ $idx + 1 }}</td>
                             <td style="padding: 12px 16px; color: var(--text-muted); white-space: nowrap;">
                                 {{ $reg->created_at->format('d M Y') }}<br>
@@ -153,9 +176,15 @@
                                 <span style="font-size: 10px;" title="{{ $reg->user_agent }}">{{ Str::limit($reg->user_agent ?? 'Browser Web', 28) }}</span>
                             </td>
                             <td style="padding: 12px 16px; text-align: center;">
-                                <span style="background: rgba(245, 158, 11, 0.18); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700;">
-                                    Pending Review
-                                </span>
+                                @if(!empty($reg->rejection_reason) && Str::startsWith($reg->rejection_reason, '[Sebelumnya Ditolak]'))
+                                    <span style="background: rgba(14, 165, 233, 0.2); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.4); padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; display: inline-block;" title="{{ $reg->rejection_reason }}">
+                                        🔄 Daftar Ulang
+                                    </span>
+                                @else
+                                    <span style="background: rgba(245, 158, 11, 0.18); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700;">
+                                        Pending Review
+                                    </span>
+                                @endif
                             </td>
                             <td style="padding: 12px 16px; text-align: center; white-space: nowrap;">
                                 <button type="button" 
@@ -181,6 +210,11 @@
                             </td>
                         </tr>
                     @endforelse
+                    <tr id="empty-filter-row" style="display: none;">
+                        <td colspan="8" style="padding: 30px; text-align: center; color: var(--text-sub); font-size: 12.5px;">
+                            ℹ️ Tidak ada permohonan yang sesuai dengan filter kategori ini.
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -319,6 +353,17 @@
                     <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--border-glass); padding-bottom: 8px;">
                         <span style="font-size: 14px;">📋</span>
                         <strong style="font-size: 12px; color: #38bdf8; text-transform: uppercase;">1. Data Pengajuan (Terkunci)</strong>
+                    </div>
+
+                    <div id="modal_view_rereg_box" style="display: none; background: rgba(14, 165, 233, 0.12); border: 1.5px solid rgba(14, 165, 233, 0.4); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px;">
+                        <div style="display: flex; align-items: center; gap: 6px; color: #38bdf8; font-weight: 700; font-size: 11.5px; margin-bottom: 4px;">
+                            <span>🔄</span>
+                            <span>BERKAS DAFTAR ULANG / PERBAIKAN</span>
+                        </div>
+                        <div style="font-size: 11.5px; color: #e2e8f0; line-height: 1.4;">
+                            <span style="color: #94a3b8;">Catatan Penolakan Sebelumnya:</span><br>
+                            <span id="modal_view_rereg_reason" style="color: #fca5a5; font-weight: 600;">-</span>
+                        </div>
                     </div>
 
                     <div style="margin-bottom: 12px;">
@@ -482,6 +527,15 @@
         document.getElementById('modal_view_email').textContent = reg.email || '-';
         document.getElementById('modal_view_meta').textContent = (reg.created_at ? reg.created_at : 'Baru saja') + ' | IP: ' + (reg.ip_address || '127.0.0.1');
 
+        const reregBox = document.getElementById('modal_view_rereg_box');
+        const reregReason = document.getElementById('modal_view_rereg_reason');
+        if (reg.rejection_reason && reg.rejection_reason.includes('[Sebelumnya Ditolak]')) {
+            if (reregBox) reregBox.style.display = 'block';
+            if (reregReason) reregReason.textContent = reg.rejection_reason.replace('[Sebelumnya Ditolak]:', '').trim();
+        } else {
+            if (reregBox) reregBox.style.display = 'none';
+        }
+
         const form = document.getElementById('formApproval');
         form.action = verifikasiBaseUrl + "/" + reg.id + "/approve";
 
@@ -491,6 +545,45 @@
 
     function closeApprovalModal() {
         document.getElementById('modalApproval').style.display = 'none';
+    }
+
+    function filterQueue(type) {
+        const rows = document.querySelectorAll('.pending-reg-row');
+        const emptyRow = document.getElementById('empty-filter-row');
+        const buttons = {
+            all: document.getElementById('filter-all-btn'),
+            rereg: document.getElementById('filter-rereg-btn'),
+            new: document.getElementById('filter-new-btn'),
+        };
+
+        Object.keys(buttons).forEach(k => {
+            if (!buttons[k]) return;
+            if (k === type) {
+                buttons[k].style.background = 'rgba(56, 189, 248, 0.18)';
+                buttons[k].style.borderColor = '#38bdf8';
+                buttons[k].style.color = '#fff';
+                buttons[k].style.fontWeight = '700';
+            } else {
+                buttons[k].style.background = 'rgba(15, 23, 42, 0.6)';
+                buttons[k].style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                buttons[k].style.color = 'var(--text-muted)';
+                buttons[k].style.fontWeight = '600';
+            }
+        });
+
+        let visibleCount = 0;
+        rows.forEach(row => {
+            if (type === 'all' || row.getAttribute('data-type') === type) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        if (emptyRow) {
+            emptyRow.style.display = (visibleCount === 0 && rows.length > 0) ? '' : 'none';
+        }
     }
 
     function openRejectModal(reg) {

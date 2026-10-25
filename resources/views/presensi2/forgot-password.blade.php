@@ -456,18 +456,25 @@
                         onclick="toggleVisibility('confirm_credential', 'eye-icon-2')" 
                         title="Tampilkan / Sembunyikan"
                     >
-                        <span id="eye-icon-2">👁️</span>
+                        <!-- <span id="eye-icon-2">👁️</span> -->
                     </button>
                 </div>
             </div>
 
             <button type="submit" class="btn-fp-submit" id="btn-submit-fp">
-                <span>💾</span>
-                <span id="btn-text">Perbarui Password &amp; PIN Sekarang</span>
+                <span>🛡️</span>
+                <span id="btn-text">Ajukan Permohonan Reset ke Admin</span>
             </button>
+            <div style="font-size: 11.5px; color: var(--fp-text-body); margin-top: 10px; text-align: center; line-height: 1.4;">
+                ⏳ <em>Permohonan reset akan diperiksa dan disetujui oleh Supervisor / Admin Cabang demi mencegah pembajakan akun.</em>
+            </div>
         </form>
 
-        <div style="margin-top: 18px; text-align: center;">
+        <div style="margin-top: 18px; text-align: center; display: flex; flex-direction: column; gap: 10px;">
+            <a href="{{ route('presensi2.check-reset-status') }}" style="color: #f59e0b; font-size: 12.5px; font-weight: 600; text-decoration: none;">
+                🔍 Sudah mengajukan? <u>Cek Status Permohonan Reset di Sini</u> &rarr;
+            </a>
+
             <a href="{{ route('presensi2.login') }}" class="back-to-login">
                 <span>←</span>
                 <span>Ingat Password Anda? Kembali ke Halaman Masuk</span>

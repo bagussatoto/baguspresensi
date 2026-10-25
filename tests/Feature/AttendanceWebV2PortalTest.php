@@ -7,12 +7,15 @@ namespace Tests\Feature;
 use App\Domains\Attendance\Enums\AttendanceStatus;
 use App\Domains\Attendance\Enums\VerificationMethod;
 use App\Domains\Attendance\Models\AttendanceRecord;
+use App\Domains\Attendance\Services\EarlyWarningNotificationService;
 use App\Domains\Employee\Models\Shift;
 use App\Models\EmployeeRegistration;
+use App\Models\PasswordResetRequest;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\Employee;
 use Tests\TestCase;
@@ -126,6 +129,89 @@ class AttendanceWebV2PortalTest extends TestCase
         $response->assertRedirect(route('presensi2.login'));
         $response->assertSessionHasErrors(['credential']);
         $this->assertNull(session('presensi2_employee_id'));
+    }
+
+    public function test_progressive_lockout_after_repeated_three_failed_attempts(): void
+    {
+        // 1. Percobaan 1 gagal -> 2 kesempatan tersisa
+        $res1 = $this->from(route('presensi2.login'))->post(route('presensi2.login.post'), [
+            'employee_code' => 'EMP-001',
+            'credential' => 'wrongpass1',
+        ]);
+        $res1->assertSessionHas('remaining_attempts', 2);
+
+        // 2. Percobaan 2 gagal -> 1 kesempatan tersisa (Peringatan Terakhir)
+        $res2 = $this->from(route('presensi2.login'))->post(route('presensi2.login.post'), [
+            'employee_code' => 'EMP-001',
+            'credential' => 'wrongpass2',
+        ]);
+        $res2->assertSessionHas('remaining_attempts', 1);
+
+        // 3. Percobaan 3 gagal -> Kunci 1 Menit (60 detik)
+        $res3 = $this->from(route('presensi2.login'))->post(route('presensi2.login.post'), [
+            'employee_code' => 'EMP-001',
+            'credential' => 'wrongpass3',
+        ]);
+        $res3->assertSessionHas('lockout_seconds', 60);
+
+        // Simulasikan 1 menit berlalu dengan membersihkan RateLimiter throttle (tier tetap tersimpan)
+        $throttleKey = 'presensi2_login:emp_'.$this->employee->id.'|127.0.0.1';
+        RateLimiter::clear($throttleKey);
+
+        // 4. Setelah masa tunggu selesai, mencoba lagi dan salah 3 kali lagi
+        $res4 = $this->from(route('presensi2.login'))->post(route('presensi2.login.post'), [
+            'employee_code' => 'EMP-001',
+            'credential' => 'wrongpass4',
+        ]);
+        $res4->assertSessionHas('remaining_attempts', 2);
+
+        $res5 = $this->from(route('presensi2.login'))->post(route('presensi2.login.post'), [
+            'employee_code' => 'EMP-001',
+            'credential' => 'wrongpass5',
+        ]);
+        $res5->assertSessionHas('remaining_attempts', 1);
+
+        // 5. Percobaan ke-3 pada putaran kedua -> Kunci meningkat menjadi 2 Menit (120 detik)
+        $res6 = $this->from(route('presensi2.login'))->post(route('presensi2.login.post'), [
+            'employee_code' => 'EMP-001',
+            'credential' => 'wrongpass6',
+        ]);
+        $res6->assertSessionHas('lockout_seconds', 120);
+
+        // 6. Jika memasukkan password yang benar setelah kuncian reda, status tier dan throttle direset
+        RateLimiter::clear($throttleKey);
+        $resSuccess = $this->post(route('presensi2.login.post'), [
+            'employee_code' => 'EMP-001',
+            'credential' => 'secret123',
+        ]);
+        $resSuccess->assertRedirect(route('presensi2.index'));
+        $this->assertEquals($this->employee->id, session('presensi2_employee_id'));
+        $this->assertNull(cache()->get('presensi2_login_tier:emp_'.$this->employee->id.'|127.0.0.1'));
+    }
+
+    public function test_early_warning_notification_service_dispatches_alerts_on_lockout(): void
+    {
+        $mockService = $this->createMock(EarlyWarningNotificationService::class);
+        $mockService->expects($this->once())
+            ->method('sendLoginLockoutAlert')
+            ->with(
+                $this->callback(fn ($emp) => $emp && $emp->id === $this->employee->id),
+                $this->callback(function (array $details) {
+                    return $details['employee_code'] === 'EMP-001'
+                        && $details['tier'] === 1
+                        && $details['duration_seconds'] === 60;
+                })
+            )
+            ->willReturn(['whatsapp' => true, 'telegram' => true]);
+
+        $this->app->instance(EarlyWarningNotificationService::class, $mockService);
+
+        // Buat 3 kali gagal login
+        $this->post(route('presensi2.login.post'), ['employee_code' => 'EMP-001', 'credential' => 'wrong1']);
+        $this->post(route('presensi2.login.post'), ['employee_code' => 'EMP-001', 'credential' => 'wrong2']);
+        $res = $this->post(route('presensi2.login.post'), ['employee_code' => 'EMP-001', 'credential' => 'wrong3']);
+
+        $res->assertSessionHas('lockout_seconds', 60);
     }
 
     public function test_v2_login_view_renders_portal_masuk_terpadu_and_help_text(): void
@@ -421,6 +507,23 @@ class AttendanceWebV2PortalTest extends TestCase
         $response->assertRedirect(route('presensi2.login'));
         $response->assertSessionHas('success');
 
+        // Dalam alur Maker-Checker, permohonan tersimpan di antrean pending
+        $this->assertDatabaseHas('password_reset_requests', [
+            'employee_id' => $this->employee->id,
+            'status' => 'pending',
+        ]);
+
+        $resetReq = PasswordResetRequest::where('employee_id', $this->employee->id)->latest()->first();
+        $this->assertNotNull($resetReq);
+
+        // Sebelum disetujui admin, kredensial di tabel employees belum berubah
+        $this->employee->refresh();
+        $this->assertFalse(Hash::check('newpass654', $this->employee->pin));
+
+        // Setelah disetujui admin
+        $admin = User::first() ?? User::create(['name' => 'Admin Test', 'email' => 'adm@test.com', 'password' => 'secret']);
+        $this->actingAs($admin)->post(route('admin.karyawan.reset-password.approve', $resetReq->id));
+
         $this->employee->refresh();
         $this->assertTrue(Hash::check('newpass654', $this->employee->pin));
         $this->assertTrue(Hash::check('newpass654', $this->employee->password));
@@ -445,6 +548,15 @@ class AttendanceWebV2PortalTest extends TestCase
 
         $response->assertRedirect(route('presensi2.login'));
         $response->assertSessionHas('success');
+
+        $this->assertDatabaseHas('password_reset_requests', [
+            'employee_id' => $this->employee->id,
+            'status' => 'pending',
+        ]);
+
+        $resetReq = PasswordResetRequest::where('employee_id', $this->employee->id)->latest()->first();
+        $admin = User::first() ?? User::create(['name' => 'Admin Test', 'email' => 'adm@test.com', 'password' => 'secret']);
+        $this->actingAs($admin)->post(route('admin.karyawan.reset-password.approve', $resetReq->id));
 
         $this->employee->refresh();
         $this->assertTrue(Hash::check('newpass789', $this->employee->pin));

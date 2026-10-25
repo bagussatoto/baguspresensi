@@ -284,12 +284,21 @@
         </a>
         @php
             $pendingVerifikasiCount = \App\Models\EmployeeRegistration::where('status', 'pending')->count();
+            $pendingResetCount = \App\Models\PasswordResetRequest::where('status', 'pending')->count();
         @endphp
         <a href="{{ route('admin.karyawan.verifikasi') }}" class="header-link-btn" title="Verifikasi Pendaftaran Mandiri (Maker-Checker & SoD)" style="{{ $pendingVerifikasiCount > 0 ? 'background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4);' : '' }}">
             🛡️ Verifikasi
             @if($pendingVerifikasiCount > 0)
                 <span style="background: #ef4444; color: #ffffff; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 999px; margin-left: 4px;">
                     {{ $pendingVerifikasiCount }}
+                </span>
+            @endif
+        </a>
+        <a href="{{ route('admin.karyawan.reset-password') }}" class="header-link-btn" title="Otorisasi Reset Password & PIN Karyawan" style="{{ $pendingResetCount > 0 ? 'background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4);' : '' }}">
+            🔑 Otorisasi Reset
+            @if($pendingResetCount > 0)
+                <span style="background: #ef4444; color: #ffffff; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 999px; margin-left: 4px;">
+                    {{ $pendingResetCount }}
                 </span>
             @endif
         </a>
