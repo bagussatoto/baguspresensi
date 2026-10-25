@@ -173,13 +173,19 @@
                 </div>
 
                 <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-                    <button type="submit" style="background: #10b981; color: #fff; font-weight: 700; font-size: 13.5px; border: none; padding: 12px 24px; border-radius: 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35); transition: all 0.2s ease;">
+                    <button type="submit" name="decision" value="approve" style="background: #10b981; color: #fff; font-weight: 700; font-size: 13.5px; border: none; padding: 12px 24px; border-radius: 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35); transition: all 0.2s ease;">
                         <span>🔓</span>
                         <span>SETUJUI &amp; BUKA BLOKIR SEKARANG (APPROVE)</span>
                     </button>
 
-                    <a href="{{ route('admin.karyawan') }}" style="background: rgba(255, 255, 255, 0.08); color: var(--text-sub); text-decoration: none; font-size: 13px; padding: 12px 18px; border-radius: 10px;">
-                        Tolak / Biarkan Terkunci
+                    <button type="submit" name="decision" value="reject" onclick="return confirm('Apakah Anda yakin ingin MENOLAK pembukaan blokir akun ini? Akun karyawan akan tetap dibekukan.');" style="background: rgba(239, 68, 68, 0.15); border: 1.5px solid rgba(239, 68, 68, 0.4); color: #f87171; font-weight: 700; font-size: 13px; padding: 12px 20px; border-radius: 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s ease;">
+                        <span>🚫</span>
+                        <span>Tolak / Biarkan Terkunci</span>
+                    </button>
+
+                    <a href="{{ route('admin.karyawan.unlock') }}" style="background: rgba(255, 255, 255, 0.08); color: var(--text-sub); text-decoration: none; font-size: 13px; padding: 12px 18px; border-radius: 10px; display: inline-flex; align-items: center; gap: 6px;">
+                        <span>📋</span>
+                        <span>Riwayat Lockout</span>
                     </a>
                 </div>
             </form>

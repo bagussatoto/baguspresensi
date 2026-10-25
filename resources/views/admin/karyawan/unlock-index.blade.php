@@ -147,6 +147,13 @@
                                 <div style="font-size: 10.5px; color: var(--text-sub); margin-top: 4px;">
                                     Oleh: <strong>{{ $vals['unlocked_by'] ?? 'Admin' }}</strong>
                                 </div>
+                            @elseif($log->action === 'EMPLOYEE_LOCKOUT_REJECTED_BY_ADMIN')
+                                <span style="background: rgba(244, 63, 94, 0.15); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.35); padding: 4px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                                    <span>🚫</span> Ditolak (Tetap Terkunci)
+                                </span>
+                                <div style="font-size: 10.5px; color: var(--text-sub); margin-top: 4px;">
+                                    Oleh: <strong>{{ $vals['rejected_by'] ?? 'Admin' }}</strong>
+                                </div>
                             @else
                                 <span style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); padding: 4px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
                                     <span>🔴</span> Terkunci (3x Gagal)
@@ -207,9 +214,6 @@
                     <span>Buka Data Master ERP (admin/data)</span>
                     <span style="font-size: 13px;">&rarr;</span>
                 </a>
-                <span style="font-size: 12px; color: var(--text-sub);">
-                    Tautan langsung: <a href="{{ route('admin.data') }}" style="color: #38bdf8; text-decoration: underline;">{{ route('admin.data') }}</a>
-                </span>
             </div>
             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                 <a href="{{ route('admin.karyawan.reset-password') }}" class="btn-action-sm" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); text-decoration: none; padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;">

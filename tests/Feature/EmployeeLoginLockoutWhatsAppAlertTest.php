@@ -260,4 +260,44 @@ class EmployeeLoginLockoutWhatsAppAlertTest extends TestCase
         $response->assertSee(route('admin.data'));
         $response->assertSee('Buka Data Master ERP (admin/data)');
     }
+
+    public function test_admin_can_reject_unlock_and_employee_remains_locked(): void
+    {
+        $admin = User::factory()->create(['name' => 'IT Security Admin']);
+        $ip = '127.0.0.1';
+
+        // 1. Kunci akun
+        $userKey = 'emp_'.$this->employee->id;
+        $throttleKey = 'presensi2_login:'.$userKey.'|'.$ip;
+        RateLimiter::hit($throttleKey, 300);
+        RateLimiter::hit($throttleKey, 300);
+        RateLimiter::hit($throttleKey, 300);
+        $this->assertTrue(RateLimiter::tooManyAttempts($throttleKey, 3));
+
+        $expires = now()->addMinutes(30)->timestamp;
+        $token = hash_hmac('sha256', $this->employee->id.'|'.$ip.'|'.$expires, config('app.key'));
+
+        // 2. Submit reject
+        $processResponse = $this->actingAs($admin)->post(route('admin.karyawan.unlock.process', $this->employee), [
+            'ip' => $ip,
+            'expires' => $expires,
+            'token' => $token,
+            'decision' => 'reject',
+            'notes' => 'Aktivitas terindikasi serangan berbahaya.',
+        ]);
+
+        $processResponse->assertRedirect(route('admin.karyawan.unlock'));
+        $processResponse->assertSessionHas('info');
+
+        // 3. Akun tetap terkunci
+        $this->assertTrue(RateLimiter::tooManyAttempts($throttleKey, 3));
+
+        // 4. Log audit penolakan tercatat
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'EMPLOYEE_LOCKOUT_REJECTED_BY_ADMIN',
+            'auditable_type' => Employee::class,
+            'auditable_id' => $this->employee->id,
+            'user_id' => $admin->id,
+        ]);
+    }
 }

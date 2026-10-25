@@ -300,9 +300,6 @@
                     <span>Buka Data Master ERP (admin/data)</span>
                     <span style="font-size: 13px;">&rarr;</span>
                 </a>
-                <span style="font-size: 12px; color: var(--text-sub);">
-                    Tautan langsung: <a href="{{ route('admin.data') }}" style="color: #38bdf8; text-decoration: underline;">{{ route('admin.data') }}</a>
-                </span>
             </div>
             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                 <a href="{{ route('admin.karyawan.unlock') }}" class="btn-action-sm" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); text-decoration: none; padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;">

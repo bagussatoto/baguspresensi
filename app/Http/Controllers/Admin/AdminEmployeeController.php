@@ -1205,6 +1205,36 @@ class AdminEmployeeController extends Controller
             ])->with('error', 'Token persetujuan tidak valid atau telah kedaluwarsa.');
         }
 
+        $decision = (string) $request->input('decision', 'approve');
+        $adminUser = Auth::user();
+
+        // JIKA ADMIN MEMILIH TOLAK (Tolak / Biarkan Terkunci)
+        if ($decision === 'reject') {
+            rescue(fn () => AuditLog::create([
+                'user_id' => $adminUser?->id,
+                'action' => 'EMPLOYEE_LOCKOUT_REJECTED_BY_ADMIN',
+                'auditable_type' => Employee::class,
+                'auditable_id' => $employee->id,
+                'old_values' => [
+                    'status' => 'LOCKED_OUT',
+                    'target_ip' => $ip,
+                ],
+                'new_values' => [
+                    'status' => 'REJECTED_STILL_LOCKED',
+                    'rejected_by' => $adminUser?->name ?? 'Admin',
+                    'rejected_at' => now()->toDateTimeString(),
+                    'target_ip' => $ip,
+                    'notes' => $request->input('notes', 'Pembukaan blokir akun ditolak oleh Admin. Akun tetap dalam keadaan terkunci.'),
+                ],
+                'ip_address' => request()->ip(),
+                'user_agent' => request()->userAgent(),
+                'created_at' => now(),
+            ]));
+
+            return redirect()->route('admin.karyawan.unlock')
+                ->with('info', "Permintaan pembukaan blokir akun {$employee->name} ({$employee->code}) telah DITOLAK. Akun tetap dalam keadaan terkunci demi keamanan.");
+        }
+
         // 1. Reset RateLimiter & Tier Cache untuk membuka blokir
         $userKey = 'emp_'.$employee->id;
         RateLimiter::clear('presensi2_login:'.$userKey.'|'.$ip);
@@ -1219,8 +1249,6 @@ class AdminEmployeeController extends Controller
             RateLimiter::clear('presensi2_login:'.$employee->username.'|'.$ip);
             cache()->forget('presensi2_login_tier:'.$employee->username.'|'.$ip);
         }
-
-        $adminUser = Auth::user();
 
         // 2. Catat Audit Log ISO 27001 (WORM)
         rescue(fn () => AuditLog::create([
