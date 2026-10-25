@@ -109,6 +109,13 @@
     🔒 review akses
 </a>
 
+{{-- 10e. OTORISASI BUKA BLOKIR (UNLOCK APPROVAL) --}}
+<a href="{{ route('admin.karyawan.unlock') }}" 
+   class="subnav-item {{ request()->routeIs('admin.karyawan.unlock*') ? 'active' : '' }}" 
+   title="Otorisasi Pembukaan Blokir Akun Karyawan (Unlock Approval)">
+    🔓 buka blokir
+</a>
+
 {{-- 11. PROFILE --}}
 <a href="{{ route('admin.staff.profile') }}" 
    class="subnav-item {{ request()->routeIs('admin.staff.profile*') || request()->is('*staff/profile*') || request()->is('*karyawan/profile*') || request()->is('*admin/staff/profile*') || (request()->routeIs('admin.data') && request('tab') == 'tab-profil') ? 'active' : '' }}" 

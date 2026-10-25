@@ -13,9 +13,12 @@
                 <span class="section-subtitle">Alur Maker-Checker — Menanggapi Peringatan Keamanan WhatsApp (Percobaan Gagal 3x)</span>
             </div>
         </div>
-        <div>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <a href="{{ route('admin.karyawan.unlock') }}" class="btn-action-sm" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); text-decoration: none;">
+                📋 Riwayat Lockout
+            </a>
             <a href="{{ route('admin.karyawan') }}" class="btn-action-sm" style="background: rgba(255, 255, 255, 0.08); color: #fff; text-decoration: none;">
-                ← Kembali ke Data Karyawan
+                ← Master Karyawan
             </a>
         </div>
     </div>

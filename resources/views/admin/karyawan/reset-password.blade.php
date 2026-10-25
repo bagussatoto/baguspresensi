@@ -20,6 +20,9 @@
             <a href="{{ route('admin.karyawan.verifikasi') }}" class="btn-action-sm" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">
                 🛡️ Verifikasi Pendaftaran
             </a>
+            <a href="{{ route('admin.karyawan.unlock') }}" class="btn-action-sm" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">
+                🔓 Buka Blokir
+            </a>
             <a href="{{ route('admin.karyawan') }}" class="btn-action-sm" style="background: rgba(255,255,255,0.08); color: #fff;">
                 👥 Master Karyawan
             </a>

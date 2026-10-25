@@ -264,6 +264,7 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::delete('/karyawan-reset-password/{resetRequest}', [AdminEmployeeController::class, 'destroyPasswordReset'])->name('admin.karyawan.reset-password.destroy');
 
     // Persetujuan Pembukaan Blokir (Unlock Approval) Akun Karyawan Akibat 3x Gagal Login
+    Route::get('/karyawan-unlock', [AdminEmployeeController::class, 'unlockIndex'])->name('admin.karyawan.unlock');
     Route::get('/karyawan-unlock/{employee}', [AdminEmployeeController::class, 'showUnlockApproval'])->name('admin.karyawan.unlock.show');
     Route::post('/karyawan-unlock/{employee}', [AdminEmployeeController::class, 'processUnlockApproval'])->name('admin.karyawan.unlock.process');
 

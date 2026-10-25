@@ -17,8 +17,14 @@
             <span class="badge-status {{ $pendingRegistrations->count() > 0 ? 'badge-amber' : 'badge-emerald' }}">
                 {{ $pendingRegistrations->count() }} Menunggu Otorisasi Admin
             </span>
+            <a href="{{ route('admin.karyawan.reset-password') }}" class="btn-action-sm" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);">
+                🔑 Reset PIN
+            </a>
+            <a href="{{ route('admin.karyawan.unlock') }}" class="btn-action-sm" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">
+                🔓 Buka Blokir
+            </a>
             <a href="{{ route('admin.karyawan') }}" class="btn-action-sm" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">
-                👥 Kelola Master Karyawan
+                👥 Master Karyawan
             </a>
             <a href="{{ route('admin.index') }}" class="btn-action-sm" style="background: rgba(255,255,255,0.08); color: #fff;">
                 ← Dashboard

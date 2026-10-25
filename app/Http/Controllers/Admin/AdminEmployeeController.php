@@ -1104,6 +1104,45 @@ class AdminEmployeeController extends Controller
     }
 
     /**
+     * Halaman Index Daftar Akun Terkunci & Riwayat Otorisasi Pembukaan Blokir (Unlock Approval).
+     */
+    public function unlockIndex(Request $request): View
+    {
+        $query = AuditLog::where('auditable_type', Employee::class)
+            ->whereIn('action', ['portal_login_lockout', 'EMPLOYEE_LOCKOUT_UNLOCKED_BY_ADMIN'])
+            ->orderBy('id', 'desc');
+
+        if ($request->filled('q')) {
+            $search = trim((string) $request->input('q'));
+            $query->where(function ($q) use ($search) {
+                $q->where('new_values', 'like', "%{$search}%")
+                    ->orWhere('ip_address', 'like', "%{$search}%");
+            });
+        }
+
+        $logs = $query->paginate(20)->withQueryString();
+
+        $employeeIds = $logs->pluck('auditable_id')->unique()->filter();
+        $employees = Employee::with('branch')->whereIn('id', $employeeIds)->get()->keyBy('id');
+
+        $totalLockout24h = AuditLog::where('auditable_type', Employee::class)
+            ->where('action', 'portal_login_lockout')
+            ->where('created_at', '>=', now()->subHours(24))
+            ->count();
+
+        $totalUnlocked = AuditLog::where('auditable_type', Employee::class)
+            ->where('action', 'EMPLOYEE_LOCKOUT_UNLOCKED_BY_ADMIN')
+            ->count();
+
+        return view('admin.karyawan.unlock-index', [
+            'logs' => $logs,
+            'employees' => $employees,
+            'totalLockout24h' => $totalLockout24h,
+            'totalUnlocked' => $totalUnlocked,
+        ]);
+    }
+
+    /**
      * Tampilkan Halaman Persetujuan Pembukaan Blokir (Unlock Approval) Akun Karyawan yang terkunci akibat 3x gagal login.
      */
     public function showUnlockApproval(Request $request, Employee $employee): View
@@ -1111,6 +1150,17 @@ class AdminEmployeeController extends Controller
         $ip = (string) $request->query('ip', '');
         $expires = (int) $request->query('expires', 0);
         $token = (string) $request->query('token', '');
+
+        // Jika dibuka langsung oleh Admin terautentikasi tanpa token di URL
+        if ($token === '' && Auth::check()) {
+            $ip = $ip ?: (string) (AuditLog::where('auditable_type', Employee::class)
+                ->where('auditable_id', $employee->id)
+                ->where('action', 'portal_login_lockout')
+                ->latest()
+                ->value('ip_address') ?? '127.0.0.1');
+            $expires = now()->addMinutes(30)->timestamp;
+            $token = hash_hmac('sha256', $employee->id.'|'.$ip.'|'.$expires, config('app.key'));
+        }
 
         $expectedToken = hash_hmac('sha256', $employee->id.'|'.$ip.'|'.$expires, config('app.key'));
 
