@@ -14,6 +14,9 @@
             </div>
         </div>
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <a href="{{ route('admin.data') }}" class="btn-action-sm" style="background: rgba(2, 132, 199, 0.18); color: #38bdf8; border: 1px solid rgba(2, 132, 199, 0.35);">
+                📊 Data Master ERP
+            </a>
             <a href="{{ route('admin.karyawan.verifikasi') }}" class="btn-action-sm" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">
                 🛡️ Verifikasi Pendaftaran
             </a>
@@ -193,6 +196,30 @@
                 {{ $logs->links() }}
             </div>
         @endif
+
+        <!-- TAUTAN NAVIGASI DI BAWAH TABEL -->
+        <div style="margin-top: 24px; padding: 18px 20px; background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border-color); border-radius: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <a href="{{ route('admin.data') }}" 
+                   class="btn-action-sm" 
+                   style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #ffffff; border: 1px solid rgba(56, 189, 248, 0.5); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 8px; font-weight: 700; font-size: 13px; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);">
+                    <span style="font-size: 15px;">📊</span>
+                    <span>Buka Data Master ERP (admin/data)</span>
+                    <span style="font-size: 13px;">&rarr;</span>
+                </a>
+                <span style="font-size: 12px; color: var(--text-sub);">
+                    Tautan langsung: <a href="{{ route('admin.data') }}" style="color: #38bdf8; text-decoration: underline;">{{ route('admin.data') }}</a>
+                </span>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <a href="{{ route('admin.karyawan.reset-password') }}" class="btn-action-sm" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); text-decoration: none; padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;">
+                    🔑 Otorisasi Reset Password &amp; PIN
+                </a>
+                <a href="{{ route('admin.karyawan') }}" class="btn-action-sm" style="background: rgba(255, 255, 255, 0.08); color: #fff; text-decoration: none; padding: 8px 12px; border-radius: 8px; font-size: 12px;">
+                    👥 Master Karyawan
+                </a>
+            </div>
+        </div>
     </div>
 </div>
 @endsection

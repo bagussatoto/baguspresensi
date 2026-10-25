@@ -14,6 +14,9 @@
             </div>
         </div>
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <a href="{{ route('admin.data') }}" class="btn-action-sm" style="background: rgba(2, 132, 199, 0.18); color: #38bdf8; border: 1px solid rgba(2, 132, 199, 0.35);">
+                📊 Data Master ERP
+            </a>
             <span class="badge-status {{ $pendingRequests->count() > 0 ? 'badge-amber' : 'badge-emerald' }}">
                 {{ $pendingRequests->count() }} Menunggu Otorisasi Admin
             </span>
@@ -285,6 +288,30 @@
                     @endforelse
                 </tbody>
             </table>
+        </div>
+
+        <!-- TAUTAN NAVIGASI DI BAWAH TABEL OTORISASI RESET PASSWORD & PIN -->
+        <div style="margin-top: 24px; padding: 18px 20px; background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border-color); border-radius: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <a href="{{ route('admin.data') }}" 
+                   class="btn-action-sm" 
+                   style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #ffffff; border: 1px solid rgba(56, 189, 248, 0.5); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 8px; font-weight: 700; font-size: 13px; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);">
+                    <span style="font-size: 15px;">📊</span>
+                    <span>Buka Data Master ERP (admin/data)</span>
+                    <span style="font-size: 13px;">&rarr;</span>
+                </a>
+                <span style="font-size: 12px; color: var(--text-sub);">
+                    Tautan langsung: <a href="{{ route('admin.data') }}" style="color: #38bdf8; text-decoration: underline;">{{ route('admin.data') }}</a>
+                </span>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <a href="{{ route('admin.karyawan.unlock') }}" class="btn-action-sm" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); text-decoration: none; padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;">
+                    🔓 Pusat Buka Blokir
+                </a>
+                <a href="{{ route('admin.karyawan') }}" class="btn-action-sm" style="background: rgba(255, 255, 255, 0.08); color: #fff; text-decoration: none; padding: 8px 12px; border-radius: 8px; font-size: 12px;">
+                    👥 Master Karyawan
+                </a>
+            </div>
         </div>
     </div>
 </div>

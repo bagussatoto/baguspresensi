@@ -203,4 +203,26 @@ class EmployeeLoginLockoutWhatsAppAlertTest extends TestCase
         $loginRes->assertRedirect(route('presensi2.index'));
         $this->assertEquals($this->employee->id, session('presensi2_employee_id'));
     }
+
+    public function test_admin_can_view_unlock_incident_index_and_sees_data_master_link(): void
+    {
+        $admin = User::factory()->create(['name' => 'IT Security Admin']);
+
+        $response = $this->actingAs($admin)->get(route('admin.karyawan.unlock'));
+
+        $response->assertOk();
+        $response->assertSee(route('admin.data'));
+        $response->assertSee('Buka Data Master ERP (admin/data)');
+    }
+
+    public function test_admin_can_view_reset_password_page_and_sees_data_master_link(): void
+    {
+        $admin = User::factory()->create(['name' => 'HRD Admin']);
+
+        $response = $this->actingAs($admin)->get(route('admin.karyawan.reset-password'));
+
+        $response->assertOk();
+        $response->assertSee(route('admin.data'));
+        $response->assertSee('Buka Data Master ERP (admin/data)');
+    }
 }

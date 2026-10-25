@@ -14,6 +14,9 @@
             </div>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <a href="{{ route('admin.data') }}" class="btn-action-sm" style="background: rgba(2, 132, 199, 0.18); color: #38bdf8; border: 1px solid rgba(2, 132, 199, 0.35); text-decoration: none;">
+                📊 Data Master ERP
+            </a>
             <a href="{{ route('admin.karyawan.unlock') }}" class="btn-action-sm" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); text-decoration: none;">
                 📋 Riwayat Lockout
             </a>
