@@ -1284,7 +1284,7 @@ class AdminEmployeeController extends Controller
             rescue(fn () => app(EarlyWarningNotificationService::class)->sendWhatsApp($employee->phone, $msg));
         }
 
-        return redirect()->route('admin.karyawan')
-            ->with('success', "Akun karyawan {$employee->name} ({$employee->code}) berhasil dibuka blokirnya! Karyawan sudah dapat login kembali.");
+        return redirect()->route('admin.karyawan.unlock')
+            ->with('success', "Akun karyawan {$employee->name} ({$employee->code}) berhasil dibuka blokirnya! Status pada Riwayat Lockout telah diperbarui dan karyawan sudah dapat login kembali.");
     }
 }

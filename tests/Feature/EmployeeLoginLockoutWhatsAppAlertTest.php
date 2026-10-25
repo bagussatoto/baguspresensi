@@ -216,7 +216,7 @@ class EmployeeLoginLockoutWhatsAppAlertTest extends TestCase
             'notes' => 'Telah dikonfirmasi langsung oleh HRD via telepon.',
         ]);
 
-        $processResponse->assertRedirect(route('admin.karyawan'));
+        $processResponse->assertRedirect(route('admin.karyawan.unlock'));
         $processResponse->assertSessionHas('success');
 
         // 3. Verifikasi RateLimiter telah di-clear (buka blokir berhasil)

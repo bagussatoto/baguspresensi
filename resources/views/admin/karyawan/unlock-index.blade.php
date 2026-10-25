@@ -60,6 +60,20 @@
         </div>
     @endif
 
+    @if(session('info'))
+        <div style="margin: 18px 24px 0; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 10px; padding: 12px 16px; color: #7dd3fc; font-size: 13.5px; display: flex; align-items: center; gap: 8px;">
+            <span>ℹ️</span>
+            <span>{{ session('info') }}</span>
+        </div>
+    @endif
+
+    @if(session('error'))
+        <div style="margin: 18px 24px 0; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 10px; padding: 12px 16px; color: #f87171; font-size: 13.5px; display: flex; align-items: center; gap: 8px;">
+            <span>⚠️</span>
+            <span>{{ session('error') }}</span>
+        </div>
+    @endif
+
     <!-- FILTER & SEARCH BAR -->
     <div style="padding: 20px 24px 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
         <form action="{{ route('admin.karyawan.unlock') }}" method="GET" style="display: flex; gap: 8px; flex: 1; max-width: 480px;">
