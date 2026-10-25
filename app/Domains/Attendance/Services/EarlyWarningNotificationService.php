@@ -61,7 +61,7 @@ class EarlyWarningNotificationService
 
         // 3. Format Opsi A: Pesan WhatsApp ke Admin HRD / IT (Dengan Tautan Approval Buka Blokir)
         $adminWaMessage = "🚨 *[SECURITY ALERT: PERCOBAAN TIDAK SAH 3X]*\n\n"
-            ."Halo Admin HRD / IT,\n"
+            ."Halo Tim Admin & HRD,\n"
             ."Terdeteksi aktivitas mencurigakan pada sistem presensi:\n"
             ."• Karyawan Sasaran: *{$empName}* (NIP: *{$empCode}*)\n"
             ."• Username: `{$username}`\n"
@@ -89,10 +89,10 @@ class EarlyWarningNotificationService
             $results['whatsapp'] = $results['whatsapp_employee'];
         }
 
-        // 2. Kirim ke WhatsApp Admin HRD / IT (Format Opsi A)
-        $adminPhone = config('services.whatsapp.admin_phone') ?: '081234567890';
-        if ($adminPhone) {
-            $results['whatsapp_admin'] = $this->sendWhatsApp($adminPhone, $adminWaMessage);
+        // 2. Kirim ke WhatsApp Admin HRD / IT (Format Opsi A: Prioritas Grup WhatsApp jika terkonfigurasi)
+        $adminTarget = config('services.whatsapp.admin_group_id') ?: (config('services.whatsapp.admin_phone') ?: '081234567890');
+        if ($adminTarget) {
+            $results['whatsapp_admin'] = $this->sendWhatsApp($adminTarget, $adminWaMessage);
             if (! $results['whatsapp']) {
                 $results['whatsapp'] = $results['whatsapp_admin'];
             }
@@ -184,10 +184,10 @@ class EarlyWarningNotificationService
             ."Silakan buka menu Verifikasi Karyawan untuk meninjau data KTP/kontak dan menyetujui (Approve):\n"
             ."{$verificationUrl}";
 
-        // 1. Kirim via WhatsApp ke Admin / HRD jika nomor terkonfigurasi
-        $adminPhone = config('services.whatsapp.admin_phone');
-        if ($adminPhone) {
-            $this->sendWhatsApp($adminPhone, $adminMessage);
+        // 1. Kirim via WhatsApp ke Admin / HRD jika nomor/grup terkonfigurasi
+        $adminTarget = config('services.whatsapp.admin_group_id') ?: config('services.whatsapp.admin_phone');
+        if ($adminTarget) {
+            $this->sendWhatsApp($adminTarget, $adminMessage);
         }
 
         // 2. Kirim via Telegram Channel / Bot Admin
@@ -199,10 +199,17 @@ class EarlyWarningNotificationService
      */
     public function sendWhatsApp(string $phoneNumber, string $message): bool
     {
-        // Normalisasi nomor telepon: ubah 08xxx atau +628xxx menjadi 628xxx
-        $cleanPhone = preg_replace('/[^0-9]/', '', $phoneNumber);
-        if (str_starts_with($cleanPhone, '0')) {
-            $cleanPhone = '62'.substr($cleanPhone, 1);
+        $target = trim($phoneNumber);
+
+        // Jika target berupa Grup WhatsApp (misal: 120363xxx@g.us atau mengandung @g.us)
+        if (str_ends_with($target, '@g.us') || str_contains($target, '@g.us')) {
+            $cleanPhone = $target;
+        } else {
+            // Normalisasi nomor telepon perorangan: ubah 08xxx atau +628xxx menjadi 628xxx
+            $cleanPhone = preg_replace('/[^0-9]/', '', $target);
+            if (str_starts_with($cleanPhone, '0')) {
+                $cleanPhone = '62'.substr($cleanPhone, 1);
+            }
         }
 
         $apiUrl = config('services.whatsapp.api_url');

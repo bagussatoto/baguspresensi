@@ -49,6 +49,7 @@ class EmployeeLoginLockoutWhatsAppAlertTest extends TestCase
 
     public function test_three_failed_login_attempts_triggers_whatsapp_alert_to_admin_with_format_opsi_a(): void
     {
+        config(['services.whatsapp.admin_group_id' => null]);
         config(['services.whatsapp.admin_phone' => '081299887766']);
         config(['services.whatsapp.api_url' => 'https://api.fonnte.com/send']);
         config(['services.whatsapp.api_token' => 'dummy_token_123']);
@@ -102,6 +103,40 @@ class EmployeeLoginLockoutWhatsAppAlertTest extends TestCase
             'auditable_type' => Employee::class,
             'auditable_id' => $this->employee->id,
         ]);
+    }
+
+    public function test_three_failed_login_attempts_triggers_whatsapp_alert_to_group_when_group_id_is_configured(): void
+    {
+        config(['services.whatsapp.admin_group_id' => '120363412767536329@g.us']);
+        config(['services.whatsapp.admin_phone' => '081299887766']);
+        config(['services.whatsapp.api_url' => 'https://api.fonnte.com/send']);
+        config(['services.whatsapp.api_token' => 'dummy_token_123']);
+
+        Http::fake([
+            'https://api.fonnte.com/send' => Http::response(['status' => true], 200),
+        ]);
+
+        for ($i = 1; $i <= 3; $i++) {
+            $this->post(route('presensi2.login.post'), [
+                'employee_code' => 'dimas_wahyu',
+                'credential' => 'wrong_pin_'.$i,
+            ]);
+        }
+
+        // Verifikasi HTTP request terkirim ke Group ID WhatsApp Admin (bukan nomor personal)
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+            $target = $body['target'] ?? '';
+            $message = $body['message'] ?? '';
+
+            if ($target === '120363412767536329@g.us') {
+                return str_contains($message, 'SECURITY ALERT: PERCOBAAN TIDAK SAH 3X')
+                    && str_contains($message, 'Dimas Wahyu Pratama')
+                    && str_contains($message, 'admin/karyawan-unlock');
+            }
+
+            return false;
+        });
     }
 
     public function test_admin_can_view_unlock_approval_page_with_valid_hmac_token(): void
