@@ -194,6 +194,14 @@ class EmployeeLoginLockoutWhatsAppAlertTest extends TestCase
 
     public function test_admin_can_approve_unlock_and_employee_can_immediately_login(): void
     {
+        config(['services.whatsapp.admin_group_id' => '120363412767536329@g.us']);
+        config(['services.whatsapp.api_url' => 'https://api.fonnte.com/send']);
+        config(['services.whatsapp.api_token' => 'dummy_token']);
+
+        Http::fake([
+            'https://api.fonnte.com/send' => Http::response(['status' => true], 200),
+        ]);
+
         $admin = User::factory()->create(['name' => 'HRD Manager']);
         $ip = '127.0.0.1';
 
@@ -219,10 +227,24 @@ class EmployeeLoginLockoutWhatsAppAlertTest extends TestCase
         $processResponse->assertRedirect(route('admin.karyawan.unlock'));
         $processResponse->assertSessionHas('success');
 
-        // 3. Verifikasi RateLimiter telah di-clear (buka blokir berhasil)
+        // 3. Verifikasi pesan update status terkirim ke Grup WhatsApp
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+            $target = $body['target'] ?? '';
+            $message = $body['message'] ?? '';
+
+            if ($target === '120363412767536329@g.us') {
+                return str_contains($message, 'UPDATE STATUS: BLOKIR AKUN TELAH DIBUKA')
+                    && str_contains($message, 'AKTIF KEMBALI');
+            }
+
+            return false;
+        });
+
+        // 4. Verifikasi RateLimiter telah di-clear (buka blokir berhasil)
         $this->assertFalse(RateLimiter::tooManyAttempts($throttleKey, 3));
 
-        // 4. Verifikasi AuditLog ISO 27001 mencatat aksi UNLOCKED oleh Admin
+        // 5. Verifikasi AuditLog ISO 27001 mencatat aksi UNLOCKED oleh Admin
         $this->assertDatabaseHas('audit_logs', [
             'action' => 'EMPLOYEE_LOCKOUT_UNLOCKED_BY_ADMIN',
             'auditable_type' => Employee::class,
@@ -230,7 +252,7 @@ class EmployeeLoginLockoutWhatsAppAlertTest extends TestCase
             'user_id' => $admin->id,
         ]);
 
-        // 5. Karyawan langsung dapat login dengan sukses
+        // 6. Karyawan langsung dapat login dengan sukses
         $loginRes = $this->post(route('presensi2.login.post'), [
             'employee_code' => 'dimas_wahyu',
             'credential' => '123456',
@@ -263,6 +285,14 @@ class EmployeeLoginLockoutWhatsAppAlertTest extends TestCase
 
     public function test_admin_can_reject_unlock_and_employee_remains_locked(): void
     {
+        config(['services.whatsapp.admin_group_id' => '120363412767536329@g.us']);
+        config(['services.whatsapp.api_url' => 'https://api.fonnte.com/send']);
+        config(['services.whatsapp.api_token' => 'dummy_token']);
+
+        Http::fake([
+            'https://api.fonnte.com/send' => Http::response(['status' => true], 200),
+        ]);
+
         $admin = User::factory()->create(['name' => 'IT Security Admin']);
         $ip = '127.0.0.1';
 
@@ -289,10 +319,24 @@ class EmployeeLoginLockoutWhatsAppAlertTest extends TestCase
         $processResponse->assertRedirect(route('admin.karyawan.unlock'));
         $processResponse->assertSessionHas('info');
 
-        // 3. Akun tetap terkunci
+        // 3. Verifikasi pesan update status penolakan terkirim ke Grup WhatsApp
+        Http::assertSent(function ($request) {
+            $body = $request->data();
+            $target = $body['target'] ?? '';
+            $message = $body['message'] ?? '';
+
+            if ($target === '120363412767536329@g.us') {
+                return str_contains($message, 'UPDATE STATUS: BUKA BLOKIR DITOLAK')
+                    && str_contains($message, 'TETAP TERKUNCI');
+            }
+
+            return false;
+        });
+
+        // 4. Akun tetap terkunci
         $this->assertTrue(RateLimiter::tooManyAttempts($throttleKey, 3));
 
-        // 4. Log audit penolakan tercatat
+        // 5. Log audit penolakan tercatat
         $this->assertDatabaseHas('audit_logs', [
             'action' => 'EMPLOYEE_LOCKOUT_REJECTED_BY_ADMIN',
             'auditable_type' => Employee::class,

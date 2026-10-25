@@ -1231,6 +1231,26 @@ class AdminEmployeeController extends Controller
                 'created_at' => now(),
             ]));
 
+            // Notifikasi pembaruan status ke Grup WhatsApp Admin & HRD
+            $groupTarget = config('services.whatsapp.admin_group_id') ?: config('services.whatsapp.admin_phone');
+            if ($groupTarget) {
+                $time = now()->format('d M Y, H:i');
+                $adminName = $adminUser?->name ?? 'Admin';
+                $notes = $request->input('notes') ? "\n• Catatan Admin: ".$request->input('notes') : '';
+                $rejectGroupMsg = "🚫 *[UPDATE STATUS: BUKA BLOKIR DITOLAK]*\n\n"
+                    ."Halo Tim Admin & HRD,\n"
+                    ."Permintaan pembukaan blokir akun telah *DITOLAK (REJECTED)*:\n"
+                    ."• Karyawan: *{$employee->name}* (NIP: `{$employee->code}`)\n"
+                    ."• Keputusan: *Ditolak / Biarkan Terkunci* ❌\n"
+                    ."• Diputuskan Oleh: *{$adminName}*\n"
+                    ."• Waktu: {$time} WIB"
+                    .$notes."\n\n"
+                    ."Status Akun: *TETAP TERKUNCI / DIBEKUKAN* 🔴\n"
+                    .'Pantau riwayat lengkap: http://192.168.5.10:8086/bagus/admin/karyawan-unlock';
+
+                rescue(fn () => app(EarlyWarningNotificationService::class)->sendWhatsApp($groupTarget, $rejectGroupMsg));
+            }
+
             return redirect()->route('admin.karyawan.unlock')
                 ->with('info', "Permintaan pembukaan blokir akun {$employee->name} ({$employee->code}) telah DITOLAK. Akun tetap dalam keadaan terkunci demi keamanan.");
         }
@@ -1282,6 +1302,27 @@ class AdminEmployeeController extends Controller
                 .'http://192.168.5.10:8086/bagus/presensi2/login';
 
             rescue(fn () => app(EarlyWarningNotificationService::class)->sendWhatsApp($employee->phone, $msg));
+        }
+
+        // 4. Notifikasi konfirmasi pembaruan status ke GRUP WHATSAPP ADMIN & HRD
+        $groupTarget = config('services.whatsapp.admin_group_id') ?: config('services.whatsapp.admin_phone');
+        if ($groupTarget) {
+            $time = now()->format('d M Y, H:i');
+            $adminName = $adminUser?->name ?? 'Admin';
+            $notes = $request->input('notes') ? "\n• Catatan Admin: ".$request->input('notes') : '';
+            $approveGroupMsg = "✅ *[UPDATE STATUS: BLOKIR AKUN TELAH DIBUKA]*\n\n"
+                ."Halo Tim Admin & HRD,\n"
+                ."Pembukaan blokir akun telah *DISETUJUI (APPROVED)* oleh checker:\n"
+                ."• Karyawan: *{$employee->name}* (NIP: `{$employee->code}`)\n"
+                ."• Status Tindakan: *Dibuka / Unlocked* 🔓\n"
+                ."• Disetujui Oleh: *{$adminName}*\n"
+                ."• Waktu: {$time} WIB"
+                .$notes."\n\n"
+                ."Status Akun: *AKTIF KEMBALI* 🟢\n"
+                ."Karyawan bersangkutan sudah dapat melakukan login dan presensi kembali.\n"
+                .'Pantau riwayat lengkap: http://192.168.5.10:8086/bagus/admin/karyawan-unlock';
+
+            rescue(fn () => app(EarlyWarningNotificationService::class)->sendWhatsApp($groupTarget, $approveGroupMsg));
         }
 
         return redirect()->route('admin.karyawan.unlock')
