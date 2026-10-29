@@ -71,7 +71,8 @@ class AdminAuthMultiRoleTest extends TestCase
         $response->assertSee('1. Manager');
         $response->assertSee('2. Staff');
         $response->assertSee('maya123');
-        $response->assertSee('Grace');
+        $response->assertSee('name="manager_identifier"', false);
+        $response->assertSee('name="staff_identifier"', false);
     }
 
     public function test_login_route_alias_also_renders_admin_login_page(): void

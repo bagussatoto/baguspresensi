@@ -224,13 +224,58 @@ class InternetCafeController extends Controller
     public function clockAttendance(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'employee_id' => ['required', 'exists:employees,id'],
+            'employee_name' => ['nullable', 'string', 'max:100'],
+            'employee_id' => ['nullable'],
             'type' => ['required', 'string', 'in:in,out'],
             'shift_id' => ['nullable', 'exists:shifts,id'],
             'notes' => ['nullable', 'string'],
         ]);
 
-        $employee = Employee::with('branch')->findOrFail($validated['employee_id']);
+        $employee = null;
+        $identifier = trim((string) ($request->input('employee_name') ?: $request->input('employee_id') ?: ''));
+
+        if ($identifier !== '') {
+            if (is_numeric($identifier)) {
+                $employee = Employee::with('branch')->where('is_active', true)->find((int) $identifier);
+            }
+
+            if (! $employee) {
+                $employee = Employee::with('branch')->where('is_active', true)
+                    ->whereRaw('LOWER(name) = ?', [mb_strtolower($identifier)])
+                    ->first();
+            }
+
+            if (! $employee) {
+                $employee = Employee::with('branch')->where('is_active', true)
+                    ->where(function ($q) use ($identifier) {
+                        $q->where('code', $identifier)
+                            ->orWhere('username', $identifier)
+                            ->orWhere('email', $identifier);
+                    })
+                    ->first();
+            }
+
+            if (! $employee) {
+                $matchingEmployees = Employee::with('branch')->where('is_active', true)
+                    ->where('name', 'LIKE', '%'.$identifier.'%')
+                    ->get();
+
+                if ($matchingEmployees->count() === 1) {
+                    $employee = $matchingEmployees->first();
+                } elseif ($matchingEmployees->count() > 1) {
+                    return response()->json([
+                        'message' => 'Ditemukan lebih dari 1 karyawan dengan nama tersebut. Tuliskan nama lengkap Anda secara spesifik atau gunakan NIK.',
+                    ], 422);
+                }
+            }
+        }
+
+        if (! $employee) {
+            return response()->json([
+                'message' => 'Identitas operator kasir tidak ditemukan dalam data karyawan aktif.',
+            ], 422);
+        }
+
         $branch = $employee->branch ?? Branch::where('code', 'NET-PST')->first() ?? Branch::first();
 
         // Pastikan cabang memiliki koordinat GPS

@@ -193,17 +193,58 @@ class AttendanceWebV2Controller extends Controller
         }
 
         $request->validate([
-            'employee_id' => 'required|exists:employees,id',
+            'employee_name' => 'required_without:employee_id|nullable|string|max:100',
+            'employee_id' => 'required_without:employee_name|nullable|exists:employees,id',
             'credential' => 'required|string',
         ], [
-            'employee_id.required' => 'Silakan pilih identitas karyawan Anda.',
+            'employee_name.required_without' => 'Silakan tulis nama atau identitas karyawan Anda.',
+            'employee_id.required_without' => 'Silakan tulis nama atau identitas karyawan Anda.',
             'employee_id.exists' => 'Data karyawan tidak ditemukan.',
             'credential.required' => 'Password atau PIN 6-digit wajib diisi.',
         ]);
 
-        $employee = Employee::where('is_active', true)->find($request->input('employee_id'));
+        $employee = null;
+        if ($request->filled('employee_id')) {
+            $employee = Employee::where('is_active', true)->find($request->input('employee_id'));
+        }
+
+        if (! $employee && $request->filled('employee_name')) {
+            $nameInput = trim((string) $request->input('employee_name'));
+
+            // 1. Pencocokan langsung nama karyawan (case-insensitive)
+            $employee = Employee::where('is_active', true)
+                ->whereRaw('LOWER(name) = ?', [mb_strtolower($nameInput)])
+                ->first();
+
+            // 2. Pencocokan berdasarkan kode, username, atau email
+            if (! $employee) {
+                $employee = Employee::where('is_active', true)
+                    ->where(function ($q) use ($nameInput) {
+                        $q->where('code', $nameInput)
+                            ->orWhere('username', $nameInput)
+                            ->orWhere('email', $nameInput);
+                    })
+                    ->first();
+            }
+
+            // 3. Pencocokan LIKE nama (jika hanya ada 1 hasil spesifik)
+            if (! $employee) {
+                $matchingEmployees = Employee::where('is_active', true)
+                    ->where('name', 'LIKE', '%'.$nameInput.'%')
+                    ->get();
+
+                if ($matchingEmployees->count() === 1) {
+                    $employee = $matchingEmployees->first();
+                } elseif ($matchingEmployees->count() > 1) {
+                    return back()->withInput()->withErrors([
+                        'employee_name' => 'Ditemukan lebih dari 1 karyawan dengan nama tersebut. Mohon tuliskan nama lengkap Anda secara spesifik atau gunakan kode/NIK karyawan.',
+                    ]);
+                }
+            }
+        }
+
         if (! $employee) {
-            return back()->withInput()->withErrors(['employee_id' => 'Akun karyawan tidak aktif atau tidak ditemukan.']);
+            return back()->withInput()->withErrors(['employee_name' => 'Akun karyawan tidak aktif atau tidak ditemukan. Pastikan penulisan nama lengkap sudah benar.']);
         }
 
         if (! $this->verifyEmployeeCredential($employee, (string) $request->input('credential'))) {
@@ -912,15 +953,10 @@ class AttendanceWebV2Controller extends Controller
             'created_at' => now(),
         ]));
 
-        // Kirim Notifikasi Early Warning Alert ke Telegram Admin
-        rescue(fn () => $this->earlyWarningNotificationService->sendTelegramAlert(
-            "🔑 *[REQUEST RESET PIN/PASSWORD]*\n"
-            ."Karyawan mengajukan reset kredensial:\n"
-            ."• Nama: *{$employee->name}* ({$employee->code})\n"
-            .'• Cabang: *'.($employee->branch?->name ?? 'Pusat')."*\n"
-            ."• Status: *Menunggu Otorisasi Admin*\n"
-            .'• Waktu: '.now()->toDateTimeString()."\n\n"
-            .'Mohon buka menu Admin: `/karyawan-reset-password` untuk memverifikasi.'
+        // Kirim Notifikasi Early Warning Alert ke Grup WhatsApp & Telegram Admin
+        rescue(fn () => $this->earlyWarningNotificationService->sendPasswordResetRequestedAlert(
+            $employee,
+            (ctype_digit($newCredential) && strlen($newCredential) === 6) ? 'pin' : 'password'
         ));
 
         return redirect()->route('presensi2.login')
@@ -1255,6 +1291,7 @@ class AttendanceWebV2Controller extends Controller
     public function login(Request $request): RedirectResponse
     {
         $request->validate([
+            'employee_name' => 'nullable|string|max:100',
             'employee_id' => 'nullable|exists:employees,id',
             'employee_code' => 'nullable|string',
             'email_or_code' => 'nullable|string',
@@ -1265,7 +1302,7 @@ class AttendanceWebV2Controller extends Controller
         ]);
 
         $credential = (string) $request->input('credential');
-        $identifier = trim((string) ($request->input('employee_code') ?: $request->input('email_or_code') ?: ''));
+        $identifier = trim((string) ($request->input('employee_name') ?: $request->input('employee_code') ?: $request->input('email_or_code') ?: ''));
         $remember = $request->boolean('remember');
 
         // 1. Cek autentikasi Admin jika identifier merupakan email
@@ -1283,14 +1320,39 @@ class AttendanceWebV2Controller extends Controller
 
         if ($request->filled('employee_id')) {
             $employee = Employee::where('is_active', true)->find($request->input('employee_id'));
-        } elseif ($identifier !== '') {
+        }
+
+        if (! $employee && $identifier !== '') {
+            // A. Pencocokan langsung nama karyawan (case-insensitive)
             $employee = Employee::where('is_active', true)
-                ->where(function ($q) use ($identifier) {
-                    $q->where('code', $identifier)
-                        ->orWhere('username', $identifier)
-                        ->orWhere('email', $identifier);
-                })
+                ->whereRaw('LOWER(name) = ?', [mb_strtolower($identifier)])
                 ->first();
+
+            // B. Pencocokan berdasarkan kode/NIK, username, atau email
+            if (! $employee) {
+                $employee = Employee::where('is_active', true)
+                    ->where(function ($q) use ($identifier) {
+                        $q->where('code', $identifier)
+                            ->orWhere('username', $identifier)
+                            ->orWhere('email', $identifier);
+                    })
+                    ->first();
+            }
+
+            // C. Pencocokan LIKE nama (jika hanya ada 1 hasil spesifik)
+            if (! $employee) {
+                $matchingEmployees = Employee::where('is_active', true)
+                    ->where('name', 'LIKE', '%'.$identifier.'%')
+                    ->get();
+
+                if ($matchingEmployees->count() === 1) {
+                    $employee = $matchingEmployees->first();
+                } elseif ($matchingEmployees->count() > 1) {
+                    return redirect()->route('presensi2.login')
+                        ->withInput()
+                        ->withErrors(['employee_name' => 'Ditemukan lebih dari 1 karyawan dengan nama tersebut. Mohon tuliskan nama lengkap Anda secara spesifik atau gunakan kode/NIK karyawan.']);
+                }
+            }
         }
 
         if (! $employee) {
@@ -1302,7 +1364,7 @@ class AttendanceWebV2Controller extends Controller
 
             return redirect()->route('presensi2.login')
                 ->withInput()
-                ->withErrors(['employee_id' => 'Identitas karyawan atau NIK tidak ditemukan. Silakan periksa kembali atau pilih dari daftar.']);
+                ->withErrors(['employee_name' => 'Identitas karyawan tidak ditemukan. Silakan periksa kembali penulisan nama lengkap atau NIK Anda.']);
         }
 
         $userKey = $employee ? 'emp_'.$employee->id : ($identifier ?: 'unknown');

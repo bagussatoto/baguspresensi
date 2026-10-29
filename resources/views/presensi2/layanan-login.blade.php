@@ -470,23 +470,25 @@
             @csrf
             <input type="hidden" name="service" id="input_service" value="{{ $service }}">
 
-            {{-- 1. IDENTITAS KARYAWAN --}}
+            {{-- 1. IDENTITAS KARYAWAN (MURNI INPUT TEKS) --}}
             <div class="form-group-custom">
-                <label for="employee_id" class="form-label-custom">
+                <label for="employee_name" class="form-label-custom">
                     <span>👤 Identitas Karyawan:</span>
-                    <span style="font-size: 11px; color: #38bdf8;">(Wajib Dipilih)</span>
+                    <span style="font-size: 11px; color: #38bdf8;">(Tulis Nama Karyawan)</span>
                 </label>
                 <div class="input-box-wrap">
                     <span class="input-icon-left">👤</span>
-                    <select name="employee_id" id="employee_id" class="form-input-field" required style="cursor: pointer; appearance: none; -webkit-appearance: none; padding-right: 38px;">
-                        <option value="" disabled {{ old('employee_id') ? '' : 'selected' }}>-- Pilih Nama Anda --</option>
-                        @foreach($employees as $emp)
-                            <option value="{{ $emp->id }}" {{ old('employee_id') == $emp->id ? 'selected' : '' }}>
-                                {{ $emp->name }} ({{ $emp->code ?? 'OP' }}) — {{ $emp->position ?? ($emp->role ? $emp->role->value : 'Staf') }}
-                            </option>
-                        @endforeach
-                    </select>
-                    <div style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #94a3b8; font-size: 12px;">▼</div>
+                    <input 
+                        type="text" 
+                        name="employee_name" 
+                        id="employee_name" 
+                        class="form-input-field" 
+                        placeholder="Ketik nama karyawan Anda..." 
+                        value="{{ old('employee_name') }}"
+                        required 
+                        autofocus
+                        autocomplete="off"
+                    >
                 </div>
             </div>
 
@@ -614,11 +616,11 @@
         window.history.replaceState({}, '', url);
 
         // Focus credential if employee already chosen
-        const emp = document.getElementById('employee_id');
+        const emp = document.getElementById('employee_name') || document.getElementById('employee_id');
         const cred = document.getElementById('credential');
-        if (emp.value) {
+        if (emp && emp.value) {
             cred.focus();
-        } else {
+        } else if (emp) {
             emp.focus();
         }
     }

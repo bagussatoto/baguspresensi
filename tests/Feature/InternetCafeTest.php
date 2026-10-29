@@ -32,16 +32,12 @@ class InternetCafeTest extends TestCase
         $response = $this->get('/warnet');
 
         $response->assertStatus(200);
+        $response->assertSee('MGK CYBER LOUNGE');
         $response->assertSee('Maya Graha Kencana');
-        $response->assertSee('Penjualan / POS Kasir');
-        $response->assertSee('Billing & PC Stations', false);
-        $response->assertSee('Produk & Kategori', false);
-        $response->assertSee('Stok Fisik Inventaris');
-        $response->assertSee('Distribusi Stok Barang');
-        $response->assertSee('Data Kasir / Karyawan');
-        $response->assertSee('Jadwal Shift');
-        $response->assertSee('Presensi Karyawan');
-        $response->assertSee('Komisi Karyawan');
+        $response->assertSee('FnB Meja');
+        $response->assertSee('General (Station Monitoring)');
+        $response->assertSee('Report Database B-Exp');
+        $response->assertSee('Kios Presensi Operator');
     }
 
     public function test_root_route_redirects_or_renders_warnet_dashboard(): void

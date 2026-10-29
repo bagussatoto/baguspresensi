@@ -88,10 +88,9 @@ class EmployeeLoginLockoutWhatsAppAlertTest extends TestCase
 
             // Pastikan terkirim ke nomor WhatsApp Admin
             if ($target === '6281299887766') {
-                return str_contains($message, 'SECURITY ALERT: PERCOBAAN TIDAK SAH 3X')
+                return str_contains($message, 'SECURITY & HRD ALERT MGK')
                     && str_contains($message, 'Dimas Wahyu Pratama')
-                    && str_contains($message, 'dimas_wahyu')
-                    && str_contains($message, 'admin/karyawan-unlock');
+                    && str_contains($message, 'dimas_wahyu');
             }
 
             return false;
@@ -130,9 +129,9 @@ class EmployeeLoginLockoutWhatsAppAlertTest extends TestCase
             $message = $body['message'] ?? '';
 
             if ($target === '120363412767536329@g.us') {
-                return str_contains($message, 'SECURITY ALERT: PERCOBAAN TIDAK SAH 3X')
+                return str_contains($message, 'SECURITY & HRD ALERT MGK')
                     && str_contains($message, 'Dimas Wahyu Pratama')
-                    && str_contains($message, 'admin/karyawan-unlock');
+                    && str_contains($message, 'dimas_wahyu');
             }
 
             return false;

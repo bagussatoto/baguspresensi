@@ -1036,7 +1036,7 @@
 
             <button type="button" class="tab-btn" onclick="switchMainTab('tab-fnb', this)">
                 <span>🛒</span>
-                <span>POS & F&B Meja</span>
+                <span>POS & FnB Meja</span>
             </button>
 
             <button type="button" class="tab-btn" onclick="switchMainTab('tab-client', this)">
@@ -1461,12 +1461,16 @@
                 <form id="attendanceClockForm" onsubmit="handleAttendanceSubmit(event)">
                     <div class="form-grid">
                         <div class="form-group-full">
-                            <label class="form-label">Operator Kasir</label>
-                            <select id="attEmployeeSelect" class="cyber-select" style="width: 100%;" required>
-                                @foreach($employees as $emp)
-                                    <option value="{{ $emp->id }}">{{ $emp->name }} ({{ $emp->code }})</option>
-                                @endforeach
-                            </select>
+                            <label class="form-label">Identitas Operator Kasir (Tulis Nama / NIK)</label>
+                            <input 
+                                type="text" 
+                                id="attEmployeeInput" 
+                                class="cyber-input" 
+                                style="width: 100%;" 
+                                placeholder="Ketik nama lengkap atau NIK kasir..." 
+                                required
+                                autocomplete="off"
+                            >
                         </div>
 
                         <div class="form-group-full">
@@ -2272,8 +2276,10 @@
             const submitter = e.submitter;
             const attType = submitter ? submitter.value : 'in';
 
+            const empInput = document.getElementById('attEmployeeInput') || document.getElementById('attEmployeeSelect');
             const payload = {
-                employee_id: document.getElementById('attEmployeeSelect').value,
+                employee_name: empInput ? empInput.value : '',
+                employee_id: empInput ? empInput.value : '',
                 type: attType,
                 shift_id: document.getElementById('attShiftSelect').value,
                 notes: document.getElementById('attNotesInput').value

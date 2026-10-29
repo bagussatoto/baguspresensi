@@ -738,7 +738,7 @@
                 <input type="hidden" name="role" id="inputRole" value="{{ old('role', 'manager') }}">
 
                 <!-- ==============================================
-                     FIELDS FOR MANAGER ROLE
+                     FIELDS FOR MANAGER ROLE (MURNI INPUT TEKS)
                      ============================================== -->
                 <div id="sectionManagerFields">
                     <div class="form-group">
@@ -746,57 +746,44 @@
                             <label class="form-label" for="managerIdentifier">
                                 <span>👤</span> Identitas / Akun Manager
                             </label>
-                            <span class="form-helper-label">Pilih akun terdaftar</span>
+                            <span class="form-helper-label">Tulis Nama / Email / NIK</span>
                         </div>
                         <div class="input-with-icon">
                             <span class="input-icon-left">🛡️</span>
-                            <select id="managerIdentifier" name="manager_identifier" class="form-select">
-                                @foreach($managers as $mgr)
-                                    <option value="{{ $mgr->id }}">{{ $mgr->name }} — {{ $mgr->position ?? 'Manager' }} ({{ $mgr->code }})</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div id="manualManagerInputWrap" style="display: none; margin-top: 8px;">
                             <input 
                                 type="text" 
-                                id="manualManagerText" 
-                                name="manual_manager_text" 
+                                id="managerIdentifier" 
+                                name="manager_identifier" 
                                 class="form-input" 
-                                placeholder="Masukkan email (contoh: admin@mayanet.com) atau username manager..."
+                                placeholder="Ketik nama, email (cth: admin@mayanet.com), atau NIK..."
+                                value="{{ old('manager_identifier') }}"
+                                autocomplete="off"
                             >
                         </div>
                     </div>
                 </div>
 
                 <!-- ==============================================
-                     FIELDS FOR STAFF ROLE
+                     FIELDS FOR STAFF ROLE (MURNI INPUT TEKS)
                      ============================================== -->
                 <div id="sectionStaffFields" style="display: none;">
                     <div class="form-group">
                         <div class="form-label-wrap">
                             <label class="form-label" for="staffIdentifier">
-                                <span>👤</span> Pilih Akun Karyawan / Staff
+                                <span>👤</span> Identitas Karyawan / Staff
                             </label>
-                            <span class="form-helper-label">Sesuai data Presensi</span>
+                            <span class="form-helper-label">Tulis Nama / NIK</span>
                         </div>
                         <div class="input-with-icon">
                             <span class="input-icon-left">🏷️</span>
-                            <select id="staffIdentifier" name="staff_identifier" class="form-select">
-                                <option value="" disabled selected>-- Pilih Nama Staff Operasional --</option>
-                                @foreach($staffs as $stf)
-                                    <option value="{{ $stf->id }}" {{ old('staff_identifier') == $stf->id ? 'selected' : '' }}>
-                                        {{ $stf->name }} — {{ $stf->position ?? 'Staff' }} (NIK: {{ $stf->code }})
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div id="manualStaffInputWrap" style="display: none; margin-top: 8px;">
                             <input 
                                 type="text" 
-                                id="manualStaffText" 
-                                name="manual_staff_text" 
+                                id="staffIdentifier" 
+                                name="staff_identifier" 
                                 class="form-input" 
-                                placeholder="Ketik NIK (contoh: EMP-047) atau Username..."
+                                placeholder="Ketik nama lengkap atau NIK Staff..."
+                                value="{{ old('staff_identifier') }}"
+                                autocomplete="off"
                             >
                         </div>
                     </div>
@@ -934,28 +921,6 @@
             select.value = stfId;
             document.getElementById('passwordInput').focus();
         }
-
-        // Listener for manual manager dropdown option
-        document.getElementById('managerIdentifier').addEventListener('change', function() {
-            const wrap = document.getElementById('manualManagerInputWrap');
-            if (this.value === 'manual_input') {
-                wrap.style.display = 'block';
-                document.getElementById('manualManagerText').focus();
-            } else {
-                wrap.style.display = 'none';
-            }
-        });
-
-        // Listener for manual staff dropdown option
-        document.getElementById('staffIdentifier').addEventListener('change', function() {
-            const wrap = document.getElementById('manualStaffInputWrap');
-            if (this.value === 'manual_staff') {
-                wrap.style.display = 'block';
-                document.getElementById('manualStaffText').focus();
-            } else {
-                wrap.style.display = 'none';
-            }
-        });
 
         // Initialize state on load
         document.addEventListener('DOMContentLoaded', function() {

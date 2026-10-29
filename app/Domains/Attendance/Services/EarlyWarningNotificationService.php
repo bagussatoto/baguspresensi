@@ -59,20 +59,19 @@ class EarlyWarningNotificationService
             ."⚠️ *Tindakan Pengamanan:*\n"
             .'Jika ini bukan Anda, akun Anda mungkin sedang dicoba diakses oleh pihak lain. Segera hubungi Supervisor Cabang atau IT/Admin HRD untuk pengamanan akun.';
 
-        // 3. Format Opsi A: Pesan WhatsApp ke Admin HRD / IT (Dengan Tautan Approval Buka Blokir)
-        $adminWaMessage = "🚨 *[SECURITY ALERT: PERCOBAAN TIDAK SAH 3X]*\n\n"
-            ."Halo Tim Admin & HRD,\n"
-            ."Terdeteksi aktivitas mencurigakan pada sistem presensi:\n"
-            ."• Karyawan Sasaran: *{$empName}* (NIP: *{$empCode}*)\n"
-            ."• Username: `{$username}`\n"
-            ."• Indikasi: Percobaan akses gagal 3 kali berturut-turut\n"
-            ."• Alamat IP: `{$ip}`\n"
-            ."• Waktu: {$time}\n\n"
-            ."Status Saat Ini: Akun DIBEKUKAN sementara demi keamanan.\n\n"
-            ."👉 *Tindakan Admin:*\n"
-            ."Jika karyawan telah mengonfirmasi bahwa ini adalah dirinya sendiri yang lupa PIN/password, silakan klik tautan di bawah untuk melakukan APPROVE / BUKA BLOKIR:\n"
-            ."{$unlockUrl}\n\n"
-            .'(Tautan berlaku selama 30 menit)';
+        // 3. Format Pesan WhatsApp ke Grup Security & HRD Alert MGK
+        $adminWaMessage = "🚨 *[SECURITY & HRD ALERT MGK]*\n"
+            ."*PERINGATAN: PERCOBAAN LOGIN TIDAK SAH (3X)*\n"
+            ."━━━━━━━━━━━━━━━━━━━━\n"
+            ."Terdeteksi aktivitas mencurigakan pada sistem presensi:\n\n"
+            ."👤 *Karyawan Sasaran:* {$empName}\n"
+            ."🆔 *NIP / NIK:* {$empCode}\n"
+            ."🔑 *Identitas Input:* {$username}\n"
+            ."🌐 *Alamat IP:* {$ip}\n"
+            ."⏰ *Waktu:* {$time}\n\n"
+            ."🛡️ *Tindakan Sistem:* Akun telah dibekukan sementara (Tier {$tier} - {$minutes} menit) demi mencegah akses tidak sah.\n"
+            ."━━━━━━━━━━━━━━━━━━━━\n"
+            .'_Notifikasi Otomatis Keamanan Sistem Maya Graha Kencana_';
 
         $results = [
             'whatsapp' => false,
@@ -105,8 +104,7 @@ class EarlyWarningNotificationService
             ."• Level Lockout: *Tier {$tier}* ({$minutes} Menit)\n"
             ."• IP Address: `{$ip}`\n"
             ."• Waktu: {$time}\n"
-            ."• User-Agent: {$details['user_agent']}\n"
-            ."• Link Approval: {$unlockUrl}";
+            ."• User-Agent: {$details['user_agent']}";
 
         $results['telegram'] = $this->sendTelegramAlert($adminTelegramMessage);
 
@@ -152,14 +150,24 @@ class EarlyWarningNotificationService
             $results['whatsapp'] = $this->sendWhatsApp($targetPhone, $userMessage);
         }
 
-        // 2. Alert ke Telegram / WhatsApp Pengawas Admin
-        $adminMessage = "🚨 *[SECURITY ALERT: REGISTRATION BREACH ATTEMPT]*\n\n"
-            ."Terdeteksi upaya registrasi berulang 3x menggunakan identitas karyawan aktif:\n"
-            ."• Sasaran Identitas: *{$targetName}* ({$targetCode})\n"
-            ."• Username Yang Dicoba: `{$attemptedUser}`\n"
-            ."• Alamat IP: `{$ip}`\n"
-            ."• Waktu Kejadian: {$time}\n"
-            ."• Tindakan Sistem: Perangkat IP telah dibekukan {$minutes} menit.";
+        // 2. Alert ke Grup WhatsApp & Telegram Pengawas Admin
+        $adminMessage = "🚨 *[SECURITY & HRD ALERT MGK]*\n"
+            ."*PERINGATAN: UPAYA REGISTRASI MENCURIGAKAN (3X)*\n"
+            ."━━━━━━━━━━━━━━━━━━━━\n"
+            ."Terdeteksi upaya registrasi berulang menggunakan data identitas karyawan aktif:\n\n"
+            ."👤 *Sasaran Identitas:* {$targetName}\n"
+            ."🆔 *NIP / NIK:* {$targetCode}\n"
+            ."🔑 *Username Dicoba:* {$attemptedUser}\n"
+            ."🌐 *Alamat IP:* {$ip}\n"
+            ."⏰ *Waktu:* {$time}\n\n"
+            ."🛡️ *Tindakan Sistem:* Perangkat IP penyerang telah diblokir sementara ({$minutes} menit).\n"
+            ."━━━━━━━━━━━━━━━━━━━━\n"
+            .'_Notifikasi Otomatis Keamanan Sistem Maya Graha Kencana_';
+
+        $adminTarget = config('services.whatsapp.admin_group_id') ?: config('services.whatsapp.admin_phone');
+        if ($adminTarget) {
+            $this->sendWhatsApp($adminTarget, $adminMessage);
+        }
 
         $results['telegram'] = $this->sendTelegramAlert($adminMessage);
 
@@ -191,6 +199,37 @@ class EarlyWarningNotificationService
         }
 
         // 2. Kirim via Telegram Channel / Bot Admin
+        return $this->sendTelegramAlert($adminMessage);
+    }
+
+    /**
+     * Kirim notifikasi ke Grup WhatsApp Admin & Telegram ketika karyawan mengajukan permohonan reset PIN / Password.
+     */
+    public function sendPasswordResetRequestedAlert(Employee $employee, string $requestedType): bool
+    {
+        $time = now()->toDateTimeString();
+        $branchName = $employee->branch?->name ?? 'Pusat';
+        $typeLabel = strtoupper($requestedType);
+
+        $adminMessage = "🔑 *[SECURITY & HRD ALERT MGK]*\n"
+            ."*PERMOHONAN RESET {$typeLabel} KARYAWAN*\n"
+            ."━━━━━━━━━━━━━━━━━━━━\n"
+            ."Karyawan telah mengajukan permohonan pembaruan kredensial:\n\n"
+            ."👤 *Nama Karyawan:* {$employee->name}\n"
+            ."🆔 *NIP / NIK:* {$employee->code}\n"
+            ."🏢 *Cabang / Unit:* {$branchName}\n"
+            ."📌 *Tipe Kredensial:* {$typeLabel}\n"
+            ."⏰ *Waktu Pengajuan:* {$time}\n\n"
+            ."🛡️ *Status:* Menunggu Otorisasi / Verifikasi Admin\n"
+            ."Silakan tinjau pada menu Admin: Master Karyawan > Reset PIN\n"
+            ."━━━━━━━━━━━━━━━━━━━━\n"
+            .'_Notifikasi Otomatis Keamanan Sistem Maya Graha Kencana_';
+
+        $adminTarget = config('services.whatsapp.admin_group_id') ?: config('services.whatsapp.admin_phone');
+        if ($adminTarget) {
+            $this->sendWhatsApp($adminTarget, $adminMessage);
+        }
+
         return $this->sendTelegramAlert($adminMessage);
     }
 

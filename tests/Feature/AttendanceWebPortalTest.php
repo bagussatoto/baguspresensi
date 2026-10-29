@@ -70,11 +70,10 @@ class AttendanceWebPortalTest extends TestCase
     {
         $response = $this->get(route('presensi.login'));
         $response->assertStatus(200);
-        $response->assertSee('Portal Presensi Karyawan');
-        $response->assertSee($this->employee->name);
+        $response->assertSee('Presensi Karyawan');
 
         $loginResponse = $this->post(route('presensi.login.post'), [
-            'employee_id' => $this->employee->id,
+            'employee_name' => $this->employee->name,
         ]);
 
         $loginResponse->assertRedirect(route('presensi.index'));
@@ -125,7 +124,7 @@ class AttendanceWebPortalTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_employee_clock_in_succeeds_without_gps_restriction(): void
+    public function test_employee_clock_in_outside_geofence_is_rejected(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-10-12 07:05:00'));
 
@@ -137,9 +136,9 @@ class AttendanceWebPortalTest extends TestCase
                 'shift_id' => $this->shift->id,
             ]);
 
-        $response->assertStatus(200)
+        $response->assertStatus(422)
             ->assertJson([
-                'success' => true,
+                'success' => false,
             ]);
 
         Carbon::setTestNow();

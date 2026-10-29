@@ -183,12 +183,6 @@ Terdeteksi aktivitas mencurigakan pada sistem presensi:
 • Waktu: 25 Okt 2026, 13:40:00
 
 Status Saat Ini: Akun DIBEKUKAN sementara demi keamanan.
-
-👉 *Tindakan Admin:*
-Jika karyawan telah mengonfirmasi bahwa ini adalah dirinya sendiri yang lupa PIN/password, silakan klik tautan di bawah untuk melakukan APPROVE / BUKA BLOKIR:
-http://192.168.5.10:8086/bagus/admin/karyawan-unlock/14?ip=192.168.1.45&expires=1792911000&token=a8f93bc...
-
-(Tautan berlaku selama 30 menit)
 ```
 
 ### C. Alur Otorisasi Admin & Notifikasi Balik ke Karyawan

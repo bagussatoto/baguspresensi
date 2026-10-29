@@ -335,6 +335,8 @@ class ShiftStockAndSalesFlowTest extends TestCase
 
     public function test_authenticated_staff_can_view_penjualan_page(): void
     {
+        $this->clockInStaff();
+
         $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
             ->get(route('presensi2.penjualan'));
 
@@ -352,6 +354,8 @@ class ShiftStockAndSalesFlowTest extends TestCase
 
     public function test_can_record_fnb_sale_on_penjualan_page(): void
     {
+        $this->clockInStaff();
+
         $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
             ->post(route('presensi2.penjualan.transaksi'), [
                 'transaction_type' => 'fnb',
@@ -373,6 +377,8 @@ class ShiftStockAndSalesFlowTest extends TestCase
 
     public function test_can_record_internet_billing_on_penjualan_page(): void
     {
+        $this->clockInStaff();
+
         $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
             ->post(route('presensi2.penjualan.transaksi'), [
                 'transaction_type' => 'internet',
@@ -538,6 +544,8 @@ class ShiftStockAndSalesFlowTest extends TestCase
         $initialStock = (int) StockInventory::where('product_variant_id', $this->variantKopi->id)
             ->where('warehouse_id', $this->warehouse->id)
             ->value('qty_on_hand');
+
+        $this->clockInStaff();
 
         // 1. Buat transaksi penjualan F&B (3x Kopi)
         $this->withSession(['presensi2_employee_id' => $this->employee->id])

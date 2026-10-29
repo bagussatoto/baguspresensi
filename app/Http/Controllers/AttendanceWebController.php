@@ -89,11 +89,26 @@ class AttendanceWebController extends Controller
      */
     public function login(Request $request): RedirectResponse
     {
-        $request->validate([
-            'employee_id' => 'required|exists:employees,id',
-        ]);
+        $employee = null;
 
-        $employee = Employee::where('is_active', true)->findOrFail($request->input('employee_id'));
+        if ($request->filled('employee_id')) {
+            $employee = Employee::where('is_active', true)->find($request->input('employee_id'));
+        }
+
+        if (! $employee && $request->filled('employee_name')) {
+            $nameInput = trim((string) $request->input('employee_name'));
+            $employee = Employee::where('is_active', true)
+                ->where(function ($q) use ($nameInput) {
+                    $q->whereRaw('LOWER(name) = ?', [mb_strtolower($nameInput)])
+                        ->orWhere('code', $nameInput)
+                        ->orWhere('name', 'LIKE', '%'.$nameInput.'%');
+                })
+                ->first();
+        }
+
+        if (! $employee) {
+            return back()->withInput()->with('error', 'Data karyawan tidak ditemukan atau tidak aktif.');
+        }
 
         session(['presensi_employee_id' => $employee->id]);
 

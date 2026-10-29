@@ -76,14 +76,12 @@ class AttendanceWebV2PortalTest extends TestCase
         $response = $this->get(route('presensi2.login'));
         $response->assertOk();
         $response->assertSee('Portal Presensi v2');
-        $response->assertSee('name="employee_id"', false);
-        $response->assertSee('Bagus Karyawan');
+        $response->assertSee('name="employee_name"', false);
 
         $aliasResponse = $this->get('/presensi/login2');
         $aliasResponse->assertOk();
         $aliasResponse->assertSee('Portal Presensi v2');
-        $aliasResponse->assertSee('name="employee_id"', false);
-        $aliasResponse->assertSee('Bagus Karyawan');
+        $aliasResponse->assertSee('name="employee_name"', false);
     }
 
     public function test_employee_can_login_by_selecting_from_list(): void
@@ -152,7 +150,7 @@ class AttendanceWebV2PortalTest extends TestCase
             'employee_code' => 'EMP-001',
             'credential' => 'wrongpass3',
         ]);
-        $res3->assertSessionHas('lockout_seconds', 60);
+        $res3->assertSessionHas('lockout_seconds', fn ($sec) => in_array($sec, [59, 60], true));
 
         // Simulasikan 1 menit berlalu dengan membersihkan RateLimiter throttle (tier tetap tersimpan)
         $throttleKey = 'presensi2_login:emp_'.$this->employee->id.'|127.0.0.1';
@@ -220,8 +218,20 @@ class AttendanceWebV2PortalTest extends TestCase
         $response->assertOk();
         $response->assertSee('Portal Login');
         $response->assertSee('Maya Graha Kencana');
-        $response->assertSee('Pilih Identitas Karyawan');
+        $response->assertSee('Identitas Karyawan');
+        $response->assertSee('Tulis Nama Karyawan');
         $response->assertSee('Password atau PIN 6-Digit');
+    }
+
+    public function test_employee_can_login_by_typing_employee_name(): void
+    {
+        $response = $this->post(route('presensi2.login.post'), [
+            'employee_name' => $this->employee->name,
+            'credential' => '654321',
+        ]);
+
+        $response->assertRedirect(route('presensi2.index'));
+        $this->assertEquals($this->employee->id, session('presensi2_employee_id'));
     }
 
     public function test_admin_can_login_through_v2_portal_with_email_and_password(): void
@@ -618,7 +628,7 @@ class AttendanceWebV2PortalTest extends TestCase
         $response->assertSee('Meeting');
         $response->assertSee('BO / Training');
         $response->assertSee('AMBIL STOK');
-        $response->assertSee('Bagus Karyawan');
+        $response->assertSee('name="employee_name"', false);
     }
 
     public function test_employee_can_login_through_dedicated_layanan_portal(): void

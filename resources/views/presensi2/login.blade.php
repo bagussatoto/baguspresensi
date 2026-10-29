@@ -1024,37 +1024,25 @@
         <form action="{{ route('presensi2.login.post') }}" method="POST" id="form-portal-login">
             @csrf
 
-            <!-- Pilih Identitas Karyawan (Dropdown) -->
+            <!-- Tulis Identitas Karyawan (Murni Input Teks) -->
             <div class="form-group-custom" id="group-list-input">
-                <label for="employee_id" class="form-label-custom">
-                    <span>Pilih Identitas Karyawan</span>
-                    <span style="font-size: 11px; color: #06b6d4; font-weight: normal;">(Tinggal Pilih Nama)</span>
+                <label for="employee_name" class="form-label-custom">
+                    <span>Identitas Karyawan</span>
+                    <span style="font-size: 11px; color: #06b6d4; font-weight: normal;">(Tulis Nama Karyawan)</span>
                 </label>
                 <div class="input-field-wrap">
                     <span class="input-leading-icon">👤</span>
-                    <select 
-                        name="employee_id" 
-                        id="employee_id" 
+                    <input 
+                        type="text"
+                        name="employee_name" 
+                        id="employee_name" 
                         class="form-control-custom"
-                        style="cursor: pointer; appearance: none; -webkit-appearance: none; padding-right: 40px;"
+                        placeholder="Ketik nama karyawan Anda..."
+                        value="{{ old('employee_name') }}"
                         required
                         autofocus
+                        autocomplete="off"
                     >
-                        <option value="" disabled {{ old('employee_id') ? '' : 'selected' }}>
-                            -- Klik untuk memilih nama karyawan --
-                        </option>
-                        @foreach($employees as $emp)
-                            <option 
-                                value="{{ $emp->id }}" 
-                                {{ old('employee_id') == $emp->id ? 'selected' : '' }}
-                            >
-                                {{ $emp->name }} ({{ $emp->code ?? 'Karyawan' }}) — {{ $emp->position ?? ($emp->role ? $emp->role->value : 'Staf') }}
-                            </option>
-                        @endforeach
-                    </select>
-                    <div style="position: absolute; right: 14px; pointer-events: none; color: var(--login-text-body); font-size: 12px;">
-                        ▼
-                    </div>
                 </div>
             </div>
 
@@ -1285,7 +1273,7 @@
     }
 
     function showAccessHelp() {
-        alert("Bantuan Akses Presensi:\n\n1. Pilih Nama Karyawan Anda pada daftar.\n2. Masukkan Password atau PIN 6-digit terdaftar.\n\nJika lupa PIN/Password, silakan hubungi Admin atau HRD.");
+        alert("Bantuan Akses Presensi:\n\n1. Tulis Nama Karyawan Anda.\n2. Masukkan Password atau PIN 6-digit terdaftar.\n\nJika lupa PIN/Password, silakan hubungi Admin atau HRD.");
     }
 
     // Form Submit visual loading
