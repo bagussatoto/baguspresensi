@@ -1,0 +1,11 @@
+29 10 26
+
+1. Ketika login   
+usakan jangan pilih nama karyawan harus ketik nama karyawan sendiri
+
+2. Meninjau halaman login kasir warnet atau login staf operasional
+agar instruksi berganti dari Pilih nama pada dropdown
+
+3. Early Warning Aler) pada Kegagalan Login Berulang
+saat ada pihak yang mencoba memasukkan nama karyawan dan salah memasukkan Password/PIN hingga terpicu pembekuan 
+
