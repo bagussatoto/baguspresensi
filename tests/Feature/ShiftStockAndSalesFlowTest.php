@@ -376,6 +376,11 @@ class ShiftStockAndSalesFlowTest extends TestCase
         $response->assertSee('Sebelumnya');
         $response->assertSee('Sesudahnya');
         $response->assertSee('pcs');
+        $response->assertSee('Rincian data billing', false);
+        $response->assertSee('Shif saya', false);
+        $response->assertSee('Shif selanjutnya', false);
+        $response->assertSee('Total', false);
+        $response->assertSee('Netto', false);
     }
 
     public function test_can_record_fnb_sale_on_penjualan_page(): void

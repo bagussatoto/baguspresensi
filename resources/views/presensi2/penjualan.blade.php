@@ -685,14 +685,14 @@
 
     {{-- 1. MODAL TERPADU: DATA & KUNCI BILLING SHIFT --}}
     <div id="modal-billing" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.78); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 99999; align-items: center; justify-content: center; padding: 16px;">
-        <div style="background: #ffffff; border-radius: 8px; width: 100%; max-width: 580px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column; color: #1e293b;">
-            <div style="background: {{ $isBillingLocked ? '#b45309' : '#00a65a' }}; color: #ffffff; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
+        <div style="background: #ffffff; border-radius: 8px; width: 100%; max-width: 820px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column; color: #1e293b;">
+            <div style="background: {{ $isBillingLocked ? '#b45309' : '#00a65a' }}; color: #ffffff; padding: 13px 18px; display: flex; align-items: center; justify-content: space-between;">
                 <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px;">
-                    <span>{{ $isBillingLocked ? '🔒' : '💻' }}</span> Data & Kunci Billing Shift
+                    <span>{{ $isBillingLocked ? '🔒' : '💻' }}</span> Rincian Data & Kunci Billing Shift
                 </div>
                 <button type="button" onclick="closeModal('modal-billing')" style="background: none; border: none; color: #ffffff; font-size: 18px; font-weight: bold; cursor: pointer;">✕</button>
             </div>
-            <div style="padding: 18px; max-height: 75vh; overflow-y: auto;">
+            <div style="padding: 18px; max-height: 80vh; overflow-y: auto;">
                 {{-- RINGKASAN DATA BILLING & PC --}}
                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px;">
                     <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 10px; text-align: center;">
@@ -710,7 +710,7 @@
                 </div>
 
                 {{-- SECTION KUNCI DATA TUTUP SHIFT BILLING --}}
-                <div style="background: {{ $isBillingLocked ? '#fef3c7' : '#f8fafc' }}; border: 1px solid {{ $isBillingLocked ? '#f59e0b' : '#e2e8f0' }}; border-radius: 6px; padding: 12px; margin-bottom: 14px;">
+                <div style="background: {{ $isBillingLocked ? '#fef3c7' : '#f8fafc' }}; border: 1px solid {{ $isBillingLocked ? '#f59e0b' : '#e2e8f0' }}; border-radius: 6px; padding: 12px; margin-bottom: 16px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                         <div style="font-weight: 700; font-size: 13px; color: {{ $isBillingLocked ? '#92400e' : '#1e293b' }}; display: flex; align-items: center; gap: 6px;">
                             <span>{{ $isBillingLocked ? '🔒' : '🔓' }}</span> Status Kunci Billing Shift
@@ -740,20 +740,126 @@
                     @endif
                 </div>
 
-                <div style="font-weight: 700; font-size: 12px; margin-bottom: 8px; color: #334155;">Status Real-time Unit PC Cabang:</div>
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px;">
-                    @foreach($pcStations as $pc)
-                    @php $isOcc = $pc->status === 'occupied'; @endphp
-                    <div style="padding: 8px; border: 1px solid {{ $isOcc ? '#f87171' : '#cbd5e1' }}; border-radius: 6px; background: {{ $isOcc ? '#fff1f2' : '#f8fafc' }}; text-align: center;">
-                        <div style="font-weight: 700; font-size: 12px; color: {{ $isOcc ? '#dc2626' : '#1e293b' }};">{{ $pc->station_code }}</div>
-                        <div style="font-size: 10px; font-weight: 600; color: {{ $isOcc ? '#dc2626' : '#15803d' }}; margin: 2px 0;">
-                            {{ $isOcc ? '🔴 ' . ($pc->current_user_name ?? 'Aktif') : '🟢 Standby' }}
+                {{-- DAFTAR RINCIAN DATA BILLING (SESUAI REFERENSI) --}}
+                <div style="margin-top: 6px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                        <h4 style="font-size: 14px; font-weight: 700; color: #0f172a; margin: 0; display: flex; align-items: center; gap: 6px;">
+                            <span>📋</span> Rincian data billing
+                        </h4>
+                        <span style="font-size: 11px; color: #64748b;">Sinkronisasi Otomatis Server Billing PC</span>
+                    </div>
+
+                    {{-- 1. TABEL SHIF SAYA (HIJAU PASTEL) --}}
+                    @php
+                        $myTotal = isset($myShiftBillingDetails) ? $myShiftBillingDetails->sum('biaya') : 0;
+                        $myMgkFree = isset($myShiftBillingDetails) ? $myShiftBillingDetails->sum('mgkfree') : 0;
+                        $myNetto = $myTotal - $myMgkFree;
+                    @endphp
+                    <div style="border: 1px solid #c7e8c3; border-radius: 6px; overflow: hidden; background: #ffffff; margin-bottom: 14px;">
+                        <div style="background: #e2f0d9; color: #2e7d32; padding: 8px 14px; font-weight: 600; font-size: 12.5px;">
+                            Shif saya
                         </div>
-                        <div style="font-size: 10px; color: #64748b; font-family: monospace;">
-                            {{ $isOcc ? 'Rp ' . number_format($pc->billing_amount, 0, ',', '.') : 'Rp 0' }}
+                        <div style="overflow-x: auto; padding: 12px;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
+                                <thead>
+                                    <tr style="color: #334155;">
+                                        <th style="padding: 8px 10px; border: 1px solid #e5e7eb; text-align: center; font-weight: 700; width: 45px;">No</th>
+                                        <th style="padding: 8px 10px; border: 1px solid #e5e7eb; text-align: center; font-weight: 700;">Boks</th>
+                                        <th style="padding: 8px 10px; border: 1px solid #e5e7eb; text-align: center; font-weight: 700;">Tanggal</th>
+                                        <th style="padding: 8px 10px; border: 1px solid #e5e7eb; text-align: center; font-weight: 700;">Mulai</th>
+                                        <th style="padding: 8px 10px; border: 1px solid #e5e7eb; font-weight: 700;">User</th>
+                                        <th style="padding: 8px 10px; border: 1px solid #e5e7eb; text-align: center; font-weight: 700;">Durasi</th>
+                                        <th style="padding: 8px 10px; border: 1px solid #e5e7eb; text-align: right; font-weight: 700;">Biaya</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if(isset($myShiftBillingDetails) && $myShiftBillingDetails->isNotEmpty())
+                                        @foreach($myShiftBillingDetails as $idx => $row)
+                                            <tr>
+                                                <td style="padding: 7px 10px; border: 1px solid #e5e7eb; text-align: center; color: #64748b;">{{ $idx + 1 }}</td>
+                                                <td style="padding: 7px 10px; border: 1px solid #e5e7eb; text-align: center; font-weight: 600; color: #0f172a;">{{ $row['boks'] }}</td>
+                                                <td style="padding: 7px 10px; border: 1px solid #e5e7eb; text-align: center; color: #475569;">{{ $row['tanggal'] }}</td>
+                                                <td style="padding: 7px 10px; border: 1px solid #e5e7eb; text-align: center; font-family: monospace; color: #475569;">{{ $row['mulai'] }}</td>
+                                                <td style="padding: 7px 10px; border: 1px solid #e5e7eb; font-weight: 600; color: #0f172a;">{{ $row['user'] }}</td>
+                                                <td style="padding: 7px 10px; border: 1px solid #e5e7eb; text-align: center; font-family: monospace; color: #475569;">{{ $row['durasi'] }}</td>
+                                                <td style="padding: 7px 10px; border: 1px solid #e5e7eb; text-align: right; font-weight: 600; font-family: monospace; color: #0f172a;">{{ number_format($row['biaya'], 0, ',', '.') }}</td>
+                                            </tr>
+                                        @endforeach
+                                    @endif
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td colspan="6" style="padding: 6px 14px; border: 1px solid #e5e7eb; text-align: center; font-weight: 700; color: #334155;">Total</td>
+                                        <td style="padding: 6px 10px; border: 1px solid #e5e7eb; text-align: right; font-weight: 800; font-family: monospace; color: #0f172a;">{{ number_format($myTotal, 0, ',', '.') }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="6" style="padding: 6px 14px; border: 1px solid #e5e7eb; text-align: center; font-weight: 700; color: #334155;">MgkFree</td>
+                                        <td style="padding: 6px 10px; border: 1px solid #e5e7eb; text-align: right; font-weight: 800; font-family: monospace; color: #0f172a;">{{ number_format($myMgkFree, 0, ',', '.') }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="6" style="padding: 6px 14px; border: 1px solid #e5e7eb; text-align: center; font-weight: 700; color: #334155;">Netto</td>
+                                        <td style="padding: 6px 10px; border: 1px solid #e5e7eb; text-align: right; font-weight: 800; font-family: monospace; color: #0f172a;">{{ number_format($myNetto, 0, ',', '.') }}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
                         </div>
                     </div>
-                    @endforeach
+
+                    {{-- 2. TABEL SHIF SELANJUTNYA (MERAH/PINK PASTEL) --}}
+                    @php
+                        $nextTotal = isset($nextShiftBillingDetails) ? $nextShiftBillingDetails->sum('biaya') : 0;
+                        $nextMgkFree = isset($nextShiftBillingDetails) ? $nextShiftBillingDetails->sum('mgkfree') : 0;
+                        $nextNetto = $nextTotal - $nextMgkFree;
+                    @endphp
+                    <div style="border: 1px solid #fecaca; border-radius: 6px; overflow: hidden; background: #ffffff;">
+                        <div style="background: #fce4e4; color: #c62828; padding: 8px 14px; font-weight: 600; font-size: 12.5px;">
+                            Shif selanjutnya
+                        </div>
+                        <div style="overflow-x: auto; padding: 12px;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
+                                <thead>
+                                    <tr style="color: #334155;">
+                                        <th style="padding: 8px 10px; border: 1px solid #e5e7eb; text-align: center; font-weight: 700; width: 45px;">No</th>
+                                        <th style="padding: 8px 10px; border: 1px solid #e5e7eb; text-align: center; font-weight: 700;">Boks</th>
+                                        <th style="padding: 8px 10px; border: 1px solid #e5e7eb; text-align: center; font-weight: 700;">Tanggal</th>
+                                        <th style="padding: 8px 10px; border: 1px solid #e5e7eb; text-align: center; font-weight: 700;">Mulai</th>
+                                        <th style="padding: 8px 10px; border: 1px solid #e5e7eb; font-weight: 700;">User</th>
+                                        <th style="padding: 8px 10px; border: 1px solid #e5e7eb; text-align: center; font-weight: 700;">Durasi</th>
+                                        <th style="padding: 8px 10px; border: 1px solid #e5e7eb; text-align: right; font-weight: 700;">Biaya</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if(isset($nextShiftBillingDetails) && $nextShiftBillingDetails->isNotEmpty())
+                                        @foreach($nextShiftBillingDetails as $idx => $row)
+                                            <tr>
+                                                <td style="padding: 7px 10px; border: 1px solid #e5e7eb; text-align: center; color: #64748b;">{{ $idx + 1 }}</td>
+                                                <td style="padding: 7px 10px; border: 1px solid #e5e7eb; text-align: center; font-weight: 600; color: #0f172a;">{{ $row['boks'] }}</td>
+                                                <td style="padding: 7px 10px; border: 1px solid #e5e7eb; text-align: center; color: #475569;">{{ $row['tanggal'] }}</td>
+                                                <td style="padding: 7px 10px; border: 1px solid #e5e7eb; text-align: center; font-family: monospace; color: #475569;">{{ $row['mulai'] }}</td>
+                                                <td style="padding: 7px 10px; border: 1px solid #e5e7eb; font-weight: 600; color: #0f172a;">{{ $row['user'] }}</td>
+                                                <td style="padding: 7px 10px; border: 1px solid #e5e7eb; text-align: center; font-family: monospace; color: #475569;">{{ $row['durasi'] }}</td>
+                                                <td style="padding: 7px 10px; border: 1px solid #e5e7eb; text-align: right; font-weight: 600; font-family: monospace; color: #0f172a;">{{ number_format($row['biaya'], 0, ',', '.') }}</td>
+                                            </tr>
+                                        @endforeach
+                                    @endif
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td colspan="6" style="padding: 6px 14px; border: 1px solid #e5e7eb; text-align: center; font-weight: 700; color: #334155;">Total</td>
+                                        <td style="padding: 6px 10px; border: 1px solid #e5e7eb; text-align: right; font-weight: 800; font-family: monospace; color: #0f172a;">{{ number_format($nextTotal, 0, ',', '.') }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="6" style="padding: 6px 14px; border: 1px solid #e5e7eb; text-align: center; font-weight: 700; color: #334155;">Mgkfree</td>
+                                        <td style="padding: 6px 10px; border: 1px solid #e5e7eb; text-align: right; font-weight: 800; font-family: monospace; color: #0f172a;">{{ number_format($nextMgkFree, 0, ',', '.') }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="6" style="padding: 6px 14px; border: 1px solid #e5e7eb; text-align: center; font-weight: 700; color: #334155;">Netto</td>
+                                        <td style="padding: 6px 10px; border: 1px solid #e5e7eb; text-align: right; font-weight: 800; font-family: monospace; color: #0f172a;">{{ number_format($nextNetto, 0, ',', '.') }}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

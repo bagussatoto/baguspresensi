@@ -10,7 +10,6 @@ use App\Domains\Attendance\Actions\SubmitAttendanceCorrectionAction;
 use App\Domains\Attendance\Actions\SyncOfflineAttendanceAction;
 use App\Domains\Attendance\DataTransferObjects\ClockInDTO;
 use App\Domains\Attendance\DataTransferObjects\ClockOutDTO;
-use App\Domains\Attendance\Enums\ApprovalStatus;
 use App\Domains\Attendance\Enums\AttendanceStatus;
 use App\Domains\Attendance\Enums\VerificationMethod;
 use App\Domains\Attendance\Exceptions\AlreadyClockedInException;
@@ -21,7 +20,6 @@ use App\Domains\Attendance\Models\AuditLog;
 use App\Domains\Attendance\Services\EarlyWarningNotificationService;
 use App\Domains\Attendance\Services\ShiftResolverService;
 use App\Domains\Employee\Models\Shift;
-use App\Domains\Leave\Models\LeaveRequest;
 use App\Models\EmployeeRegistration;
 use App\Models\PasswordResetRequest;
 use App\Models\PrinterPrintJob;
@@ -1582,65 +1580,21 @@ class AttendanceWebV2Controller extends Controller
                 ->latest('id')
                 ->first();
 
-        $startOfMonth = Carbon::now()->startOfMonth()->toDateString();
-        $endOfMonth = Carbon::now()->endOfMonth()->toDateString();
-
-        $monthlyStats = [
-            'total_hadir' => AttendanceRecord::where('employee_id', $employee->id)
-                ->whereBetween('work_date', [$startOfMonth, $endOfMonth])
-                ->whereIn('status', [AttendanceStatus::Present, AttendanceStatus::Late])
-                ->count(),
-            'total_telat' => AttendanceRecord::where('employee_id', $employee->id)
-                ->whereBetween('work_date', [$startOfMonth, $endOfMonth])
-                ->where('status', AttendanceStatus::Late)
-                ->count(),
-            'total_jam_kerja' => round((int) AttendanceRecord::where('employee_id', $employee->id)
-                ->whereBetween('work_date', [$startOfMonth, $endOfMonth])
-                ->sum('duration_minutes') / 60, 1),
-            'total_izin' => LeaveRequest::where('employee_id', $employee->id)
-                ->where('status', ApprovalStatus::Approved)
-                ->whereBetween('start_date', [$startOfMonth, $endOfMonth])
-                ->sum('total_days'),
-        ];
-
         $branchId = $employee->branch_id;
 
+        // Cek apakah shift aktif saat ini sudah diverifikasi stoknya (wajib dicek per shift 1 s/d 4)
         $hasCompletedStock = ShiftHandoverChecklist::whereDate('check_date', $workDate->toDateString())
+            ->when($activeShift, fn ($q) => $q->where('shift_id', $activeShift->id))
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
             ->where('status', 'completed')
             ->exists();
-
-        $todaySalesSummary = ShiftSalesSummary::with(['shift', 'branch', 'employee'])
-            ->whereDate('work_date', $workDate->toDateString())
-            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
-            ->latest('id')
-            ->first();
-
-        $depositHistories = ShiftSalesSummary::with(['shift', 'branch', 'employee'])
-            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
-            ->orderByDesc('work_date')
-            ->orderByDesc('id')
-            ->take(10)
-            ->get();
-
-        $shiftSummariesByDate = [];
-        foreach ($depositHistories as $histItem) {
-            $dKey = $histItem->work_date?->toDateString();
-            if ($dKey) {
-                $shiftSummariesByDate[$dKey][$histItem->shiftNumber()] = $histItem->id;
-            }
-        }
 
         return view('presensi2.index', [
             'currentEmployee' => $employee,
             'activeShift' => $activeShift,
             'workDate' => $workDate,
             'attendanceToday' => $attendanceToday,
-            'monthlyStats' => $monthlyStats,
             'hasCompletedStock' => $hasCompletedStock,
-            'todaySalesSummary' => $todaySalesSummary,
-            'depositHistories' => $depositHistories,
-            'shiftSummariesByDate' => $shiftSummariesByDate,
         ]);
     }
 
@@ -1940,10 +1894,12 @@ class AttendanceWebV2Controller extends Controller
         $stockComparisons = $this->buildStockComparison($workDate, $employee);
         $prevShiftBilling = $this->getPreviousShiftBillingData($now, $activeShift, $branchId);
 
-        // Checklist terakhir hari ini di cabang ini jika sudah ada
-        $existingChecklist = ShiftHandoverChecklist::with('employee')
+        // Checklist verifikasi shift aktif saat ini (wajib dicek ulang pada setiap shift 1 s/d 4)
+        $existingChecklist = ShiftHandoverChecklist::with(['employee', 'shift'])
             ->whereDate('check_date', $workDate->toDateString())
+            ->when($activeShift, fn ($q) => $q->where('shift_id', $activeShift->id))
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+            ->where('status', 'completed')
             ->latest('id')
             ->first();
 
@@ -2531,6 +2487,133 @@ class AttendanceWebV2Controller extends Controller
         $occupiedPcCount = $pcStations->where('status', 'occupied')->count();
         $availablePcCount = $pcStations->where('status', 'available')->count();
 
+        // Rincian Data Billing per Shift
+        $myShiftSales = $internetSales->filter(function ($sale) use ($employee) {
+            return (int) $sale->employee_id === (int) $employee->id;
+        });
+
+        $myShiftBillingDetails = $myShiftSales->map(function ($sale, $idx) {
+            $stationCode = $sale->pcStation?->station_code ?? ($sale->customer_name ?: 'W/S '.($idx + 1));
+
+            return [
+                'boks' => $stationCode,
+                'tanggal' => Carbon::parse($sale->created_at)->format('d-m-Y'),
+                'mulai' => Carbon::parse($sale->created_at)->format('H:i:s'),
+                'user' => $sale->customer_name ?: 'User',
+                'durasi' => '01:00:00',
+                'biaya' => (float) $sale->total_billing,
+                'mgkfree' => (float) ($sale->discount_amount ?? 0),
+                'netto' => (float) ($sale->net_amount ?? ($sale->total_billing - ($sale->discount_amount ?? 0))),
+            ];
+        })->values();
+
+        $occupiedStations = $pcStations->where('status', 'occupied');
+        $otherSales = $internetSales->filter(function ($sale) use ($employee) {
+            return (int) $sale->employee_id !== (int) $employee->id;
+        });
+
+        $nextShiftBillingDetails = collect();
+
+        foreach ($occupiedStations as $pc) {
+            $durMinutes = (int) ($pc->duration_minutes ?: 45);
+            $durHours = floor($durMinutes / 60);
+            $durRemMins = $durMinutes % 60;
+            $durasiStr = sprintf('%02d:%02d:%02d', $durHours, $durRemMins, 0);
+
+            $biaya = (float) ($pc->billing_amount > 0
+                ? $pc->billing_amount
+                : round(($pc->hourly_rate ?: 6000) * ($durMinutes / 60)));
+
+            $nextShiftBillingDetails->push([
+                'boks' => $pc->station_code,
+                'tanggal' => Carbon::parse($pc->started_at ?? $workDate)->format('d-m-Y'),
+                'mulai' => Carbon::parse($pc->started_at ?? now())->format('H:i:s'),
+                'user' => $pc->current_user_name ?: 'User',
+                'durasi' => $durasiStr,
+                'biaya' => $biaya,
+                'mgkfree' => 0.0,
+                'netto' => $biaya,
+            ]);
+        }
+
+        foreach ($otherSales as $idx => $sale) {
+            $stationCode = $sale->pcStation?->station_code ?? ($sale->customer_name ?: 'W/S '.($idx + 1));
+            $nextShiftBillingDetails->push([
+                'boks' => $stationCode,
+                'tanggal' => Carbon::parse($sale->created_at)->format('d-m-Y'),
+                'mulai' => Carbon::parse($sale->created_at)->format('H:i:s'),
+                'user' => $sale->customer_name ?: 'User',
+                'durasi' => '01:00:00',
+                'biaya' => (float) $sale->total_billing,
+                'mgkfree' => (float) ($sale->discount_amount ?? 0),
+                'netto' => (float) ($sale->net_amount ?? ($sale->total_billing - ($sale->discount_amount ?? 0))),
+            ]);
+        }
+
+        // Rincian Data Billing: Shif Saya (Billing transaksi selesai shift kasir aktif)
+        $myShiftSales = $internetSales->filter(function ($sale) use ($employee) {
+            return (int) $sale->employee_id === (int) $employee->id;
+        });
+
+        $myShiftBillingDetails = $myShiftSales->map(function ($sale, $idx) {
+            $stationCode = $sale->pcStation?->station_code ?? ($sale->customer_name ?: 'W/S '.($idx + 1));
+
+            return [
+                'boks' => $stationCode,
+                'tanggal' => Carbon::parse($sale->created_at)->format('d-m-Y'),
+                'mulai' => Carbon::parse($sale->created_at)->format('H:i:s'),
+                'user' => $sale->customer_name ?: 'User',
+                'durasi' => '01:00:00',
+                'biaya' => (float) $sale->total_billing,
+                'mgkfree' => (float) ($sale->discount_amount ?? 0),
+                'netto' => (float) ($sale->net_amount ?? ($sale->total_billing - ($sale->discount_amount ?? 0))),
+            ];
+        })->values();
+
+        // Rincian Data Billing: Shif Selanjutnya (Sesi PC Station aktif berjalan / over-shift)
+        $occupiedStations = $pcStations->where('status', 'occupied');
+        $otherSales = $internetSales->filter(function ($sale) use ($employee) {
+            return (int) $sale->employee_id !== (int) $employee->id;
+        });
+
+        $nextShiftBillingDetails = collect();
+
+        foreach ($occupiedStations as $pc) {
+            $durMinutes = (int) ($pc->duration_minutes ?: 45);
+            $durHours = floor($durMinutes / 60);
+            $durRemMins = $durMinutes % 60;
+            $durasiStr = sprintf('%02d:%02d:%02d', $durHours, $durRemMins, 0);
+
+            $biaya = (float) ($pc->billing_amount > 0
+                ? $pc->billing_amount
+                : round(($pc->hourly_rate ?: 6000) * ($durMinutes / 60)));
+
+            $nextShiftBillingDetails->push([
+                'boks' => $pc->station_code,
+                'tanggal' => Carbon::parse($pc->started_at ?? $workDate)->format('d-m-Y'),
+                'mulai' => Carbon::parse($pc->started_at ?? now())->format('H:i:s'),
+                'user' => $pc->current_user_name ?: 'User',
+                'durasi' => $durasiStr,
+                'biaya' => $biaya,
+                'mgkfree' => 0.0,
+                'netto' => $biaya,
+            ]);
+        }
+
+        foreach ($otherSales as $idx => $sale) {
+            $stationCode = $sale->pcStation?->station_code ?? ($sale->customer_name ?: 'W/S '.($idx + 1));
+            $nextShiftBillingDetails->push([
+                'boks' => $stationCode,
+                'tanggal' => Carbon::parse($sale->created_at)->format('d-m-Y'),
+                'mulai' => Carbon::parse($sale->created_at)->format('H:i:s'),
+                'user' => $sale->customer_name ?: 'User',
+                'durasi' => '01:00:00',
+                'biaya' => (float) $sale->total_billing,
+                'mgkfree' => (float) ($sale->discount_amount ?? 0),
+                'netto' => (float) ($sale->net_amount ?? ($sale->total_billing - ($sale->discount_amount ?? 0))),
+            ]);
+        }
+
         // 3. Permintaan Stok Barang (Restock Requests Cabang)
         $stockRequests = ShiftStockRequest::whereDate('created_at', $workDate->toDateString())
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
@@ -2633,6 +2716,8 @@ class AttendanceWebV2Controller extends Controller
             'totalPcCount' => $totalPcCount,
             'occupiedPcCount' => $occupiedPcCount,
             'availablePcCount' => $availablePcCount,
+            'myShiftBillingDetails' => $myShiftBillingDetails,
+            'nextShiftBillingDetails' => $nextShiftBillingDetails,
             'stockRequests' => $stockRequests,
             'salesSummary' => $salesSummary,
             'stockComparisons' => $stockComparisons,
@@ -3964,6 +4049,69 @@ BAT;
         $occupiedPcCount = $pcStations->where('status', 'occupied')->count();
         $availablePcCount = $pcStations->where('status', 'available')->count();
 
+        // Rincian Data Billing per Shift
+        $myShiftSales = $internetSales->filter(function ($sale) use ($employee) {
+            return (int) $sale->employee_id === (int) $employee->id;
+        });
+
+        $myShiftBillingDetails = $myShiftSales->map(function ($sale, $idx) {
+            $stationCode = $sale->pcStation?->station_code ?? ($sale->customer_name ?: 'W/S '.($idx + 1));
+
+            return [
+                'boks' => $stationCode,
+                'tanggal' => Carbon::parse($sale->created_at)->format('d-m-Y'),
+                'mulai' => Carbon::parse($sale->created_at)->format('H:i:s'),
+                'user' => $sale->customer_name ?: 'User',
+                'durasi' => '01:00:00',
+                'biaya' => (float) $sale->total_billing,
+                'mgkfree' => (float) ($sale->discount_amount ?? 0),
+                'netto' => (float) ($sale->net_amount ?? ($sale->total_billing - ($sale->discount_amount ?? 0))),
+            ];
+        })->values();
+
+        $occupiedStations = $pcStations->where('status', 'occupied');
+        $otherSales = $internetSales->filter(function ($sale) use ($employee) {
+            return (int) $sale->employee_id !== (int) $employee->id;
+        });
+
+        $nextShiftBillingDetails = collect();
+
+        foreach ($occupiedStations as $pc) {
+            $durMinutes = (int) ($pc->duration_minutes ?: 45);
+            $durHours = floor($durMinutes / 60);
+            $durRemMins = $durMinutes % 60;
+            $durasiStr = sprintf('%02d:%02d:%02d', $durHours, $durRemMins, 0);
+
+            $biaya = (float) ($pc->billing_amount > 0
+                ? $pc->billing_amount
+                : round(($pc->hourly_rate ?: 6000) * ($durMinutes / 60)));
+
+            $nextShiftBillingDetails->push([
+                'boks' => $pc->station_code,
+                'tanggal' => Carbon::parse($pc->started_at ?? $workDate)->format('d-m-Y'),
+                'mulai' => Carbon::parse($pc->started_at ?? now())->format('H:i:s'),
+                'user' => $pc->current_user_name ?: 'User',
+                'durasi' => $durasiStr,
+                'biaya' => $biaya,
+                'mgkfree' => 0.0,
+                'netto' => $biaya,
+            ]);
+        }
+
+        foreach ($otherSales as $idx => $sale) {
+            $stationCode = $sale->pcStation?->station_code ?? ($sale->customer_name ?: 'W/S '.($idx + 1));
+            $nextShiftBillingDetails->push([
+                'boks' => $stationCode,
+                'tanggal' => Carbon::parse($sale->created_at)->format('d-m-Y'),
+                'mulai' => Carbon::parse($sale->created_at)->format('H:i:s'),
+                'user' => $sale->customer_name ?: 'User',
+                'durasi' => '01:00:00',
+                'biaya' => (float) $sale->total_billing,
+                'mgkfree' => (float) ($sale->discount_amount ?? 0),
+                'netto' => (float) ($sale->net_amount ?? ($sale->total_billing - ($sale->discount_amount ?? 0))),
+            ]);
+        }
+
         // 4. Data Penjualan Kertas Print (Otomatis POS & Integrasi Canon USB & Terkunci per Cabang)
         $printSalesItems = CafeSaleItem::whereHas('sale', function ($q) use ($workDate, $branchId) {
             $q->whereDate('created_at', $workDate->toDateString())
@@ -4093,6 +4241,8 @@ BAT;
             'totalPcCount' => $totalPcCount,
             'occupiedPcCount' => $occupiedPcCount,
             'availablePcCount' => $availablePcCount,
+            'myShiftBillingDetails' => $myShiftBillingDetails,
+            'nextShiftBillingDetails' => $nextShiftBillingDetails,
             'totalPrintPages' => $totalPrintPages,
             'totalPrintIncome' => $totalPrintIncome,
             'realHardwarePages' => $realHardwarePages,

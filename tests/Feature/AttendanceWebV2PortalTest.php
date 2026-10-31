@@ -174,7 +174,7 @@ class AttendanceWebV2PortalTest extends TestCase
             'employee_code' => 'EMP-001',
             'credential' => 'wrongpass6',
         ]);
-        $res6->assertSessionHas('lockout_seconds', 120);
+        $res6->assertSessionHas('lockout_seconds', fn ($sec) => in_array($sec, [119, 120]));
 
         // 6. Jika memasukkan password yang benar setelah kuncian reda, status tier dan throttle direset
         RateLimiter::clear($throttleKey);

@@ -44,7 +44,7 @@
         @endif
     </div>
 
-    {{-- PANDUAN RINGKAS / BANNER MODE CEPAT JIKA SUDAH DIVERIFIKASI HARI INI --}}
+    {{-- PANDUAN RINGKAS / BANNER STATUS VERIFIKASI STOK SHIFT AKTIF --}}
     @if($existingChecklist && $existingChecklist->status === 'completed')
     <div class="glass-card" style="background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.4); padding: 16px 20px; margin-bottom: 18px;">
         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px;">
@@ -54,11 +54,11 @@
                 </div>
                 <div>
                     <div style="font-size: 14px; font-weight: 800; color: #34d399;">
-                        Stok Cabang Hari Ini Sudah Diverifikasi
+                        Stok Cabang Hari Ini Sudah Diverifikasi ({{ $existingChecklist->shift->name ?? $activeShift->name ?? 'Shift Ini' }})
                     </div>
                     <div style="font-size: 11.5px; color: #d1fae5; margin-top: 2px;">
                         Diverifikasi pukul <strong>{{ $existingChecklist->completed_at?->format('H:i') ?? $existingChecklist->updated_at?->format('H:i') }}</strong>
-                        oleh <strong>{{ $existingChecklist->employee->name ?? $currentEmployee->name }}</strong>. Anda dapat langsung masuk ke Kasir Penjualan tanpa harus mengisi ulang.
+                        oleh <strong>{{ $existingChecklist->employee->name ?? $currentEmployee->name }}</strong>. Anda dapat langsung masuk ke Kasir Penjualan atau perbarui form di bawah jika ada perubahan fisik stok.
                     </div>
                 </div>
             </div>
@@ -72,7 +72,7 @@
         <div style="display: flex; gap: 12px; align-items: flex-start;">
             <span style="font-size: 20px; line-height: 1;">📝</span>
             <div style="font-size: 12px; color: #bae6fd; line-height: 1.5;">
-                <strong>Instruksi Operasional:</strong> Pastikan Anda telah memeriksa ketersediaan fisik <strong>kertas (A4 & F4)</strong>, stok <strong>minuman & makanan</strong>, kelayakan <strong>hardware</strong>, serta mencocokkan <strong>pendapatan billing shift sebelumnya</strong>. Klik <strong>Selesai</strong> untuk masuk ke <strong>Halaman Penjualan</strong>.
+                <strong>Instruksi Pergantian Shift ({{ $activeShift->name ?? 'Shift Aktif' }}):</strong> Setiap operator shift (Shift 1 s/d 4) <strong>wajib memeriksa ulang fisik stok</strong> pada saat pergantian shift guna mendeteksi kekurangan barang. Pastikan ketersediaan <strong>kertas (A4 & F4)</strong>, stok <strong>minuman & makanan</strong>, kelayakan <strong>hardware</strong>, serta serah terima kas sebelum masuk ke Kasir Penjualan.
             </div>
         </div>
     </div>

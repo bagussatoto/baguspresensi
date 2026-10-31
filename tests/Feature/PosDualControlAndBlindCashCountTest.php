@@ -747,14 +747,13 @@ class PosDualControlAndBlindCashCountTest extends TestCase
         $this->assertEquals('Shift 2 (Grace)', $summary->deposit_recipient);
         $this->assertNotNull($summary->deposit_verified_at);
 
-        // 2. Beranda presensi2/ menampilkan History Setor Kas sebagai Disetor ke Shift Selanjutnya
+        // 2. Beranda presensi2/ bersih dari tabel History Setor Kas (fokus ke presensi murni)
         $indexPage = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
             ->get(route('presensi2.index'));
 
         $indexPage->assertOk();
-        $indexPage->assertSee('Status & History Setor Kas', false);
-        $indexPage->assertSee('Disetor ke Shift Selanjutnya', false);
-        $indexPage->assertSee('Shift 2 (Grace)');
+        $indexPage->assertDontSee('Status & History Setor Kas', false);
+        $indexPage->assertDontSee('Lanjutan Rekapitulasi Shift', false);
 
         // 3. Halaman rekap menampilkan status Otomatis Disetor ke Shift Selanjutnya
         $rekapPage = $this->withSession(['presensi2_employee_id' => $this->cashier->id])

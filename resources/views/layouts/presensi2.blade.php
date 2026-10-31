@@ -169,6 +169,27 @@
             border-radius: 20px 20px 0 0;
         }
 
+        /* DYNAMIC SLIDING BUBBLE INDICATOR */
+        .nav-indicator-bubble {
+            position: absolute;
+            top: -16px;
+            left: 0;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            box-shadow: 0 8px 22px rgba(139, 92, 246, 0.55), 0 0 0 3px rgba(10, 14, 26, 0.95);
+            pointer-events: none;
+            z-index: 1;
+            transform: translateX(-100px);
+            transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease;
+            opacity: 0;
+        }
+
+        .nav-indicator-bubble.visible {
+            opacity: 1;
+        }
+
         .nav-item {
             display: flex;
             flex-direction: column;
@@ -176,54 +197,47 @@
             justify-content: center;
             text-decoration: none;
             color: var(--text-sub);
-            padding: 6px 6px;
+            padding: 6px 4px;
             border-radius: 12px;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: color 0.25s ease;
             position: relative;
-            min-width: 46px;
+            min-width: 44px;
             flex: 1;
-            max-width: 72px;
+            max-width: 76px;
+            z-index: 2;
         }
 
-        .nav-item .nav-icon { font-size: 20px; margin-bottom: 3px; transition: transform 0.2s ease; }
-        .nav-item .nav-label { font-size: 11px; font-weight: 600; letter-spacing: -0.01em; }
-
-        .nav-item.active { color: #fff; }
-        .nav-item.active .nav-icon { color: var(--accent-primary); transform: translateY(-2px); }
-        .nav-item.active::before {
-            content: '';
-            position: absolute;
-            top: 2px;
-            width: 16px;
-            height: 3px;
-            border-radius: 999px;
-            background: var(--accent-primary);
-            box-shadow: 0 0 10px var(--accent-primary);
-        }
-
-        /* FAB Scan */
-        .nav-item-fab { position: relative; transform: translateY(-16px); }
-        .nav-fab-btn {
-            width: 54px;
-            height: 54px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+        .nav-item .nav-icon {
+            font-size: 20px;
+            margin-bottom: 2px;
             display: flex;
             align-items: center;
             justify-content: center;
+            transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.25s ease;
+        }
+
+        .nav-item .nav-label {
+            font-size: 10.5px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            transition: color 0.25s ease, font-weight 0.25s ease;
+            white-space: nowrap;
+        }
+
+        .nav-item.active {
             color: #fff;
-            font-size: 24px;
-            box-shadow: 0 8px 20px rgba(139, 92, 246, 0.45);
-            border: 3px solid rgba(10, 14, 26, 0.95);
-            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
         }
-        .nav-fab-btn:active { transform: scale(0.92); }
-        .nav-item-fab.active .nav-fab-btn {
-            background: linear-gradient(135deg, #10b981, #059669);
-            box-shadow: 0 8px 24px rgba(16, 185, 129, 0.45);
+
+        .nav-item.active .nav-icon {
+            transform: translateY(-16px) scale(1.18);
+            color: #fff;
+            filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
         }
-        .nav-item-fab .nav-label { margin-top: 4px; font-size: 11px; font-weight: 600; color: var(--text-muted); }
-        .nav-item-fab.active .nav-label { color: #fff; }
+
+        .nav-item.active .nav-label {
+            color: #fff;
+            font-weight: 700;
+        }
 
         /* GLASS CARD */
         .glass-card {
@@ -435,6 +449,7 @@
             if ($navHasClockedIn) {
                 $navHasCompletedStock = \App\Models\ShiftHandoverChecklist::where('employee_id', $navEmployeeId)
                     ->whereDate('check_date', $navRecord->work_date)
+                    ->when($navRecord->shift_id, fn($q) => $q->where('shift_id', $navRecord->shift_id))
                     ->where('status', 'completed')
                     ->exists();
             }
@@ -448,8 +463,11 @@
         $riwayatMenu = $navMenus->firstWhere('code', 'presensi2_riwayat');
     @endphp
     <!-- BOTTOM NAV BAR (TERINTEGRASI DATABASE NAVICAT SYSTEM_MENUS) -->
-    <nav class="mobile-bottom-nav">
-        <a href="{{ $berandaMenu?->url ?? route('presensi2.index') }}" class="nav-item {{ request()->routeIs('presensi2.index') ? 'active' : '' }}" title="{{ $berandaMenu?->description }}">
+    <nav class="mobile-bottom-nav" id="mobileBottomNav">
+        <!-- Floating Active Bubble Indicator -->
+        <div class="nav-indicator-bubble" id="navIndicatorBubble" aria-hidden="true"></div>
+
+        <a href="{{ $berandaMenu?->url ?? route('presensi2.index') }}" class="nav-item {{ request()->routeIs('presensi2.index') ? 'active' : '' }}" title="{{ $berandaMenu?->description ?? 'Beranda Presensi' }}">
             <span class="nav-icon">{{ $berandaMenu?->icon ?? '🏠' }}</span>
             <span class="nav-label">{{ $berandaMenu?->name ?? 'Beranda' }}</span>
         </a>
@@ -459,14 +477,13 @@
            @if(!$navHasClockedIn)
                onclick="event.preventDefault(); showPresensiRequiredModal('stok');"
            @endif
-           title="{{ $stokMenu?->description }}">
+           title="{{ $stokMenu?->description ?? 'Pemeriksaan Stok Barang' }}">
             <span class="nav-icon">{{ $stokMenu?->icon ?? '📦' }}</span>
             <span class="nav-label">{{ $stokMenu ? explode(' &', $stokMenu->name)[0] : 'Stok' }}</span>
         </a>
 
-        <!-- FAB Presensi -->
-        <a href="{{ route('presensi2.scan') }}" class="nav-item nav-item-fab {{ request()->routeIs('presensi2.scan') ? 'active' : '' }}">
-            <div class="nav-fab-btn">🔐</div>
+        <a href="{{ route('presensi2.scan') }}" class="nav-item {{ request()->routeIs('presensi2.scan*') ? 'active' : '' }}" title="Presensi Masuk & Keluar">
+            <span class="nav-icon">🔐</span>
             <span class="nav-label">Presensi</span>
         </a>
 
@@ -477,7 +494,7 @@
            @elseif(!$navHasCompletedStock)
                onclick="event.preventDefault(); showIncompleteModal('Pemeriksaan Stok Belum Lengkap!', 'Anda belum menyelesaikan pemeriksaan dan serah terima stok barang awal shift. Silakan lengkapi checklist stok terlebih dahulu.', '<span>📦</span> Lengkapi Stok Sekarang', '{{ route('presensi2.stok') }}');"
            @endif
-           title="{{ $penjualanMenu?->description }}">
+           title="{{ $penjualanMenu?->description ?? 'Penjualan & Kasir Shift' }}">
             <span class="nav-icon">{{ $penjualanMenu?->icon ?? '🛒' }}</span>
             <span class="nav-label">{{ $penjualanMenu ? explode(' &', $penjualanMenu->name)[0] : 'Penjualan' }}</span>
         </a>
@@ -489,7 +506,7 @@
             <span class="nav-label">{{ $rekapMenu ? explode(' &', $rekapMenu->name)[0] : 'Rekap' }}</span>
         </a>
 
-        <a href="{{ $riwayatMenu?->url ?? route('presensi2.riwayat') }}" class="nav-item {{ request()->routeIs('presensi2.riwayat') ? 'active' : '' }}" title="{{ $riwayatMenu?->description }}">
+        <a href="{{ $riwayatMenu?->url ?? route('presensi2.riwayat') }}" class="nav-item {{ request()->routeIs('presensi2.riwayat*') ? 'active' : '' }}" title="{{ $riwayatMenu?->description ?? 'Riwayat Presensi' }}">
             <span class="nav-icon">{{ $riwayatMenu?->icon ?? '📅' }}</span>
             <span class="nav-label">{{ $riwayatMenu?->name ?? 'Riwayat' }}</span>
         </a>
@@ -640,6 +657,64 @@
             const modal = document.getElementById('mgk-notification-modal');
             if (modal) modal.style.display = 'none';
         }
+
+        // Dynamic Sliding Bubble Indicator for Mobile Bottom Nav
+        function positionNavBubble(targetItem, animate = true) {
+            const bubble = document.getElementById('navIndicatorBubble');
+            const nav = document.getElementById('mobileBottomNav');
+            if (!bubble || !nav || !targetItem) return;
+
+            const navRect = nav.getBoundingClientRect();
+            const itemRect = targetItem.getBoundingClientRect();
+            if (navRect.width === 0 || itemRect.width === 0) return;
+
+            const targetX = (itemRect.left - navRect.left) + (itemRect.width / 2) - (bubble.offsetWidth / 2);
+
+            if (!animate) {
+                bubble.style.transition = 'none';
+            } else {
+                bubble.style.transition = 'transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease';
+            }
+
+            bubble.style.transform = 'translateX(' + targetX + 'px)';
+            bubble.classList.add('visible');
+
+            if (!animate) {
+                void bubble.offsetHeight; // Force reflow
+                bubble.style.transition = 'transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const nav = document.getElementById('mobileBottomNav');
+            if (!nav) return;
+
+            const activeItem = nav.querySelector('.nav-item.active');
+            if (activeItem) {
+                requestAnimationFrame(function () {
+                    positionNavBubble(activeItem, false);
+                });
+            }
+
+            nav.querySelectorAll('.nav-item').forEach(function (item) {
+                item.addEventListener('click', function (e) {
+                    if (e.defaultPrevented) return;
+
+                    nav.querySelectorAll('.nav-item').forEach(function (i) {
+                        i.classList.remove('active');
+                    });
+                    this.classList.add('active');
+                    positionNavBubble(this, true);
+                });
+            });
+
+            window.addEventListener('resize', function () {
+                const currentActive = nav.querySelector('.nav-item.active');
+                if (currentActive) {
+                    positionNavBubble(currentActive, false);
+                }
+            });
+        });
     </script>
     @stack('scripts')
 </body>

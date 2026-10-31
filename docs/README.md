@@ -101,6 +101,7 @@ Dokumentasi proyek **Bagus (Sistem Presensi, POS Kasir, & ERP MGK)** diorganisas
 * [`percakapan_keamanan_login_dan_alert_whatsapp.md`](2026-10-31/percakapan_keamanan_login_dan_alert_whatsapp.md) — Rangkuman evaluasi keamanan brute-force login dan integrasi alert WhatsApp.
 * [`rekap_dan_summary_serah_terima.md`](2026-10-31/rekap_dan_summary_serah_terima.md) — Dokumentasi History Setor Shift, cetak slip Laporan Summary Harian 4 Shift, dan konfirmasi serah terima kas.
 * [`uat_integrasi_printer_canon_pos_rekap.md`](2026-10-31/uat_integrasi_printer_canon_pos_rekap.md) — UAT User Acceptance Testing Printer Canon USB, Auto-Refresh POS, & Rekonsiliasi Rekap Kasir.
+* [`percakapan_evaluasi_fitur_admin_erp_dan_penutup_harian.md`](2026-10-31/percakapan_evaluasi_fitur_admin_erp_dan_penutup_harian.md) — Rangkuman evaluasi penambahan fitur Admin ERP dan penutupan sesi 31 Oktober 2026.
 
 ---
 
