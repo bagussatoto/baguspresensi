@@ -795,7 +795,7 @@ class ShiftStockAndSalesFlowTest extends TestCase
             'amount' => 4000,
         ]);
 
-        // Test status printer
+        // Test status printer real-time endpoint
         $statusResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
             ->getJson(route('presensi2.penjualan.printer.status'));
 
@@ -804,6 +804,26 @@ class ShiftStockAndSalesFlowTest extends TestCase
             'success' => true,
             'is_online' => true,
             'total_pages' => 4,
+            'hardware_pages' => 4,
+            'hardware_amount' => 4000,
+            'total_print_pages' => 4,
+            'total_print_income' => 4000,
+            'is_print_locked' => false,
+        ]);
+        $statusResponse->assertJsonStructure([
+            'success',
+            'is_online',
+            'printer_name',
+            'total_pages',
+            'total_amount',
+            'hardware_pages',
+            'hardware_amount',
+            'total_print_pages',
+            'total_print_income',
+            'is_print_locked',
+            'latest_jobs' => [
+                '*' => ['id', 'doc', 'pages', 'time', 'amount', 'source'],
+            ],
         ]);
 
         // Test download agent script

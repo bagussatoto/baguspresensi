@@ -3413,19 +3413,52 @@ class AttendanceWebV2Controller extends Controller
 
         $printerName = cache()->get('canon_printer_name_branch_'.$branchId, $latestJob?->printer_name ?? 'Canon USB Printer');
 
+        $hardwarePages = (int) $jobs->sum('pages');
+        $hardwareAmount = (float) $jobs->sum('total_amount');
+
+        // Kalkulasi item POS CAT-PAPER
+        $printSalesItems = CafeSaleItem::whereHas('sale', function ($q) use ($workDate, $branchId) {
+            $q->whereDate('created_at', $workDate->toDateString())
+                ->where('payment_status', '!=', 'cancelled')
+                ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId));
+        })->whereHas('variant.product.category', function ($q) {
+            $q->where('code', 'CAT-PAPER');
+        })->get();
+
+        $autoPrintPages = (int) $printSalesItems->sum('qty');
+        $autoPrintAmount = (float) $printSalesItems->sum('subtotal');
+
+        $effectivePages = max($autoPrintPages, $hardwarePages);
+        $effectiveAmount = max($autoPrintAmount, $hardwareAmount);
+
+        $salesSummary = ShiftSalesSummary::whereDate('work_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee?->id))
+            ->latest('id')
+            ->first();
+
+        $isPrintLocked = (bool) ($salesSummary?->is_print_locked);
+        $totalPrintPages = $isPrintLocked ? (int) ($salesSummary->locked_print_pages ?? $effectivePages) : $effectivePages;
+        $totalPrintIncome = $isPrintLocked ? (float) ($salesSummary->locked_print_amount ?? $effectiveAmount) : $effectiveAmount;
+
         return response()->json([
             'success' => true,
             'is_online' => $isOnline,
             'printer_name' => $printerName,
-            'total_pages' => (int) $jobs->sum('pages'),
-            'total_amount' => (float) $jobs->sum('total_amount'),
+            'total_pages' => $hardwarePages,
+            'total_amount' => $hardwareAmount,
+            'hardware_pages' => $hardwarePages,
+            'hardware_amount' => $hardwareAmount,
+            'total_print_pages' => $totalPrintPages,
+            'total_print_income' => $totalPrintIncome,
+            'is_print_locked' => $isPrintLocked,
             'last_job_at' => $latestJob?->printed_at?->format('H:i:s d/m/Y'),
-            'latest_jobs' => $jobs->take(5)->map(fn ($j) => [
+            'latest_jobs' => $jobs->take(15)->map(fn ($j) => [
                 'id' => $j->id,
-                'doc' => $j->document_name,
-                'pages' => $j->pages,
-                'time' => $j->printed_at?->format('H:i:s'),
-                'amount' => $j->total_amount,
+                'doc' => $j->document_name ?: 'Dokumen Cetak Pelanggan',
+                'pages' => (int) $j->pages,
+                'time' => $j->printed_at ? $j->printed_at->format('H:i:s') : $j->created_at->format('H:i:s'),
+                'amount' => (float) $j->total_amount,
+                'source' => 'Canon USB',
             ]),
         ]);
     }

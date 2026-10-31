@@ -200,14 +200,15 @@
                     </button>
 
                     {{-- 2. Data & Kunci Print Kertas (Cyan Unified) --}}
-                    <button type="button" onclick="openModalPrintKertas()" 
-                            style="background: {{ $isPrintLocked ? '#0891b2' : '#00c0ef' }}; color: #ffffff; border: none; padding: 8px 10px; font-size: 11.5px; font-weight: 700; border-radius: 4px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.3; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.2); transition: filter 0.15s;"
+                    <button type="button" onclick="openModalPrintKertas()" id="btn-open-modal-print"
+                            style="background: {{ $isPrintLocked ? '#0891b2' : '#00c0ef' }}; color: #ffffff; border: none; padding: 8px 10px; font-size: 11.5px; font-weight: 700; border-radius: 4px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.3; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.2); transition: all 0.25s;"
                             onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">
                         <span style="display: flex; align-items: center; gap: 4px;">
-                            <span>{{ $isPrintLocked ? '🔒' : '🖨️' }}</span>
-                            <span>{{ $isPrintLocked ? 'Print Terkunci' : 'Data & Kunci Print' }}</span>
+                            <span id="pos-printer-icon">{{ $isPrintLocked ? '🔒' : '🖨️' }}</span>
+                            <span id="pos-printer-title">{{ $isPrintLocked ? 'Print Terkunci' : 'Data & Kunci Print' }}</span>
+                            <span id="pos-printer-live-dot" style="display: {{ ($isPrinterOnline ?? false) ? 'inline-block' : 'none' }}; width: 6px; height: 6px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 6px #4ade80;" title="Printer Canon Online Real-Time"></span>
                         </span>
-                        <span style="font-size: 10px; opacity: 0.95; font-family: monospace;">
+                        <span id="pos-printer-summary-text" style="font-size: 10px; opacity: 0.95; font-family: monospace;">
                             {{ $totalPrintPages }} lbr (Rp {{ number_format($totalPrintIncome, 0, ',', '.') }})
                         </span>
                     </button>
@@ -770,15 +771,15 @@
             <div style="padding: 18px; max-height: 75vh; overflow-y: auto;">
                 {{-- STATUS PRINTER HARDWARE & KERTAS --}}
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
-                    <div style="background: {{ ($isPrinterOnline ?? false) ? '#f0fdf4' : '#f8fafc' }}; border: 1px solid {{ ($isPrinterOnline ?? false) ? '#bbf7d0' : '#cbd5e1' }}; border-radius: 6px; padding: 10px;">
+                    <div id="box-printer-status-wrapper" style="background: {{ ($isPrinterOnline ?? false) ? '#f0fdf4' : '#f8fafc' }}; border: 1px solid {{ ($isPrinterOnline ?? false) ? '#bbf7d0' : '#cbd5e1' }}; border-radius: 6px; padding: 10px; transition: all 0.3s;">
                         <span style="font-size: 11px; color: #475569; display: block;">Printer Canon Kasir (USB):</span>
                         <div style="display: flex; align-items: center; gap: 5px; margin-top: 2px;">
-                            <span style="font-size: 13px;">{{ ($isPrinterOnline ?? false) ? '🟢' : '🔌' }}</span>
-                            <strong style="font-size: 12.5px; color: {{ ($isPrinterOnline ?? false) ? '#15803d' : '#334155' }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            <span id="modal-printer-status-icon" style="font-size: 13px;">{{ ($isPrinterOnline ?? false) ? '🟢' : '🔌' }}</span>
+                            <strong id="modal-printer-name" style="font-size: 12.5px; color: {{ ($isPrinterOnline ?? false) ? '#15803d' : '#334155' }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                                 {{ $connectedPrinterName ?? 'Canon USB Printer' }}
                             </strong>
                         </div>
-                        <span style="font-size: 10px; color: {{ ($isPrinterOnline ?? false) ? '#166534' : '#64748b' }}; display: block; margin-top: 2px;">
+                        <span id="modal-printer-status-text" style="font-size: 10px; color: {{ ($isPrinterOnline ?? false) ? '#166534' : '#64748b' }}; display: block; margin-top: 2px;">
                             {{ ($isPrinterOnline ?? false) ? 'Tersambung (Online)' : 'Siap Terhubung ke PC Kasir' }}
                         </span>
                     </div>
@@ -842,11 +843,11 @@
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
                             <div>
                                 <label style="font-size: 10.5px; font-weight: 600; color: #475569; display: block; margin-bottom: 2px;">Jumlah Lembar Print:</label>
-                                <input type="number" id="input-lock-print-pages" value="{{ (int) $totalPrintPages }}" min="0" style="width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px; font-weight: 700; color: #0f172a;">
+                                <input type="number" id="input-lock-print-pages" value="{{ (int) $totalPrintPages }}" min="0" oninput="userHasEditedLockInputs = true" style="width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px; font-weight: 700; color: #0f172a;">
                             </div>
                             <div>
                                 <label style="font-size: 10.5px; font-weight: 600; color: #475569; display: block; margin-bottom: 2px;">Nominal Print (Rp):</label>
-                                <input type="number" id="input-lock-print-amount" value="{{ (int) $totalPrintIncome }}" min="0" style="width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px; font-weight: 700; color: #0f172a;">
+                                <input type="number" id="input-lock-print-amount" value="{{ (int) $totalPrintIncome }}" min="0" oninput="userHasEditedLockInputs = true" style="width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px; font-weight: 700; color: #0f172a;">
                             </div>
                         </div>
                         <button type="button" onclick="submitToggleLockPrint('lock')" 
@@ -1383,6 +1384,7 @@
     function openModalPrintKertas() {
         const modal = document.getElementById('modal-print-kertas');
         if (modal) modal.style.display = 'flex';
+        fetchPrinterStatusRealTime(false);
     }
 
     function openModalCekPrinting() {
@@ -1485,6 +1487,135 @@
         }
     }
 
+    let lastKnownHardwarePages = {{ (int) ($realHardwarePages ?? 0) }};
+    let userHasEditedLockInputs = false;
+    let isPrinterPollingActive = false;
+
+    function renderPrinterJobsList(jobs) {
+        const tbody = document.getElementById('printer-jobs-tbody');
+        const badge = document.getElementById('badge-total-print-jobs');
+        if (badge) badge.innerText = (jobs ? jobs.length : 0) + ' Dokumen';
+        if (!tbody) return;
+
+        if (!jobs || jobs.length === 0) {
+            tbody.innerHTML = `
+                <tr id="empty-print-jobs-row">
+                    <td colspan="5" style="text-align: center; padding: 16px 10px; color: #94a3b8; font-style: italic;">
+                        Belum ada histori cetak dokumen pada shift ini.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tbody.innerHTML = '';
+        jobs.forEach(j => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid #f1f5f9';
+            tr.innerHTML = `
+                <td style="padding: 6px 10px; color: #64748b; white-space: nowrap; font-family: monospace;">\${j.time}</td>
+                <td style="padding: 6px 10px; color: #1e293b; font-weight: 600; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${j.doc}">\${j.doc}</td>
+                <td style="padding: 6px 8px; text-align: center; font-weight: 700; color: #0284c7;">\${j.pages} lbr</td>
+                <td style="padding: 6px 10px; text-align: right; font-weight: 600; color: #059669; font-family: monospace;">Rp \${Number(j.amount).toLocaleString('id-ID')}</td>
+                <td style="padding: 6px 8px; text-align: center;">
+                    <span style="font-size: 9.5px; padding: 2px 6px; border-radius: 4px; font-weight: 700; background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0;">\${j.source || 'Canon USB'}</span>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function updatePrinterUiState(data, isAutoPolling = false) {
+        if (!data || !data.success) return;
+
+        const hwPages = Number(data.hardware_pages ?? data.total_pages ?? 0);
+        const hwAmount = Number(data.hardware_amount ?? data.total_amount ?? 0);
+        const totalPages = Number(data.total_print_pages ?? hwPages);
+        const totalIncome = Number(data.total_print_income ?? hwAmount);
+
+        // 1. Update Tombol POS di Navbar
+        const summaryText = document.getElementById('pos-printer-summary-text');
+        if (summaryText) {
+            summaryText.innerText = `\${totalPages} lbr (Rp \${totalIncome.toLocaleString('id-ID')})`;
+        }
+        const liveDot = document.getElementById('pos-printer-live-dot');
+        if (liveDot) {
+            liveDot.style.display = data.is_online ? 'inline-block' : 'none';
+        }
+
+        // 2. Update Modal Status Box
+        const statusIcon = document.getElementById('modal-printer-status-icon');
+        const printerName = document.getElementById('modal-printer-name');
+        const statusText = document.getElementById('modal-printer-status-text');
+        const boxWrapper = document.getElementById('box-printer-status-wrapper');
+
+        if (statusIcon) statusIcon.innerText = data.is_online ? '🟢' : '🔌';
+        if (printerName && data.printer_name) printerName.innerText = data.printer_name;
+        if (statusText) statusText.innerText = data.is_online ? 'Tersambung (Online)' : 'Siap Terhubung ke PC Kasir';
+        if (boxWrapper) {
+            boxWrapper.style.background = data.is_online ? '#f0fdf4' : '#f8fafc';
+            boxWrapper.style.borderColor = data.is_online ? '#bbf7d0' : '#cbd5e1';
+        }
+
+        // 3. Update Hardware Counter Display
+        const counterDisplay = document.getElementById('hardware-counter-display');
+        if (counterDisplay) {
+            counterDisplay.innerText = hwPages + ' lembar';
+        }
+
+        // 4. Update Form Kunci Data (jika kasir belum mengedit manual dan belum dikunci)
+        if (!userHasEditedLockInputs && !data.is_print_locked) {
+            const pagesInput = document.getElementById('input-lock-print-pages');
+            const amountInput = document.getElementById('input-lock-print-amount');
+            if (pagesInput && totalPages > 0) pagesInput.value = totalPages;
+            if (amountInput && totalIncome > 0) amountInput.value = totalIncome;
+        }
+
+        // 5. Render Jobs Table jika ada data list
+        const jobs = data.latest_jobs || data.jobs;
+        if (jobs && jobs.length > 0) {
+            renderPrinterJobsList(jobs);
+        }
+
+        // 6. Deteksi Cetakan Baru & Efek Real-Time Flash
+        if (isAutoPolling && hwPages > lastKnownHardwarePages) {
+            const diff = hwPages - lastKnownHardwarePages;
+            showPosToast(`🖨️ Terdeteksi print dokumen baru: +\${diff} lembar (Canon USB)!`, true);
+
+            const btnPrint = document.getElementById('btn-open-modal-print');
+            if (btnPrint) {
+                btnPrint.style.transition = 'all 0.2s';
+                btnPrint.style.transform = 'scale(1.08)';
+                btnPrint.style.boxShadow = '0 0 15px rgba(6, 182, 212, 0.8)';
+                setTimeout(() => {
+                    btnPrint.style.transform = 'scale(1)';
+                    btnPrint.style.boxShadow = '0 1px 2px rgba(0,0,0,0.2)';
+                }, 600);
+            }
+        }
+        lastKnownHardwarePages = hwPages;
+    }
+
+    async function fetchPrinterStatusRealTime(isAuto = true) {
+        if (isPrinterPollingActive) return;
+        isPrinterPollingActive = true;
+        try {
+            const resp = await fetch('{{ route("presensi2.penjualan.printer.status") }}', {
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                updatePrinterUiState(data, isAuto);
+            }
+        } catch (e) {
+            // silent fail on network hiccups
+        } finally {
+            isPrinterPollingActive = false;
+        }
+    }
+
     async function syncPrinterHardwareData() {
         const btn = document.getElementById('btn-sync-printer');
         if (btn) {
@@ -1505,35 +1636,7 @@
             const data = await resp.json();
             if (data.success) {
                 showPosToast(data.message || 'Counter printer berhasil disinkronkan!');
-                const pagesInput = document.getElementById('input-lock-print-pages');
-                const amountInput = document.getElementById('input-lock-print-amount');
-                if (pagesInput && data.pages > 0) pagesInput.value = data.pages;
-                if (amountInput && data.amount > 0) amountInput.value = data.amount;
-                const counterDisplay = document.getElementById('hardware-counter-display');
-                if (counterDisplay) counterDisplay.innerText = data.pages + ' lembar';
-
-                if (data.jobs && data.jobs.length > 0) {
-                    const tbody = document.getElementById('printer-jobs-tbody');
-                    const badge = document.getElementById('badge-total-print-jobs');
-                    if (badge) badge.innerText = data.jobs.length + ' Dokumen';
-                    if (tbody) {
-                        tbody.innerHTML = '';
-                        data.jobs.forEach(j => {
-                            const tr = document.createElement('tr');
-                            tr.style.borderBottom = '1px solid #f1f5f9';
-                            tr.innerHTML = `
-                                <td style="padding: 6px 10px; color: #64748b; white-space: nowrap; font-family: monospace;">\${j.time}</td>
-                                <td style="padding: 6px 10px; color: #1e293b; font-weight: 600; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${j.doc}">\${j.doc}</td>
-                                <td style="padding: 6px 8px; text-align: center; font-weight: 700; color: #0284c7;">\${j.pages} lbr</td>
-                                <td style="padding: 6px 10px; text-align: right; font-weight: 600; color: #059669; font-family: monospace;">Rp \${Number(j.amount).toLocaleString('id-ID')}</td>
-                                <td style="padding: 6px 8px; text-align: center;">
-                                    <span style="font-size: 9.5px; padding: 2px 6px; border-radius: 4px; font-weight: 700; background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0;">Canon USB</span>
-                                </td>
-                            `;
-                            tbody.appendChild(tr);
-                        });
-                    }
-                }
+                updatePrinterUiState(data, false);
             } else {
                 showPosToast(data.message || 'Gagal sinkron data printer.', false);
             }
@@ -2053,6 +2156,19 @@
                 if (e.target === this) closeInvoiceModal();
             });
         }
+
+        // Auto-Refresh Real-Time Counter Printer Canon USB (setiap 10 detik saat tab aktif)
+        setInterval(function() {
+            if (document.visibilityState === 'visible') {
+                fetchPrinterStatusRealTime(true);
+            }
+        }, 10000);
+
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+                fetchPrinterStatusRealTime(true);
+            }
+        });
     });
 
     async function submitAttendanceCheckOut() {
