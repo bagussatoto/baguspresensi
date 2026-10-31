@@ -201,6 +201,113 @@
 </div>
 
 <!-- ============================================================== -->
+<!-- TABEL TRANSAKSI PENJUALAN POS KASIR TERKINI (TAUTAN ADMIN ERP) -->
+<!-- ============================================================== -->
+<div class="dashboard-section-card" style="margin-bottom: 24px;">
+    <div class="section-card-header">
+        <div class="section-header-left">
+            <div class="section-header-icon" style="background: rgba(16, 185, 129, 0.15); color: #34d399;">💳</div>
+            <div>
+                <h3 class="section-title">Transaksi Penjualan POS Kasir Terkini</h3>
+                <span class="section-subtitle">Daftar nota kasir shift aktif & sinkronisasi langsung ke modul Penjualan Admin ERP</span>
+            </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+            <a href="{{ route('admin.penjualan') }}" class="btn-action-sm btn-action-primary" style="padding: 8px 14px; font-size: 12px;">
+                <span>🛒</span> Buka Semua Penjualan ERP →
+            </a>
+        </div>
+    </div>
+    <div class="section-card-body" style="padding: 0; overflow-x: auto;">
+        <table class="custom-data-table">
+            <thead>
+                <tr>
+                    <th style="width: 190px;">No. Invoice POS</th>
+                    <th>Waktu / Tanggal</th>
+                    <th>Kasir & Cabang</th>
+                    <th>Item Pesanan</th>
+                    <th style="text-align: right;">Total Bayar</th>
+                    <th style="text-align: center;">Status</th>
+                    <th style="text-align: center; width: 175px;">Aksi Admin ERP</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($recentPosSales ?? [] as $sale)
+                @php
+                    $isVoid = ($sale->payment_status === 'cancelled');
+                    $isPaid = ($sale->payment_status === 'paid');
+                    $itemCount = $sale->items->count();
+                    $firstItemName = $sale->items->first()?->item_name;
+                    $itemSummary = $firstItemName ? ($itemCount > 1 ? $firstItemName . ' (+' . ($itemCount - 1) . ' item lainnya)' : $firstItemName) : 'Layanan / Kasir';
+                @endphp
+                <tr>
+                    <td>
+                        <span style="font-family: monospace; font-weight: 700; color: #38bdf8; font-size: 13px;">
+                            {{ $sale->invoice_number }}
+                        </span>
+                    </td>
+                    <td style="color: #cbd5e1; font-size: 12px; white-space: nowrap;">
+                        {{ $sale->created_at ? $sale->created_at->format('H:i - d/m/Y') : '-' }}
+                    </td>
+                    <td>
+                        <div style="font-weight: 600; color: #fff; font-size: 12.5px;">
+                            {{ $sale->employee?->name ?? 'Kasir Shift' }}
+                        </div>
+                        <span style="font-size: 11px; color: var(--text-muted);">
+                            {{ $sale->branch?->name ?? 'Outlet MGK' }}
+                        </span>
+                    </td>
+                    <td>
+                        <span style="font-size: 12px; color: #e2e8f0; font-weight: 500;">
+                            {{ $itemSummary }}
+                        </span>
+                        @if($sale->customer_name && $sale->customer_name !== 'Pelanggan Umum')
+                            <div style="font-size: 11px; color: #94a3b8;">
+                                Pelanggan: {{ $sale->customer_name }}
+                            </div>
+                        @endif
+                    </td>
+                    <td style="text-align: right;">
+                        <div style="font-weight: 700; font-family: 'Outfit', monospace; font-size: 13px; color: {{ $isVoid ? '#fca5a5' : '#34d399' }};">
+                            Rp {{ number_format($sale->net_amount, 0, ',', '.') }}
+                        </div>
+                        <span style="font-size: 10px; text-transform: uppercase; color: var(--text-muted);">
+                            {{ $sale->payment_method ?? 'Tunai' }}
+                        </span>
+                    </td>
+                    <td style="text-align: center;">
+                        @if($isPaid)
+                            <span class="badge-status badge-emerald">Lunas</span>
+                        @elseif($isVoid)
+                            <span class="badge-status" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">
+                                Void / Dibatalkan
+                            </span>
+                        @else
+                            <span class="badge-status badge-amber">{{ ucfirst($sale->payment_status ?? 'Pending') }}</span>
+                        @endif
+                    </td>
+                    <td style="text-align: center; white-space: nowrap;">
+                        <a href="{{ route('admin.penjualan', ['q' => $sale->invoice_number]) }}" 
+                           class="btn-action-sm btn-action-primary" 
+                           style="padding: 6px 12px; font-size: 11.5px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px;"
+                           title="Buka rincian invoice {{ $sale->invoice_number }} di Admin ERP">
+                            <span>🔍</span> Buka di Admin ERP
+                        </a>
+                    </td>
+                </tr>
+                @empty
+                <tr>
+                    <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 22px;">
+                        Belum ada transaksi penjualan kasir POS yang tercatat hari ini.
+                    </td>
+                </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ============================================================== -->
 <!-- RINGKASAN AKTIVITAS TERKINI (SNAPSHOT CEPAT HARI INI) -->
 <!-- ============================================================== -->
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px;">

@@ -82,3 +82,4 @@ Sistem ini terdiri dari 4 komponen utama:
 | Indikator printer berwarna abu-abu / offline | Komputer kasir belum menjalankan agent atau kabel USB terlepas | Pastikan kabel USB terpasang, lalu jalankan file agent bat di desktop PC kasir |
 | Lembar print bertambah tapi uang laci tidak cocok | Ada print dokumen pribadi/gagal cetak yang belum dicatat | Periksa histori cetak di modal print untuk memverifikasi dokumen yang keluar |
 | Tombol POS tidak bertambah saat print | Koneksi jaringan lokal PC kasir ke server sedang terputus | Klik tombol *Ambil Data dari Printer Canon* untuk menyinkronkan data secara manual |
+

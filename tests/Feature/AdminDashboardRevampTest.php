@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Modules\MasterData\Domain\Models\Branch;
+use Modules\MasterData\Domain\Models\CafeSale;
 use Modules\MasterData\Domain\Models\Category;
 use Modules\MasterData\Domain\Models\Employee;
 use Modules\MasterData\Domain\Models\Product;
@@ -116,6 +117,34 @@ class AdminDashboardRevampTest extends TestCase
         $laporanResponse = $this->actingAs($this->adminUser)->get(route('admin.laporan'));
         $laporanResponse->assertStatus(200);
         $laporanResponse->assertSee('Laporan');
+    }
+
+    public function test_admin_dashboard_displays_recent_pos_sales_table_with_erp_link(): void
+    {
+        // 1. Buat data penjualan kasir POS
+        $sale = CafeSale::create([
+            'branch_id' => $this->branch->id,
+            'employee_id' => $this->employee->id,
+            'invoice_number' => 'INV-POS-20261031-B8995',
+            'customer_name' => 'Pelanggan Uji Coba',
+            'total_fnb' => 15000.0,
+            'total_billing' => 0.0,
+            'net_amount' => 15000.0,
+            'payment_method' => 'cash',
+            'payment_status' => 'paid',
+            'created_at' => now(),
+        ]);
+
+        // 2. Akses Dashboard Utama Admin
+        $response = $this->actingAs($this->adminUser)
+            ->withSession(['admin_role' => 'Manager', 'admin_logged_in' => true])
+            ->get(route('admin.index'));
+
+        $response->assertOk();
+        $response->assertSee('Transaksi Penjualan POS Kasir Terkini');
+        $response->assertSee('INV-POS-20261031-B8995');
+        $response->assertSee('Buka di Admin ERP');
+        $response->assertSee(route('admin.penjualan', ['q' => 'INV-POS-20261031-B8995']));
     }
 
     public function test_admin_can_add_and_delete_employee_with_redirect_to_data_profil(): void

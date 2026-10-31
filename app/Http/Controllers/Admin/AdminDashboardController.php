@@ -60,6 +60,12 @@ class AdminDashboardController extends Controller
 
         $reportSummary = $this->getReportSummaryData($today, $billingPerShift);
 
+        $recentPosSales = CafeSale::with(['employee', 'branch', 'items.variant'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->take(8)
+            ->get();
+
         return view('admin.dashboard.index', compact(
             'profileData',
             'shifts',
@@ -69,7 +75,8 @@ class AdminDashboardController extends Controller
             'stockTransfersCount',
             'stockStats',
             'stockStatsTotalSku',
-            'reportSummary'
+            'reportSummary',
+            'recentPosSales'
         ));
     }
 
