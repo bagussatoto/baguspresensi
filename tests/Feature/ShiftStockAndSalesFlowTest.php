@@ -10,6 +10,7 @@ use App\Domains\Attendance\Enums\AttendanceStatus;
 use App\Domains\Attendance\Enums\VerificationMethod;
 use App\Domains\Attendance\Models\AttendanceRecord;
 use App\Domains\Employee\Models\Shift;
+use App\Models\ShiftHandoverChecklist;
 use App\Models\ShiftSalesSummary;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -298,6 +299,8 @@ class ShiftStockAndSalesFlowTest extends TestCase
                 'hardware_checklist' => ['pc_stations', 'printer_thermal', 'lan_network'],
                 'hardware_notes' => 'Semua unit PC dan printer normal',
                 'billing_shift_income' => 350000,
+                'actual_cash_received' => 350000,
+                'cash_handover_notes' => 'Uang fisik di laci pas dan sesuai',
                 'billing_verified' => '1',
             ]);
 
@@ -313,6 +316,28 @@ class ShiftStockAndSalesFlowTest extends TestCase
             'hardware_status' => 'normal',
             'status' => 'completed',
         ]);
+
+        $savedChecklist = ShiftHandoverChecklist::where('employee_id', $this->employee->id)->latest('id')->first();
+        $this->assertNotNull($savedChecklist);
+        $this->assertEquals(350000, $savedChecklist->billing_shift_income);
+        $this->assertIsArray($savedChecklist->billing_details);
+        $this->assertEquals(350000, $savedChecklist->billing_details['actual_cash_received']);
+        $this->assertEquals('Uang fisik di laci pas dan sesuai', $savedChecklist->billing_details['cash_notes']);
+
+        $savedChecklist = \App\Models\ShiftHandoverChecklist::where('employee_id', $this->employee->id)->latest('id')->first();
+        $this->assertNotNull($savedChecklist);
+        $this->assertEquals(350000, $savedChecklist->billing_shift_income);
+        $this->assertIsArray($savedChecklist->billing_details);
+        $this->assertEquals(350000, $savedChecklist->billing_details['actual_cash_received']);
+        $this->assertEquals('Uang fisik di laci pas dan sesuai', $savedChecklist->billing_details['cash_notes']);
+
+        // Ketika kasir membuka kembali halaman stok di cabang yang sama hari ini, muncul banner Mode Cepat "Stok Cabang Hari Ini Sudah Diverifikasi"
+        $revisitResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.stok'));
+
+        $revisitResponse->assertOk();
+        $revisitResponse->assertSee('Stok Cabang Hari Ini Sudah Diverifikasi');
+        $revisitResponse->assertSee('Langsung ke Kasir Penjualan');
     }
 
     public function test_clock_in_returns_redirect_url_to_stok_page(): void

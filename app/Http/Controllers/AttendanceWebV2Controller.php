@@ -1601,10 +1601,33 @@ class AttendanceWebV2Controller extends Controller
                 ->sum('total_days'),
         ];
 
-        $hasCompletedStock = ShiftHandoverChecklist::where('employee_id', $employee->id)
-            ->where('check_date', $workDate->toDateString())
+        $branchId = $employee->branch_id;
+
+        $hasCompletedStock = ShiftHandoverChecklist::whereDate('check_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
             ->where('status', 'completed')
             ->exists();
+
+        $todaySalesSummary = ShiftSalesSummary::with(['shift', 'branch', 'employee'])
+            ->whereDate('work_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+            ->latest('id')
+            ->first();
+
+        $depositHistories = ShiftSalesSummary::with(['shift', 'branch', 'employee'])
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+            ->orderByDesc('work_date')
+            ->orderByDesc('id')
+            ->take(10)
+            ->get();
+
+        $shiftSummariesByDate = [];
+        foreach ($depositHistories as $histItem) {
+            $dKey = $histItem->work_date?->toDateString();
+            if ($dKey) {
+                $shiftSummariesByDate[$dKey][$histItem->shiftNumber()] = $histItem->id;
+            }
+        }
 
         return view('presensi2.index', [
             'currentEmployee' => $employee,
@@ -1613,6 +1636,9 @@ class AttendanceWebV2Controller extends Controller
             'attendanceToday' => $attendanceToday,
             'monthlyStats' => $monthlyStats,
             'hasCompletedStock' => $hasCompletedStock,
+            'todaySalesSummary' => $todaySalesSummary,
+            'depositHistories' => $depositHistories,
+            'shiftSummariesByDate' => $shiftSummariesByDate,
         ]);
     }
 
@@ -1868,16 +1894,27 @@ class AttendanceWebV2Controller extends Controller
                 ->with('error', 'Presensi dulu! Silakan lakukan presensi masuk terlebih dahulu sebelum mengakses stok barang.');
         }
 
+        $branchId = $employee->branch_id;
+        $warehouseId = ($branchId ? Warehouse::where('branch_id', $branchId)->value('id') : null)
+            ?? Warehouse::where('id', 5)->value('id')
+            ?? Warehouse::first()?->id;
+
         // Data Kertas (A4 & F4)
-        $paperA4Stock = StockInventory::whereHas('variant', fn ($q) => $q->where('sku', 'SKU-KERTAS-A4-RIM'))->value('qty_on_hand') ?? 12;
-        $paperF4Stock = StockInventory::whereHas('variant', fn ($q) => $q->where('sku', 'SKU-KERTAS-F4-RIM'))->value('qty_on_hand') ?? 8;
+        $paperA4Stock = StockInventory::whereHas('variant', fn ($q) => $q->where('sku', 'SKU-KERTAS-A4-RIM'))
+            ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
+            ->value('qty_on_hand') ?? 12;
+        $paperF4Stock = StockInventory::whereHas('variant', fn ($q) => $q->where('sku', 'SKU-KERTAS-F4-RIM'))
+            ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
+            ->value('qty_on_hand') ?? 8;
 
         // Data Minuman Bebas & Reguler
         $drinks = ProductVariant::whereHas('product.category', fn ($q) => $q->where('code', 'CAT-DRINK'))
             ->where('is_active', true)
             ->get();
         foreach ($drinks as $d) {
-            $d->stock_qty = (int) StockInventory::where('product_variant_id', $d->id)->sum('qty_on_hand');
+            $d->stock_qty = (int) StockInventory::where('product_variant_id', $d->id)
+                ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
+                ->sum('qty_on_hand');
         }
 
         // Data Makanan Bebas & Reguler
@@ -1885,21 +1922,26 @@ class AttendanceWebV2Controller extends Controller
             ->where('is_active', true)
             ->get();
         foreach ($foods as $f) {
-            $f->stock_qty = (int) StockInventory::where('product_variant_id', $f->id)->sum('qty_on_hand');
+            $f->stock_qty = (int) StockInventory::where('product_variant_id', $f->id)
+                ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
+                ->sum('qty_on_hand');
         }
 
-        // Data PC Stations & Hardware
-        $pcStations = PcStation::orderBy('station_code')->get();
+        // Data PC Stations & Hardware (Isolasi per Cabang)
+        $pcStations = PcStation::when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->orderBy('station_code')
+            ->get();
 
-        // Rincian Billing Setiap Shift Hari Ini
-        $billingData = $this->getBillingIncomePerShift($workDate);
+        // Rincian Billing Setiap Shift Hari Ini (Isolasi per Cabang)
+        $billingData = $this->getBillingIncomePerShift($workDate, $branchId);
 
         $stockComparisons = $this->buildStockComparison($workDate, $employee);
-        $prevShiftBilling = $this->getPreviousShiftBillingData($now, $activeShift);
+        $prevShiftBilling = $this->getPreviousShiftBillingData($now, $activeShift, $branchId);
 
-        // Checklist terakhir hari ini jika sudah ada
-        $existingChecklist = ShiftHandoverChecklist::where('employee_id', $employee->id)
-            ->where('check_date', $workDate->toDateString())
+        // Checklist terakhir hari ini di cabang ini jika sudah ada
+        $existingChecklist = ShiftHandoverChecklist::with('employee')
+            ->whereDate('check_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
             ->latest('id')
             ->first();
 
@@ -1924,7 +1966,7 @@ class AttendanceWebV2Controller extends Controller
      * Helper: Menentukan Shift Sebelumnya dan menghitung omset billing shift tersebut
      * untuk serah terima kas masuk saat kasir baru clock-in.
      */
-    protected function getPreviousShiftBillingData(Carbon $now, ?Shift $activeShift): array
+    protected function getPreviousShiftBillingData(Carbon $now, ?Shift $activeShift, ?int $branchId = null): array
     {
         $operationalShifts = Shift::whereIn('code', ['SHIFT-1', 'SHIFT-2', 'SHIFT-3', 'SHIFT-4'])
             ->orderBy('start_time')
@@ -1951,10 +1993,11 @@ class AttendanceWebV2Controller extends Controller
             $prevShift = $operationalShifts->first();
         }
 
-        // Cari riwayat ShiftSalesSummary dari shift sebelumnya jika ada
+        // Cari riwayat ShiftSalesSummary dari shift sebelumnya jika ada (Isolasi per Cabang)
         $prevSummary = ShiftSalesSummary::with('employee')
             ->where('shift_id', $prevShift?->id)
             ->whereDate('work_date', $prevWorkDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->latest('id')
             ->first();
 
@@ -1962,6 +2005,7 @@ class AttendanceWebV2Controller extends Controller
 
         if ($billingIncome <= 0 && $prevShift) {
             $billingIncome = (float) CafeSale::whereDate('created_at', $prevWorkDate->toDateString())
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
                 ->whereTime('created_at', '>=', $prevShift->start_time)
                 ->whereTime('created_at', '<=', $prevShift->end_time)
                 ->sum('total_billing');
@@ -1977,6 +2021,15 @@ class AttendanceWebV2Controller extends Controller
             $billingIncome = (float) ($defaults[$prevShift?->code ?? 'SHIFT-1'] ?? 150000.0);
         }
 
+        $depositedAmount = $prevSummary
+            ? (float) ($prevSummary->deposited_amount ?? $prevSummary->blind_cash_count ?? $prevSummary->cash_in_drawer ?? $billingIncome)
+            : $billingIncome;
+        $retainedDrawerCash = $prevSummary ? (float) ($prevSummary->retained_drawer_cash ?? 0) : 0.0;
+        $totalExpectedCash = $depositedAmount + $retainedDrawerCash;
+        $denominations = is_array($prevSummary?->cash_denominations) ? $prevSummary->cash_denominations : [];
+        $recipientName = $prevSummary?->deposit_recipient ?: ($activeShift?->name ?? 'Kasir Shift Ini');
+        $handoverNotes = $prevSummary?->deposit_notes ?: ($prevSummary?->handover_notes ?? 'Uang kas dan rekapan billing shift sebelumnya dalam kondisi normal.');
+
         return [
             'shift' => $prevShift,
             'name' => $prevShift?->name ?? 'Shift Sebelumnya',
@@ -1984,16 +2037,21 @@ class AttendanceWebV2Controller extends Controller
             'time_range' => $prevShift ? substr((string) $prevShift->start_time, 0, 5).' - '.substr((string) $prevShift->end_time, 0, 5) : '00:00 - 00:00',
             'work_date' => $prevWorkDate->toDateString(),
             'work_date_formatted' => $prevWorkDate->translatedFormat('d F Y'),
-            'amount' => $billingIncome,
+            'amount' => $totalExpectedCash,
+            'deposited_amount' => $depositedAmount,
+            'retained_drawer_cash' => $retainedDrawerCash,
+            'total_expected_cash' => $totalExpectedCash,
+            'denominations' => $denominations,
             'operator_name' => $prevSummary?->employee?->name ?? 'Operator Shift Sebelumnya',
-            'handover_notes' => $prevSummary?->handover_notes ?? 'Uang kas dan rekapan billing shift sebelumnya dalam kondisi normal.',
+            'recipient_name' => $recipientName,
+            'handover_notes' => $handoverNotes,
         ];
     }
 
     /**
      * Helper: Menghitung omset billing per shift (Shift 1 s/d 4).
      */
-    protected function getBillingIncomePerShift(Carbon $workDate): array
+    protected function getBillingIncomePerShift(Carbon $workDate, ?int $branchId = null): array
     {
         $shifts = Shift::where('is_active', true)->orderBy('start_time')->get();
         $dateStr = $workDate->toDateString();
@@ -2003,6 +2061,7 @@ class AttendanceWebV2Controller extends Controller
 
         foreach ($shifts as $s) {
             $shiftSales = CafeSale::whereDate('created_at', $dateStr)
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
                 ->whereTime('created_at', '>=', $s->start_time)
                 ->whereTime('created_at', '<=', $s->end_time)
                 ->sum('total_billing');
@@ -2079,7 +2138,7 @@ class AttendanceWebV2Controller extends Controller
         }
 
         $stockComparisons = $this->buildStockComparison($workDate, $employee);
-        $prevShiftBilling = $this->getPreviousShiftBillingData($now, $activeShift);
+        $prevShiftBilling = $this->getPreviousShiftBillingData($now, $activeShift, $employee->branch_id);
 
         $paperA4 = $request->boolean('paper_a4', true);
         $paperA4Qty = (int) $request->input('paper_a4_qty', $stockComparisons['kertas'][0]['sebelumnya'] ?? 500);
@@ -2136,9 +2195,28 @@ class AttendanceWebV2Controller extends Controller
         $hardwareChecklist = $request->input('hardware_checklist', []);
         $hardwareNotes = $request->input('hardware_notes');
 
-        $billingShiftIncome = (float) $request->input('billing_shift_income', 0);
+        $expectedCash = (float) $prevShiftBilling['total_expected_cash'];
+        $actualCashReceived = $request->filled('actual_cash_received')
+            ? (float) $request->input('actual_cash_received')
+            : (float) ($request->input('billing_shift_income') ?: $expectedCash);
+        $cashHandoverNotes = (string) $request->input('cash_handover_notes', '');
+        $cashDifference = $actualCashReceived - $expectedCash;
         $billingVerified = $request->boolean('billing_verified', true);
-        $billingDetails = $request->input('billing_details', []);
+
+        $formBillingDetails = $request->input('billing_details', []);
+        $billingDetails = array_merge([
+            'prev_shift_id' => $prevShiftBilling['shift']?->id,
+            'prev_shift_name' => $prevShiftBilling['name'],
+            'prev_operator' => $prevShiftBilling['operator_name'],
+            'deposited_amount' => (float) $prevShiftBilling['deposited_amount'],
+            'retained_drawer_cash' => (float) $prevShiftBilling['retained_drawer_cash'],
+            'expected_cash' => $expectedCash,
+            'actual_cash_received' => $actualCashReceived,
+            'cash_difference' => $cashDifference,
+            'denominations' => $prevShiftBilling['denominations'],
+            'cash_notes' => $cashHandoverNotes,
+            'verified_at' => Carbon::now()->toDateTimeString(),
+        ], is_array($formBillingDetails) ? $formBillingDetails : []);
 
         ShiftHandoverChecklist::updateOrCreate(
             [
@@ -2162,9 +2240,9 @@ class AttendanceWebV2Controller extends Controller
                 'hardware_status' => $hardwareStatus,
                 'hardware_checklist' => is_array($hardwareChecklist) ? $hardwareChecklist : [],
                 'hardware_notes' => $hardwareNotes,
-                'billing_shift_income' => $billingShiftIncome,
+                'billing_shift_income' => $actualCashReceived,
                 'billing_verified' => $billingVerified,
-                'billing_details' => is_array($billingDetails) ? $billingDetails : [],
+                'billing_details' => $billingDetails,
                 'status' => 'completed',
                 'completed_at' => Carbon::now(),
             ]
@@ -2176,29 +2254,40 @@ class AttendanceWebV2Controller extends Controller
 
     /**
      * Helper: Menghitung komparasi Stok Sebelumnya vs Terjual vs Stok Sesudahnya
-     * untuk Kertas Print, Makanan, dan Minuman secara realtime.
+     * untuk Kertas Print, Makanan, dan Minuman secara realtime (Isolasi per Cabang).
      */
     protected function buildStockComparison(Carbon $workDate, ?Employee $employee = null): array
     {
-        $existingChecklist = ShiftHandoverChecklist::when($employee, fn ($q) => $q->where('employee_id', $employee->id))
-            ->where('check_date', $workDate->toDateString())
+        $branchId = $employee?->branch_id;
+        $warehouseId = ($branchId ? Warehouse::where('branch_id', $branchId)->value('id') : null)
+            ?? Warehouse::where('id', 5)->value('id')
+            ?? Warehouse::first()?->id;
+
+        $existingChecklist = ShiftHandoverChecklist::whereDate('check_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->when($employee, fn ($sq) => $sq->where('employee_id', $employee->id)))
             ->latest('id')
             ->first();
 
         // 1. Kertas Print (A4 & F4)
-        $paperA4StockRim = (int) (StockInventory::whereHas('variant', fn ($q) => $q->where('sku', 'SKU-KERTAS-A4-RIM'))->value('qty_on_hand') ?? 12);
-        $paperF4StockRim = (int) (StockInventory::whereHas('variant', fn ($q) => $q->where('sku', 'SKU-KERTAS-F4-RIM'))->value('qty_on_hand') ?? 8);
+        $paperA4StockRim = (int) (StockInventory::whereHas('variant', fn ($q) => $q->where('sku', 'SKU-KERTAS-A4-RIM'))
+            ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
+            ->value('qty_on_hand') ?? 12);
+        $paperF4StockRim = (int) (StockInventory::whereHas('variant', fn ($q) => $q->where('sku', 'SKU-KERTAS-F4-RIM'))
+            ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
+            ->value('qty_on_hand') ?? 8);
 
         $paperA4Initial = (int) ($existingChecklist->paper_a4_qty ?? 500);
         $paperF4Initial = (int) ($existingChecklist->paper_f4_qty ?? 500);
 
-        // Terpakai shift ini
+        // Terpakai shift ini di cabang ini
         $paperA4Used = (int) CafeSaleItem::whereDate('created_at', $workDate->toDateString())
-            ->whereHas('sale', fn ($q) => $q->where('payment_status', '!=', 'cancelled'))
+            ->whereHas('sale', fn ($q) => $q->where('payment_status', '!=', 'cancelled')
+                ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId)))
             ->where('item_name', 'like', '%A4%')
             ->sum('qty');
         $paperF4Used = (int) CafeSaleItem::whereDate('created_at', $workDate->toDateString())
-            ->whereHas('sale', fn ($q) => $q->where('payment_status', '!=', 'cancelled'))
+            ->whereHas('sale', fn ($q) => $q->where('payment_status', '!=', 'cancelled')
+                ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId)))
             ->where('item_name', 'like', '%F4%')
             ->sum('qty');
 
@@ -2242,10 +2331,13 @@ class AttendanceWebV2Controller extends Controller
 
         $makanan = [];
         foreach ($foods as $food) {
-            $currentStock = (int) StockInventory::where('product_variant_id', $food->id)->sum('qty_on_hand');
+            $currentStock = (int) StockInventory::where('product_variant_id', $food->id)
+                ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
+                ->sum('qty_on_hand');
             $soldToday = (int) CafeSaleItem::where('product_variant_id', $food->id)
                 ->whereDate('created_at', $workDate->toDateString())
-                ->whereHas('sale', fn ($q) => $q->where('payment_status', '!=', 'cancelled'))
+                ->whereHas('sale', fn ($q) => $q->where('payment_status', '!=', 'cancelled')
+                    ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId)))
                 ->sum('qty');
 
             $initialQty = null;
@@ -2282,10 +2374,13 @@ class AttendanceWebV2Controller extends Controller
 
         $minuman = [];
         foreach ($drinks as $drink) {
-            $currentStock = (int) StockInventory::where('product_variant_id', $drink->id)->sum('qty_on_hand');
+            $currentStock = (int) StockInventory::where('product_variant_id', $drink->id)
+                ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
+                ->sum('qty_on_hand');
             $soldToday = (int) CafeSaleItem::where('product_variant_id', $drink->id)
                 ->whereDate('created_at', $workDate->toDateString())
-                ->whereHas('sale', fn ($q) => $q->where('payment_status', '!=', 'cancelled'))
+                ->whereHas('sale', fn ($q) => $q->where('payment_status', '!=', 'cancelled')
+                    ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId)))
                 ->sum('qty');
 
             $initialQty = null;
@@ -2354,14 +2449,19 @@ class AttendanceWebV2Controller extends Controller
                 ->with('error', 'Presensi dulu! Silakan lakukan presensi masuk terlebih dahulu sebelum mengakses sistem kasir POS.');
         }
 
-        // 1. Daftar Penjualan Makanan dan Minuman Hari Ini
+        $branchId = $employee->branch_id;
+
+        // 1. Daftar Penjualan Makanan dan Minuman Hari Ini (Isolasi per Cabang)
         $fnbSales = CafeSale::with(['items.variant', 'employee'])
             ->where('total_fnb', '>', 0)
             ->whereDate('created_at', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->latest('id')
             ->get();
 
-        $totalFnbIncome = (float) $fnbSales->where('payment_status', '!=', 'cancelled')->sum('total_fnb');
+        $validFnbSales = $fnbSales->where('payment_status', '!=', 'cancelled');
+        $totalFnbIncome = (float) $validFnbSales->sum(fn ($s) => (float) ($s->net_amount > 0 || $s->discount_amount > 0 ? $s->net_amount : $s->total_fnb));
+        $totalDiscountAmount = (float) $validFnbSales->sum('discount_amount');
 
         // Produk untuk quick POS penjualan (F&B, Internet, Kertas, Hardware, dll)
         $fnbProducts = ProductVariant::with('product.category')
@@ -2385,8 +2485,8 @@ class AttendanceWebV2Controller extends Controller
             return $priorityFlip[$p->name] ?? (1000 + (crc32($p->name) % 1000));
         })->values();
 
-        $warehouseId = Warehouse::where('id', 5)->value('id')
-            ?? Warehouse::where('branch_id', $employee->branch_id ?? 3)->value('id')
+        $warehouseId = ($branchId ? Warehouse::where('branch_id', $branchId)->value('id') : null)
+            ?? Warehouse::where('id', 5)->value('id')
             ?? Warehouse::first()?->id;
 
         $stocks = StockInventory::whereIn('product_variant_id', $fnbProducts->pluck('id'))
@@ -2397,15 +2497,18 @@ class AttendanceWebV2Controller extends Controller
             $p->stock_qty = (int) ($stocks[$p->id] ?? 20);
         });
 
-        // 2. Pendapatan Internet (Otomatis Penuh dari Server Billing & PC Station)
+        // 2. Pendapatan Internet (Otomatis Penuh dari Server Billing & PC Station Cabang)
         $internetSales = CafeSale::with(['pcStation', 'items', 'employee'])
             ->where('total_billing', '>', 0)
             ->whereDate('created_at', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->latest('id')
             ->get();
 
         $recordedBilling = (float) $internetSales->where('payment_status', '!=', 'cancelled')->sum('total_billing');
-        $activePcBilling = (float) PcStation::where('status', 'occupied')->sum('billing_amount');
+        $activePcBilling = (float) PcStation::where('status', 'occupied')
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->sum('billing_amount');
         $totalInternetIncome = $recordedBilling + $activePcBilling;
 
         if ($totalInternetIncome <= 0) {
@@ -2418,21 +2521,23 @@ class AttendanceWebV2Controller extends Controller
             $totalInternetIncome = (float) ($shiftCodes[$activeShift?->code ?? 'SHIFT-1'] ?? 150000.0);
         }
 
-        // Status & Statistik Billing PC Stations Otomatis
-        $pcStations = PcStation::orderBy('station_code')->get();
+        // Status & Statistik Billing PC Stations Otomatis (Isolasi per Cabang)
+        $pcStations = PcStation::when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->orderBy('station_code')
+            ->get();
         $totalPcCount = $pcStations->count();
         $occupiedPcCount = $pcStations->where('status', 'occupied')->count();
         $availablePcCount = $pcStations->where('status', 'available')->count();
 
-        // 3. Permintaan Stok Barang (Restock Requests)
-        $stockRequests = ShiftStockRequest::where('employee_id', $employee->id)
-            ->whereDate('created_at', $workDate->toDateString())
+        // 3. Permintaan Stok Barang (Restock Requests Cabang)
+        $stockRequests = ShiftStockRequest::whereDate('created_at', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
             ->latest('id')
             ->get();
 
-        // Rekapitulasi penjualan shift saat ini jika sudah tersimpan
-        $salesSummary = ShiftSalesSummary::where('employee_id', $employee->id)
-            ->where('work_date', $workDate->toDateString())
+        // Rekapitulasi penjualan shift saat ini di cabang ini jika sudah tersimpan
+        $salesSummary = ShiftSalesSummary::where('work_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
             ->latest('id')
             ->first();
 
@@ -2442,10 +2547,11 @@ class AttendanceWebV2Controller extends Controller
             $totalInternetIncome = (float) $salesSummary->locked_billing_amount;
         }
 
-        // Data Penjualan Kertas Print (Otomatis & Terkunci)
-        $printSalesItems = CafeSaleItem::whereHas('sale', function ($q) use ($workDate) {
+        // Data Penjualan Kertas Print (Otomatis & Terkunci per Cabang)
+        $printSalesItems = CafeSaleItem::whereHas('sale', function ($q) use ($workDate, $branchId) {
             $q->whereDate('created_at', $workDate->toDateString())
-                ->where('payment_status', '!=', 'cancelled');
+                ->where('payment_status', '!=', 'cancelled')
+                ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId));
         })->whereHas('variant.product.category', function ($q) {
             $q->where('code', 'CAT-PAPER');
         })->get();
@@ -2460,6 +2566,13 @@ class AttendanceWebV2Controller extends Controller
         // 4. Monitoring Perbandingan Stok: Sebelumnya vs Terjual vs Sesudahnya
         $stockComparisons = $this->buildStockComparison($workDate, $employee);
 
+        $totalNonCashAmount = (float) CafeSale::whereDate('created_at', $workDate->toDateString())
+            ->where('payment_status', '!=', 'cancelled')
+            ->where('payment_method', '!=', 'cash')
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->get()
+            ->sum(fn ($s) => (float) ($s->net_amount > 0 || $s->discount_amount > 0 ? $s->net_amount : ($s->total_fnb + $s->total_billing)));
+
         return view('presensi2.penjualan', [
             'currentEmployee' => $employee,
             'activeShift' => $activeShift,
@@ -2467,6 +2580,8 @@ class AttendanceWebV2Controller extends Controller
             'attendanceToday' => $attendanceToday,
             'fnbSales' => $fnbSales,
             'totalFnbIncome' => $totalFnbIncome,
+            'totalDiscountAmount' => $totalDiscountAmount,
+            'totalNonCashAmount' => $totalNonCashAmount,
             'fnbProducts' => $fnbProducts,
             'internetSales' => $internetSales,
             'totalInternetIncome' => $totalInternetIncome,
@@ -2687,8 +2802,8 @@ class AttendanceWebV2Controller extends Controller
                 ]));
             }
 
-            $warehouseId = Warehouse::where('id', 5)->value('id')
-                ?? Warehouse::where('branch_id', $branchId)->value('id')
+            $warehouseId = ($branchId ? Warehouse::where('branch_id', $branchId)->value('id') : null)
+                ?? Warehouse::where('id', 5)->value('id')
                 ?? Warehouse::first()?->id;
 
             foreach ($orderItems as $oi) {
@@ -2853,8 +2968,8 @@ class AttendanceWebV2Controller extends Controller
 
         // 2. Kembalikan stok barang yang terjual jika ada item F&B / inventaris
         $sale->load('items');
-        $warehouseId = Warehouse::where('id', 5)->value('id')
-            ?? Warehouse::where('branch_id', $sale->branch_id)->value('id')
+        $warehouseId = ($sale->branch_id ? Warehouse::where('branch_id', $sale->branch_id)->value('id') : null)
+            ?? Warehouse::where('id', 5)->value('id')
             ?? Warehouse::first()?->id;
 
         foreach ($sale->items as $item) {
@@ -3102,19 +3217,30 @@ class AttendanceWebV2Controller extends Controller
         $activeShift = $this->shiftResolverService->resolveShift(null, $now);
         $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
 
+        $branchId = $employee->branch_id;
+
         $attendanceToday = AttendanceRecord::where('employee_id', $employee->id)
             ->where('work_date', $workDate->toDateString())
             ->latest('id')
             ->first();
 
-        $existingSummary = ShiftSalesSummary::where('employee_id', $employee->id)
-            ->where('work_date', $workDate->toDateString())
+        $existingSummary = ShiftSalesSummary::where('work_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
             ->latest('id')
             ->first();
 
-        $totalFnb = (float) CafeSale::whereDate('created_at', $workDate->toDateString())
+        $validBranchSales = CafeSale::whereDate('created_at', $workDate->toDateString())
             ->where('payment_status', '!=', 'cancelled')
-            ->sum('total_fnb');
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->get();
+
+        $totalFnb = (float) $validBranchSales
+            ->where('total_fnb', '>', 0)
+            ->sum(fn ($s) => (float) ($s->net_amount > 0 || $s->discount_amount > 0 ? $s->net_amount : $s->total_fnb));
+
+        $nonCashAmount = (float) $validBranchSales
+            ->where('payment_method', '!=', 'cash')
+            ->sum(fn ($s) => (float) ($s->net_amount > 0 || $s->discount_amount > 0 ? $s->net_amount : ($s->total_fnb + $s->total_billing)));
 
         // Jika billing dikunci, gunakan nilai terkunci
         if ($existingSummary && $existingSummary->is_billing_locked && $existingSummary->locked_billing_amount !== null) {
@@ -3123,7 +3249,11 @@ class AttendanceWebV2Controller extends Controller
             if ($request->has('auto_internet_income')) {
                 $totalInternet = (float) $request->input('auto_internet_income');
             } else {
-                $totalInternet = (float) (CafeSale::whereDate('created_at', $workDate->toDateString())->where('payment_status', '!=', 'cancelled')->sum('total_billing') + PcStation::where('status', 'occupied')->sum('billing_amount'));
+                $recordedBranchBilling = (float) $validBranchSales->sum('total_billing');
+                $activeBranchPcBilling = (float) PcStation::where('status', 'occupied')
+                    ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+                    ->sum('billing_amount');
+                $totalInternet = $recordedBranchBilling + $activeBranchPcBilling;
 
                 if ($totalInternet <= 0) {
                     $shiftCodes = [
@@ -3137,10 +3267,11 @@ class AttendanceWebV2Controller extends Controller
             }
         }
 
-        // Pendapatan Print Kertas
-        $printSalesItems = CafeSaleItem::whereHas('sale', function ($q) use ($workDate) {
+        // Pendapatan Print Kertas (Isolasi per Cabang)
+        $printSalesItems = CafeSaleItem::whereHas('sale', function ($q) use ($workDate, $branchId) {
             $q->whereDate('created_at', $workDate->toDateString())
-                ->where('payment_status', '!=', 'cancelled');
+                ->where('payment_status', '!=', 'cancelled')
+                ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId));
         })->whereHas('variant.product.category', function ($q) {
             $q->where('code', 'CAT-PAPER');
         })->get();
@@ -3148,7 +3279,8 @@ class AttendanceWebV2Controller extends Controller
             ? (float) $existingSummary->locked_print_amount
             : (float) $printSalesItems->sum('subtotal');
 
-        $systemExpectedCash = $totalFnb + $totalInternet + $totalPrintIncome;
+        $totalRevenue = $totalFnb + $totalInternet + $totalPrintIncome;
+        $systemExpectedCash = max(0.0, $totalRevenue - $nonCashAmount);
 
         // Blind Cash Count: kasir menghitung fisik laci kasir mandiri
         $rawCounted = $request->input('blind_cash_count', $request->input('cash_in_drawer'));
@@ -3184,6 +3316,7 @@ class AttendanceWebV2Controller extends Controller
 
         // Rekapitulasi audit stok sebelum vs sesudahnya shift ini
         $stockAudit = $this->buildStockComparison($workDate, $employee);
+        $nextShiftRecipient = (string) ($request->input('deposit_recipient') ?: $this->resolveNextShiftRecipient($activeShift));
 
         $summary = ShiftSalesSummary::updateOrCreate(
             [
@@ -3196,15 +3329,25 @@ class AttendanceWebV2Controller extends Controller
                 'attendance_record_id' => $attendanceToday?->id,
                 'total_fnb_sales' => $totalFnb,
                 'total_internet_sales' => $totalInternet,
-                'total_revenue' => $systemExpectedCash,
+                'total_revenue' => $totalRevenue,
                 'cash_in_drawer' => $blindCashCount,
                 'system_expected_cash' => $systemExpectedCash,
                 'blind_cash_count' => $blindCashCount,
                 'cash_difference' => $cashDifference,
                 'cash_denominations' => $denominations,
+                'non_cash_amount' => $nonCashAmount,
                 'handover_notes' => $notes,
                 'stock_audit' => $stockAudit,
                 'status' => 'closed',
+                'deposit_status' => 'verified',
+                'deposited_amount' => $blindCashCount,
+                'retained_drawer_cash' => 0,
+                'deposit_method' => 'next_shift_handover',
+                'deposit_recipient' => $nextShiftRecipient,
+                'deposit_notes' => $notes ?: 'Setor otomatis ke shift selanjutnya saat tutup shift',
+                'deposited_at' => Carbon::now(),
+                'deposit_verified_at' => Carbon::now(),
+                'deposit_verified_by' => $nextShiftRecipient,
                 'closed_at' => Carbon::now(),
             ]
         );
@@ -3251,6 +3394,8 @@ class AttendanceWebV2Controller extends Controller
             'created_at' => now(),
         ]));
 
+        rescue(fn () => app(EarlyWarningNotificationService::class)->sendShiftClosedAlert($summary));
+
         return redirect()->route('presensi2.rekap')
             ->with('success', 'Rekapitulasi penjualan shift berhasil ditutup & disimpan melalui Blind Cash Count. Periksa rekonsiliasi kas di bawah.');
     }
@@ -3267,7 +3412,20 @@ class AttendanceWebV2Controller extends Controller
 
         $now = Carbon::now();
         $dateParam = $request->input('date');
+        $shiftParam = $request->input('shift');
+        $summaryIdParam = $request->input('summary_id');
         $activeShift = $this->shiftResolverService->resolveShift(null, $now);
+
+        if ($shiftParam) {
+            $requestedShift = Shift::where('code', 'SHIFT-'.(int) $shiftParam)
+                ->orWhere('name', 'like', '%'.(int) $shiftParam.'%')
+                ->orWhere('id', (int) $shiftParam)
+                ->first();
+            if ($requestedShift) {
+                $activeShift = $requestedShift;
+            }
+        }
+
         $workDate = $dateParam ? Carbon::parse($dateParam) : $this->shiftResolverService->determineWorkDate($activeShift, $now);
 
         // Cari attendance record untuk tanggal/shift ini
@@ -3282,30 +3440,56 @@ class AttendanceWebV2Controller extends Controller
                 ->latest('id')
                 ->first();
 
-        // 1. Rekapitulasi penjualan shift saat ini (dari ShiftSalesSummary jika ada)
-        $salesSummary = ShiftSalesSummary::with(['shift', 'branch', 'employee'])
-            ->where('work_date', $workDate->toDateString())
-            ->where(function ($q) use ($employee) {
-                $q->where('employee_id', $employee->id)
-                    ->orWhere('branch_id', $employee->branch_id ?? 3);
-            })
-            ->latest('id')
-            ->first();
+        $branchId = $employee->branch_id;
 
-        // 2. Daftar Transaksi Penjualan F&B
+        // 1. Rekapitulasi penjualan shift saat ini di cabang ini (dari ShiftSalesSummary jika ada)
+        $salesSummary = null;
+        if ($summaryIdParam) {
+            $salesSummary = ShiftSalesSummary::with(['shift', 'branch', 'employee'])
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+                ->find((int) $summaryIdParam);
+            if ($salesSummary) {
+                $workDate = $salesSummary->work_date ? $salesSummary->work_date->copy() : $workDate;
+                if ($salesSummary->shift) {
+                    $activeShift = $salesSummary->shift;
+                }
+            }
+        }
+
+        if (! $salesSummary) {
+            $salesSummary = ShiftSalesSummary::with(['shift', 'branch', 'employee'])
+                ->whereDate('work_date', $workDate->toDateString())
+                ->when($shiftParam && $activeShift, fn ($q) => $q->where('shift_id', $activeShift->id))
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+                ->latest('id')
+                ->first();
+        }
+
+        if (! $salesSummary && ! $dateParam && ! $shiftParam) {
+            $salesSummary = ShiftSalesSummary::with(['shift', 'branch', 'employee'])
+                ->whereDate('work_date', $now->toDateString())
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+                ->latest('id')
+                ->first();
+        }
+
+        // 2. Daftar Transaksi Penjualan F&B (Isolasi per Cabang)
         $fnbSales = CafeSale::with(['items.variant', 'employee', 'payments'])
             ->where('total_fnb', '>', 0)
             ->whereDate('created_at', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->latest('id')
             ->get();
 
         $validFnbSales = $fnbSales->where('payment_status', '!=', 'cancelled');
-        $totalFnbIncome = (float) $validFnbSales->sum('total_fnb');
+        $totalFnbIncome = (float) $validFnbSales->sum(fn ($s) => (float) ($s->net_amount > 0 || $s->discount_amount > 0 ? $s->net_amount : $s->total_fnb));
+        $totalDiscountAmount = (float) $validFnbSales->sum('discount_amount');
         $totalFnbTransactions = $validFnbSales->count();
 
-        // Ringkasan item F&B yang terjual shift ini
+        // Ringkasan item F&B yang terjual shift ini di cabang ini
         $fnbItemSummary = CafeSaleItem::whereDate('created_at', $workDate->toDateString())
-            ->whereHas('sale', fn ($q) => $q->where('payment_status', '!=', 'cancelled'))
+            ->whereHas('sale', fn ($q) => $q->where('payment_status', '!=', 'cancelled')
+                ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId)))
             ->whereHas('variant.product.category', fn ($q) => $q->whereIn('code', ['CAT-DRINK', 'CAT-FOOD', 'CAT-SNACK']))
             ->select(
                 'item_name',
@@ -3317,15 +3501,18 @@ class AttendanceWebV2Controller extends Controller
             ->orderByDesc('total_qty')
             ->get();
 
-        // 3. Billing Internet
+        // 3. Billing Internet (Isolasi per Cabang)
         $internetSales = CafeSale::with(['pcStation', 'items', 'employee'])
             ->where('total_billing', '>', 0)
             ->whereDate('created_at', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->latest('id')
             ->get();
 
         $recordedBilling = (float) $internetSales->where('payment_status', '!=', 'cancelled')->sum('total_billing');
-        $activePcBilling = (float) PcStation::where('status', 'occupied')->sum('billing_amount');
+        $activePcBilling = (float) PcStation::where('status', 'occupied')
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->sum('billing_amount');
         $calculatedInternetIncome = $recordedBilling + $activePcBilling;
 
         if ($calculatedInternetIncome <= 0) {
@@ -3343,16 +3530,19 @@ class AttendanceWebV2Controller extends Controller
             ? (float) $salesSummary->locked_billing_amount
             : $calculatedInternetIncome;
 
-        // PC Stations data
-        $pcStations = PcStation::orderBy('station_code')->get();
+        // PC Stations data (Isolasi per Cabang)
+        $pcStations = PcStation::when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->orderBy('station_code')
+            ->get();
         $totalPcCount = $pcStations->count();
         $occupiedPcCount = $pcStations->where('status', 'occupied')->count();
         $availablePcCount = $pcStations->where('status', 'available')->count();
 
-        // 4. Data Penjualan Kertas Print (Otomatis & Terkunci)
-        $printSalesItems = CafeSaleItem::whereHas('sale', function ($q) use ($workDate) {
+        // 4. Data Penjualan Kertas Print (Otomatis & Terkunci per Cabang)
+        $printSalesItems = CafeSaleItem::whereHas('sale', function ($q) use ($workDate, $branchId) {
             $q->whereDate('created_at', $workDate->toDateString())
-                ->where('payment_status', '!=', 'cancelled');
+                ->where('payment_status', '!=', 'cancelled')
+                ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId));
         })->whereHas('variant.product.category', function ($q) {
             $q->where('code', 'CAT-PAPER');
         })->get();
@@ -3364,32 +3554,100 @@ class AttendanceWebV2Controller extends Controller
         $totalPrintPages = $isPrintLocked ? (int) ($salesSummary->locked_print_pages ?? $autoPrintPages) : $autoPrintPages;
         $totalPrintIncome = $isPrintLocked ? (float) ($salesSummary->locked_print_amount ?? $autoPrintAmount) : $autoPrintAmount;
 
-        // 5. Total Pendapatan Kotor (Gross Revenue)
+        // 5. Total Pendapatan Kotor (Gross Revenue) & Non-Tunai (QRIS)
         $totalGrossRevenue = $totalFnbIncome + $totalInternetIncome + $totalPrintIncome;
 
+        $calculatedNonCash = (float) CafeSale::whereDate('created_at', $workDate->toDateString())
+            ->where('payment_status', '!=', 'cancelled')
+            ->where('payment_method', '!=', 'cash')
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->get()
+            ->sum(fn ($s) => (float) ($s->net_amount > 0 || $s->discount_amount > 0 ? $s->net_amount : ($s->total_fnb + $s->total_billing)));
+
+        $nonCashAmount = ($salesSummary && $salesSummary->non_cash_amount > 0)
+            ? (float) $salesSummary->non_cash_amount
+            : $calculatedNonCash;
+
         // Uang Kas Fisik di Laci & Selisih (Blind Cash Count)
-        $cashInDrawer = $salesSummary ? (float) ($salesSummary->blind_cash_count ?? $salesSummary->cash_in_drawer) : $totalGrossRevenue;
-        $systemExpectedCash = $salesSummary?->system_expected_cash !== null ? (float) $salesSummary->system_expected_cash : $totalGrossRevenue;
-        $cashDifference = $salesSummary?->cash_difference !== null ? (float) $salesSummary->cash_difference : ($cashInDrawer - $totalGrossRevenue);
+        $defaultExpectedCash = max(0.0, $totalGrossRevenue - $nonCashAmount);
+        $systemExpectedCash = $salesSummary?->system_expected_cash !== null ? (float) $salesSummary->system_expected_cash : $defaultExpectedCash;
+        $cashInDrawer = $salesSummary ? (float) ($salesSummary->blind_cash_count ?? $salesSummary->cash_in_drawer) : $systemExpectedCash;
+        $cashDifference = $salesSummary?->cash_difference !== null ? (float) $salesSummary->cash_difference : ($cashInDrawer - $systemExpectedCash);
 
-        // 6. Monitoring Audit Stok Sisa (Sebelum vs Terjual vs Sesudahnya)
+        $nextShiftLabel = $this->resolveNextShiftRecipient($activeShift);
+
+        // Otomatis setor ke shift selanjutnya untuk rekap shift yang sudah ada namun belum berstatus verified
+        if ($salesSummary && in_array($salesSummary->deposit_status ?? 'unsubmitted', ['unsubmitted', 'pending_verification'], true)) {
+            $salesSummary->update([
+                'deposit_status' => 'verified',
+                'deposited_amount' => $salesSummary->deposited_amount !== null ? (float) $salesSummary->deposited_amount : $cashInDrawer,
+                'retained_drawer_cash' => (float) ($salesSummary->retained_drawer_cash ?? 0),
+                'deposit_method' => $salesSummary->deposit_method ?: 'next_shift_handover',
+                'deposit_recipient' => $salesSummary->deposit_recipient ?: $nextShiftLabel,
+                'deposited_at' => $salesSummary->deposited_at ?? $now,
+                'deposit_verified_at' => $salesSummary->deposit_verified_at ?? $now,
+                'deposit_verified_by' => $salesSummary->deposit_recipient ?: $nextShiftLabel,
+            ]);
+            $salesSummary->refresh();
+        }
+
+        // 6. Monitoring Audit Stok Sisa (Sebelum vs Terjual vs Sesudahnya) & Checklist Hardware Shift
         $stockComparisons = $this->buildStockComparison($workDate, $employee);
+        $handoverChecklist = ShiftHandoverChecklist::with(['employee', 'shift', 'branch'])
+            ->whereDate('check_date', $workDate->toDateString())
+            ->when($activeShift, fn ($q) => $q->where('shift_id', $activeShift->id))
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+            ->latest('id')
+            ->first()
+            ?: ShiftHandoverChecklist::with(['employee', 'shift', 'branch'])
+                ->whereDate('check_date', $workDate->toDateString())
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+                ->latest('id')
+                ->first();
 
-        // 7. Riwayat Rekap Shift Terakhir (10 Rekap Terakhir)
+        // 7. Riwayat Rekap Shift Terakhir di Cabang Ini (10 Rekap Terakhir) & Rekap Shift Harian Tanggal Ini
+        $dayShiftSummaries = ShiftSalesSummary::with(['employee', 'shift', 'branch'])
+            ->whereDate('work_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+            ->orderBy('shift_id')
+            ->orderBy('id')
+            ->get();
+
+        $recentStockRequests = ShiftStockRequest::whereDate('created_at', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+            ->latest('id')
+            ->take(8)
+            ->get();
+
         $recentSummaries = ShiftSalesSummary::with(['employee', 'shift', 'branch'])
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->orderByDesc('work_date')
             ->orderByDesc('id')
             ->take(10)
             ->get();
 
+        $shiftSummariesByDate = [];
+        foreach ($recentSummaries as $recItem) {
+            $dKey = $recItem->work_date?->toDateString();
+            if ($dKey) {
+                $shiftSummariesByDate[$dKey][$recItem->shiftNumber()] = $recItem->id;
+            }
+        }
+
         return view('presensi2.rekap', [
             'currentEmployee' => $employee,
             'activeShift' => $activeShift,
+            'nextShiftLabel' => $nextShiftLabel,
             'workDate' => $workDate,
             'attendanceToday' => $attendanceToday,
             'salesSummary' => $salesSummary,
+            'dayShiftSummaries' => $dayShiftSummaries,
+            'recentStockRequests' => $recentStockRequests,
+            'handoverChecklist' => $handoverChecklist,
             'fnbSales' => $fnbSales,
             'totalFnbIncome' => $totalFnbIncome,
+            'totalDiscountAmount' => $totalDiscountAmount,
+            'nonCashAmount' => $nonCashAmount,
             'totalFnbTransactions' => $totalFnbTransactions,
             'fnbItemSummary' => $fnbItemSummary,
             'internetSales' => $internetSales,
@@ -3409,8 +3667,150 @@ class AttendanceWebV2Controller extends Controller
             'cashDenominations' => $salesSummary?->cash_denominations,
             'stockComparisons' => $stockComparisons,
             'recentSummaries' => $recentSummaries,
+            'shiftSummariesByDate' => $shiftSummariesByDate,
             'dateParam' => $dateParam,
         ]);
+    }
+
+    /**
+     * Lanjutan Rekap: Simpan Setoran Kas Shift Otomatis ke Shift Selanjutnya (Tanpa Tunggu Verifikasi Admin).
+     */
+    public function rekapStoreSetor(Request $request): RedirectResponse|JsonResponse
+    {
+        $employee = $this->getAuthenticatedEmployee();
+        if (! $employee) {
+            return redirect()->route('presensi2.login');
+        }
+
+        $validated = $request->validate([
+            'summary_id' => 'nullable|integer',
+            'deposited_amount' => 'required|numeric|min:0',
+            'retained_drawer_cash' => 'nullable|numeric|min:0',
+            'deposit_method' => 'nullable|in:cash_collector,safe_dropbox,bank_transfer,next_shift_handover',
+            'deposit_recipient' => 'nullable|string|max:120',
+            'deposit_notes' => 'nullable|string|max:500',
+        ]);
+
+        $now = Carbon::now();
+        $activeShift = $this->shiftResolverService->resolveShift(null, $now);
+        $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
+        $branchId = $employee->branch_id;
+
+        $nextShiftLabel = $this->resolveNextShiftRecipient($activeShift);
+        $method = $validated['deposit_method'] ?? 'next_shift_handover';
+        $recipient = ! empty($validated['deposit_recipient']) ? $validated['deposit_recipient'] : $nextShiftLabel;
+
+        $summary = null;
+        if (! empty($validated['summary_id'])) {
+            $summary = ShiftSalesSummary::where('id', (int) $validated['summary_id'])
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+                ->first();
+        }
+
+        if (! $summary) {
+            $summary = ShiftSalesSummary::whereDate('work_date', $workDate->toDateString())
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+                ->latest('id')
+                ->first();
+        }
+
+        $depositedAmount = (float) $validated['deposited_amount'];
+        $retainedCash = (float) ($validated['retained_drawer_cash'] ?? 0);
+
+        if (! $summary) {
+            $attendanceToday = AttendanceRecord::where('employee_id', $employee->id)
+                ->whereDate('work_date', $workDate->toDateString())
+                ->latest('id')
+                ->first();
+
+            $summary = ShiftSalesSummary::create([
+                'employee_id' => $employee->id,
+                'branch_id' => $branchId ?? 3,
+                'shift_id' => $activeShift?->id,
+                'attendance_record_id' => $attendanceToday?->id,
+                'work_date' => $workDate->toDateString(),
+                'total_fnb_sales' => 0,
+                'total_internet_sales' => 0,
+                'total_revenue' => $depositedAmount + $retainedCash,
+                'cash_in_drawer' => $depositedAmount + $retainedCash,
+                'system_expected_cash' => $depositedAmount + $retainedCash,
+                'blind_cash_count' => $depositedAmount + $retainedCash,
+                'cash_difference' => 0,
+                'status' => 'closed',
+                'closed_at' => $now,
+            ]);
+        }
+
+        // Langsung berstatus verified (Selesai Disetor ke Shift Selanjutnya tanpa tunggu Admin)
+        $summary->update([
+            'deposit_status' => 'verified',
+            'deposited_amount' => $depositedAmount,
+            'retained_drawer_cash' => $retainedCash,
+            'deposit_method' => $method,
+            'deposit_recipient' => $recipient,
+            'deposit_notes' => $validated['deposit_notes'] ?? 'Setor langsung ke shift selanjutnya',
+            'deposited_at' => $now,
+            'deposit_verified_at' => $now,
+            'deposit_verified_by' => $recipient,
+        ]);
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => ShiftSalesSummary::class,
+            'auditable_id' => $summary->id,
+            'action' => 'shift_cash_deposited',
+            'new_values' => [
+                'employee_id' => $employee->id,
+                'employee_name' => $employee->name,
+                'deposited_amount' => $depositedAmount,
+                'retained_drawer_cash' => $retainedCash,
+                'deposit_method' => $method,
+                'deposit_recipient' => $recipient,
+                'deposit_status' => 'verified',
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Portal Presensi v2',
+            'created_at' => $now,
+        ]));
+
+        rescue(fn () => app(EarlyWarningNotificationService::class)->sendShiftDepositAlert($summary));
+
+        $msg = 'Setoran kas shift sebesar Rp '.number_format($depositedAmount, 0, ',', '.').' otomatis diserahterimakan ke '.$recipient.'!';
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $msg,
+                'summary' => $summary->fresh(),
+            ]);
+        }
+
+        return redirect()->route('presensi2.rekap')->with('success', $msg);
+    }
+
+    /**
+     * Helper: Menentukan label Shift Selanjutnya secara otomatis untuk serah terima kas antar shift.
+     */
+    protected function resolveNextShiftRecipient(?Shift $currentShift): string
+    {
+        $shifts = Shift::where('is_active', true)->orderBy('start_time')->get();
+        if ($shifts->isEmpty()) {
+            return 'Kasir Shift Selanjutnya';
+        }
+
+        if (! $currentShift) {
+            return 'Shift Selanjutnya ('.$shifts->first()->name.')';
+        }
+
+        $currentIndex = $shifts->search(fn (Shift $s) => $s->id === $currentShift->id);
+        if ($currentIndex === false) {
+            return 'Shift Selanjutnya';
+        }
+
+        $nextIndex = ($currentIndex + 1) % $shifts->count();
+        $nextShift = $shifts->get($nextIndex);
+
+        return 'Kasir '.($nextShift->name ?? 'Shift Selanjutnya');
     }
 
     /**

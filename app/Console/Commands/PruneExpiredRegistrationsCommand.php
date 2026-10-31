@@ -18,14 +18,7 @@ class PruneExpiredRegistrationsCommand extends Command
     public function handle(): int
     {
         $days = (int) ($this->option('days') ?: EmployeeRegistration::EXPIRATION_DAYS);
-        $threshold = now()->subDays($days);
-
-        $expiredCount = EmployeeRegistration::where('status', 'pending')
-            ->where('created_at', '<', $threshold)
-            ->update([
-                'status' => 'expired',
-                'rejection_reason' => "Kedaluwarsa otomatis karena tidak diverifikasi dalam waktu {$days} hari.",
-            ]);
+        $expiredCount = EmployeeRegistration::pruneExpired($days);
 
         $this->info("Berhasil memperbarui {$expiredCount} pendaftaran yang kedaluwarsa (> {$days} hari).");
 

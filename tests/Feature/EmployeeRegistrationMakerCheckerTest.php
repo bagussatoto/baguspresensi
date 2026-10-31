@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Domains\Attendance\Models\AuditLog;
+use App\Domains\Attendance\Models\RosterJadwal;
+use App\Domains\Employee\Models\Shift;
 use App\Models\EmployeeRegistration;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -513,5 +515,121 @@ class EmployeeRegistrationMakerCheckerTest extends TestCase
 
         $submitRes->assertRedirect(route('presensi2.register'));
         $submitRes->assertSessionHasErrors(['registration']);
+    }
+
+    public function test_admin_verification_page_automatically_prunes_pending_registrations_older_than_3_days_and_allows_reset(): void
+    {
+        $admin = User::factory()->create();
+
+        // 1. Pendaftaran pending yang sudah lewat 4 hari (> 3 hari)
+        $overdueReg = EmployeeRegistration::create([
+            'full_name' => 'Hendra Kedaluwarsa',
+            'username' => 'hendra_exp',
+            'phone' => '081299991111',
+            'email' => 'hendra@wisata.id',
+            'password' => Hash::make('582914'),
+            'pin' => Hash::make('582914'),
+            'status' => 'pending',
+        ]);
+        $overdueReg->created_at = now()->subDays(4);
+        $overdueReg->save();
+
+        // 2. Pendaftaran pending yang masih segar (baru 1 hari)
+        $activeReg = EmployeeRegistration::create([
+            'full_name' => 'Sari Aktif',
+            'username' => 'sari_aktif',
+            'phone' => '081299992222',
+            'email' => 'sari@wisata.id',
+            'password' => Hash::make('582914'),
+            'pin' => Hash::make('582914'),
+            'status' => 'pending',
+        ]);
+
+        // Saat Admin membuka halaman verifikasi, berkas lewat 3 hari otomatis menjadi 'expired'
+        $response = $this->actingAs($admin)->get(route('admin.karyawan.verifikasi'));
+        $response->assertOk();
+
+        $overdueReg->refresh();
+        $this->assertEquals('expired', $overdueReg->status);
+        $this->assertStringContainsString('Kedaluwarsa otomatis', (string) $overdueReg->rejection_reason);
+
+        $activeReg->refresh();
+        $this->assertEquals('pending', $activeReg->status);
+
+        // Berkas expired muncul di tabel riwayat dengan label Kedaluwarsa (> 3 Hari)
+        $response->assertSee('Hendra Kedaluwarsa');
+        $response->assertSee('Kedaluwarsa (&gt; 3 Hari)', false);
+        $response->assertSee('Otomatis (SLA 3 Hari)');
+
+        // Admin dapat menekan tombol Review Ulang (reset) pada berkas expired untuk mengembalikannya ke pending
+        $resetResponse = $this->actingAs($admin)->post(route('admin.karyawan.verifikasi.reset', $overdueReg->id));
+        $resetResponse->assertRedirect(route('admin.karyawan.verifikasi'));
+
+        $overdueReg->refresh();
+        $this->assertEquals('pending', $overdueReg->status);
+        $this->assertFalse($overdueReg->isExpired());
+    }
+
+    public function test_admin_approval_assigns_default_shift_to_roster_and_enforces_least_privilege_defaults(): void
+    {
+        $admin = User::factory()->create();
+
+        $shiftPagi = Shift::create([
+            'code' => 'SHF-PAGI',
+            'name' => 'Shift 1 Pagi',
+            'start_time' => '07:00:00',
+            'end_time' => '13:00:00',
+            'is_overnight' => false,
+            'grace_period_minutes' => 15,
+            'is_active' => true,
+        ]);
+
+        $registration = EmployeeRegistration::create([
+            'full_name' => 'Fajar Pratama',
+            'username' => 'fajar_pratama',
+            'phone' => '081266665555',
+            'email' => 'fajar@wisata.id',
+            'password' => Hash::make('582914'),
+            'pin' => Hash::make('582914'),
+            'status' => 'pending',
+        ]);
+
+        // 1. Pastikan halaman verifikasi menampilkan pilihan Shift Kerja Awal / Default dan info Least Privilege
+        $page = $this->actingAs($admin)->get(route('admin.karyawan.verifikasi'));
+        $page->assertOk();
+        $page->assertSee('Shift Kerja Awal / Default');
+        $page->assertSee('Shift 1 Pagi (07:00 - 13:00)');
+        $page->assertSee('Prinsip Least Privilege');
+
+        // 2. Approve tanpa mengirim position atau max_discount_approval_percent, tetapi memilih shift_id
+        $response = $this->actingAs($admin)->post(route('admin.karyawan.verifikasi.approve', $registration), [
+            'branch_id' => 1,
+            'role' => 'kasir',
+            'shift_id' => $shiftPagi->id,
+            'approval_notes' => 'Ditempatkan di Shift 1 Pagi.',
+        ]);
+
+        $response->assertRedirect(route('admin.karyawan.verifikasi'));
+        $response->assertSessionHas('success');
+
+        $registration->refresh();
+        $employee = Employee::find($registration->created_employee_id);
+        $this->assertNotNull($employee);
+
+        // Jabatan otomatis menyesuaikan Role ('kasir' -> 'Kasir') & Diskon terkunci 0%
+        $this->assertEquals('Kasir', $employee->position);
+        $this->assertEquals('Kasir', $employee->jabatan);
+        $this->assertEquals(0.0, (float) $employee->max_discount_approval_percent);
+        $this->assertEquals('shift', $employee->default_work_type);
+        $this->assertEquals('5-1001', $employee->default_cost_center);
+
+        // RosterJadwal hari ini otomatis terbuat dengan shift yang dipilih
+        $roster = RosterJadwal::where('employee_id', $employee->id)
+            ->whereDate('work_date', now()->toDateString())
+            ->first();
+        $this->assertNotNull($roster);
+        $this->assertEquals($shiftPagi->id, $roster->shift_id);
+        $this->assertEquals('shift', $roster->work_type);
+        $this->assertEquals('5-1001', $roster->cost_center);
     }
 }

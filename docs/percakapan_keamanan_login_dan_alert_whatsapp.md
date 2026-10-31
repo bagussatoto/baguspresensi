@@ -39,13 +39,18 @@
 - Pembukaan blokir akun dilakukan melalui otorisasi internal menu Admin atau menunggu masa tenggang pembekuan akun berakhir secara otomatis.
 
 ### C. Integrasi Grup WhatsApp 🚨 Security & HRD Alert MGK
-Notifikasi otomatis dikirimkan ke grup WhatsApp untuk 3 kategori kejadian penting:
+Notifikasi otomatis dikirimkan ke grup WhatsApp untuk kategori kejadian penting berikut:
 1. **Percobaan Login Tidak Sah (3x Gagal PIN/Password):**
    - Memuat data: Nama Karyawan Sasaran, NIK, Identitas Input, Alamat IP, Jam Kejadian, dan Status Pembekuan Akun.
 2. **Upaya Registrasi Akun Mencurigakan (3x Percobaan):**
    - Memuat data: Identitas Sasaran, Username yang dicoba, Alamat IP Pelaku, dan Status Pemblokiran Perangkat.
 3. **Permohonan Reset PIN / Password Karyawan (`/presensi2/lupa-password`):**
    - Memuat data: Nama Karyawan, NIK, Cabang, Tipe Kredensial (PIN/Password), dan waktu pengajuan untuk ditinjau oleh Admin HRD.
+4. **Siklus Penuh Registrasi Mandiri Karyawan (Pengajuan Baru/Ulang, Disetujui, & Ditolak):**
+   - Saat calon karyawan mendaftar atau daftar ulang: mengirim alert `PENGAJUAN REGISTRASI KARYAWAN (PERLU VERIFIKASI)` ke grup Admin tanpa tautan eksekusi langsung.
+   - Saat disetujui (*Approved*) oleh Admin Checker: mengirim detail akun resmi & NIK baru ke WhatsApp karyawan, serta mengirim `UPDATE STATUS: REGISTRASI KARYAWAN DISETUJUI` ke grup WhatsApp Admin.
+   - Saat ditolak (*Rejected*) oleh Admin Checker: mengirim catatan perbaikan & tautan daftar ulang ber-token HMAC ke WhatsApp calon karyawan, serta mengirim `UPDATE STATUS: REGISTRASI KARYAWAN DITOLAK / PERLU REVISI` ke grup WhatsApp Admin.
+   - Otomasi pembersihan antrean: berkas `pending` yang melewati SLA 3 hari otomatis bertransisi menjadi `expired` (`Kedaluwarsa > 3 Hari`) saat halaman Verifikasi Karyawan dibuka maupun melalui penjadwalan harian.
 
 ---
 
@@ -88,6 +93,67 @@ Silakan tinjau pada menu Admin: Master Karyawan > Reset PIN
 Notifikasi Otomatis Keamanan Sistem Maya Graha Kencana
 ```
 
+### Format 3: Pengajuan Registrasi Karyawan (Baru / Daftar Ulang)
+```text
+📋 [SECURITY & HRD ALERT MGK]
+*PENGAJUAN REGISTRASI KARYAWAN (PERLU VERIFIKASI)*
+━━━━━━━━━━━━━━━━━━━━
+Calon karyawan telah mengajukan pendaftaran akun mandiri:
+
+👤 Nama Lengkap: [Nama Calon Karyawan]
+🔑 Username: [Username]
+📱 No. WhatsApp: [Nomor WhatsApp]
+✉️ Alamat Email: [Email Pendaftar]
+🌐 Alamat IP: [IP Perangkat Pendaftar]
+📌 Jenis Pengajuan: [Pendaftaran Baru / Daftar Ulang (Revisi Data)]
+⏰ Waktu Pengajuan: [Tanggal & Jam Pengajuan]
+
+🛡️ Status: Menunggu Otorisasi / Verifikasi Admin HRD
+Silakan tinjau pada menu Admin: Master Karyawan > Verifikasi Karyawan
+━━━━━━━━━━━━━━━━━━━━
+Notifikasi Otomatis Keamanan Sistem Maya Graha Kencana
+```
+
+### Format 4: Update Status Registrasi Disetujui (Approved)
+```text
+✅ [SECURITY & HRD ALERT MGK]
+*UPDATE STATUS: REGISTRASI KARYAWAN DISETUJUI*
+━━━━━━━━━━━━━━━━━━━━
+Pengajuan pendaftaran karyawan telah diverifikasi dan diaktifkan:
+
+👤 Nama Karyawan: [Nama Karyawan]
+🆔 NIP / NIK Baru: [Kode Karyawan]
+🔑 Username: [Username]
+🏢 Cabang Penempatan: [Nama Cabang]
+💼 Peran / Jabatan: [Jabatan / Role]
+👮 Disetujui Oleh: [Nama Admin Checker]
+⏰ Waktu Otorisasi: [Tanggal & Jam Otorisasi]
+
+🛡️ Status Akun: AKTIF DI MASTER DATA 🟢
+Karyawan yang bersangkutan sudah dapat melakukan login dan presensi.
+━━━━━━━━━━━━━━━━━━━━
+Notifikasi Otomatis Keamanan Sistem Maya Graha Kencana
+```
+
+### Format 5: Update Status Registrasi Ditolak / Perlu Revisi (Rejected)
+```text
+🚫 [SECURITY & HRD ALERT MGK]
+*UPDATE STATUS: REGISTRASI KARYAWAN DITOLAK / PERLU REVISI*
+━━━━━━━━━━━━━━━━━━━━
+Pengajuan pendaftaran karyawan telah ditolak oleh verifikator:
+
+👤 Nama Pemohon: [Nama Calon Karyawan]
+🔑 Username: [Username]
+📱 No. WhatsApp: [Nomor WhatsApp]
+📝 Alasan Penolakan: [Catatan Alasan dari Admin]
+👮 Ditolak Oleh: [Nama Admin Checker]
+⏰ Waktu Keputusan: [Tanggal & Jam Keputusan]
+
+🛡️ Status Berkas: MENUNGGU PERBAIKAN / DAFTAR ULANG ⚠️
+━━━━━━━━━━━━━━━━━━━━
+Notifikasi Otomatis Keamanan Sistem Maya Graha Kencana
+```
+
 ---
 
 ## 4. Evaluasi Potensi Kebobolan (Analisis Keamanan)
@@ -106,6 +172,9 @@ Notifikasi Otomatis Keamanan Sistem Maya Graha Kencana
 
 - **Pengujian Otomatis:**
   - `EmployeeLoginLockoutWhatsAppAlertTest` (8 tests / 42 assertions): **100% Passed**
+  - `RegistrationBreachAndApprovalNotificationTest` (5 tests / 27 assertions): **100% Passed**
+  - `EmployeeRegistrationMakerCheckerTest` (14 tests / 117 assertions): **100% Passed**
+  - `RegistrationEarlyWarningAndUniqueValidationTest` (20 tests / 130 assertions): **100% Passed**
   - `AttendanceWebV2PortalTest` (40 tests / 209 assertions): **100% Passed**
   - `AttendanceWebPortalTest` (8 tests / 31 assertions): **100% Passed**
   - `EmployeeAuthTest` (6 tests / 14 assertions): **100% Passed**

@@ -5,7 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Domains\Attendance\Services\EarlyWarningNotificationService;
+use App\Models\EmployeeRegistration;
+use App\Models\PasswordResetRequest;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request as HttpClientRequest;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\Employee;
@@ -175,5 +181,307 @@ class RegistrationBreachAndApprovalNotificationTest extends TestCase
         $this->assertDatabaseMissing('employee_registrations', [
             'username' => 'spambot',
         ]);
+    }
+
+    /**
+     * Test 4: Ketika Admin menyetujui (Approve) pendaftaran mandiri,
+     * sistem mengirim WhatsApp ke Karyawan Baru & Pembaruan Status ke Grup WhatsApp 🚨 Security & HRD Alert MGK.
+     */
+    public function test_admin_approving_registration_sends_whatsapp_to_employee_and_security_hrd_group(): void
+    {
+        config([
+            'services.whatsapp.api_url' => 'https://api.fonnte.com/send',
+            'services.whatsapp.api_token' => 'test-fonnte-token',
+            'services.whatsapp.admin_group_id' => '120363999888777@g.us',
+        ]);
+
+        Http::fake([
+            'https://api.fonnte.com/send' => Http::response(['status' => true], 200),
+        ]);
+
+        $admin = User::factory()->create(['name' => 'Rina HRD']);
+
+        $registration = EmployeeRegistration::create([
+            'full_name' => 'Andi Pratama',
+            'username' => 'andi_pratama',
+            'phone' => '081277776666',
+            'email' => 'andi@mayanet.com',
+            'password' => Hash::make('582914'),
+            'pin' => Hash::make('582914'),
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($admin)->post(route('admin.karyawan.verifikasi.approve', $registration), [
+            'branch_id' => 1,
+            'role' => 'kasir',
+            'position' => 'Kasir Outlet',
+            'max_discount_approval_percent' => 5,
+            'approval_notes' => 'Berkas KTP sesuai.',
+        ]);
+
+        $response->assertRedirect(route('admin.karyawan.verifikasi'));
+        $response->assertSessionHas('success');
+
+        // Pastikan terkirim ke nomor WA karyawan baru
+        Http::assertSent(function (HttpClientRequest $request) {
+            $data = $request->data();
+
+            return ($data['target'] ?? '') === '6281277776666'
+                && str_contains($data['message'] ?? '', '[PENDAFTARAN AKUN DISETUJUI — MGK]')
+                && str_contains($data['message'] ?? '', 'Andi Pratama')
+                && str_contains($data['message'] ?? '', 'andi_pratama');
+        });
+
+        // Pastikan terkirim pembaruan status ke Grup WhatsApp 🚨 Security & HRD Alert MGK
+        Http::assertSent(function (HttpClientRequest $request) {
+            $data = $request->data();
+
+            return ($data['target'] ?? '') === '120363999888777@g.us'
+                && str_contains($data['message'] ?? '', '[SECURITY & HRD ALERT MGK]')
+                && str_contains($data['message'] ?? '', 'UPDATE STATUS: REGISTRASI KARYAWAN DISETUJUI')
+                && str_contains($data['message'] ?? '', 'Andi Pratama')
+                && str_contains($data['message'] ?? '', 'Rina HRD')
+                && str_contains($data['message'] ?? '', 'AKTIF DI MASTER DATA');
+        });
+    }
+
+    /**
+     * Test 5: Ketika Admin menolak (Reject) pendaftaran mandiri,
+     * sistem mengirim WhatsApp ke Calon Karyawan (beserta alasan & link daftar ulang)
+     * dan Pembaruan Status ke Grup WhatsApp 🚨 Security & HRD Alert MGK.
+     */
+    public function test_admin_rejecting_registration_sends_whatsapp_to_applicant_and_security_hrd_group(): void
+    {
+        config([
+            'services.whatsapp.api_url' => 'https://api.fonnte.com/send',
+            'services.whatsapp.api_token' => 'test-fonnte-token',
+            'services.whatsapp.admin_group_id' => '120363999888777@g.us',
+        ]);
+
+        Http::fake([
+            'https://api.fonnte.com/send' => Http::response(['status' => true], 200),
+        ]);
+
+        $admin = User::factory()->create(['name' => 'Budi Supervisor']);
+
+        $registration = EmployeeRegistration::create([
+            'full_name' => 'Siti Aminah',
+            'username' => 'siti_aminah',
+            'phone' => '081355554444',
+            'email' => 'siti@mayanet.com',
+            'password' => Hash::make('582914'),
+            'pin' => Hash::make('582914'),
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($admin)->post(route('admin.karyawan.verifikasi.reject', $registration), [
+            'rejection_reason' => 'Penulisan nama lengkap belum sesuai KTP.',
+        ]);
+
+        $response->assertRedirect(route('admin.karyawan.verifikasi'));
+        $response->assertSessionHas('info');
+
+        // Pastikan terkirim ke nomor WA calon karyawan beserta alasan dan tautan daftar ulang
+        Http::assertSent(function (HttpClientRequest $request) {
+            $data = $request->data();
+
+            return ($data['target'] ?? '') === '6281355554444'
+                && str_contains($data['message'] ?? '', '[PEMBERITAHUAN VERIFIKASI PENDAFTARAN — MGK]')
+                && str_contains($data['message'] ?? '', 'Siti Aminah')
+                && str_contains($data['message'] ?? '', 'Penulisan nama lengkap belum sesuai KTP.')
+                && str_contains($data['message'] ?? '', 're_reg=');
+        });
+
+        // Pastikan terkirim pembaruan status ke Grup WhatsApp 🚨 Security & HRD Alert MGK
+        Http::assertSent(function (HttpClientRequest $request) {
+            $data = $request->data();
+
+            return ($data['target'] ?? '') === '120363999888777@g.us'
+                && str_contains($data['message'] ?? '', '[SECURITY & HRD ALERT MGK]')
+                && str_contains($data['message'] ?? '', 'UPDATE STATUS: REGISTRASI KARYAWAN DITOLAK / PERLU REVISI')
+                && str_contains($data['message'] ?? '', 'Siti Aminah')
+                && str_contains($data['message'] ?? '', 'Penulisan nama lengkap belum sesuai KTP.')
+                && str_contains($data['message'] ?? '', 'Budi Supervisor')
+                && str_contains($data['message'] ?? '', 'MENUNGGU PERBAIKAN / DAFTAR ULANG');
+        });
+    }
+
+    /**
+     * Test 6: Ketika calon karyawan mengajukan registrasi baru,
+     * pesan ke Grup WhatsApp 🚨 Security & HRD Alert MGK memuat Nama, Username, WA, Email, Alamat IP, dan Jenis Pengajuan.
+     */
+    public function test_new_registration_sends_formatted_group_whatsapp_message_with_email_and_ip(): void
+    {
+        config([
+            'services.whatsapp.api_url' => 'https://api.fonnte.com/send',
+            'services.whatsapp.api_token' => 'test-fonnte-token',
+            'services.whatsapp.admin_group_id' => '120363999888777@g.us',
+        ]);
+
+        Http::fake([
+            'https://api.fonnte.com/send' => Http::response(['status' => true], 200),
+        ]);
+
+        $response = $this->post(route('presensi2.register.post'), [
+            'full_name' => 'Rizky Saputra',
+            'username' => 'rizky_saputra',
+            'credential' => '719283',
+            'confirm_credential' => '719283',
+            'phone' => '081266667777',
+            'email' => 'rizky@mayanet.com',
+        ]);
+
+        $response->assertRedirect(route('presensi2.login'));
+        $response->assertSessionHas('success');
+
+        Http::assertSent(function (HttpClientRequest $request) {
+            $data = $request->data();
+            $msg = (string) ($data['message'] ?? '');
+
+            return ($data['target'] ?? '') === '120363999888777@g.us'
+                && str_contains($msg, '[SECURITY & HRD ALERT MGK]')
+                && str_contains($msg, 'PENGAJUAN REGISTRASI KARYAWAN (PERLU VERIFIKASI)')
+                && str_contains($msg, 'Rizky Saputra')
+                && str_contains($msg, 'rizky_saputra')
+                && str_contains($msg, '081266667777')
+                && str_contains($msg, 'Alamat Email:* rizky@mayanet.com')
+                && str_contains($msg, 'Alamat IP:* 127.0.0.1')
+                && str_contains($msg, 'Jenis Pengajuan:* Pendaftaran Baru');
+        });
+    }
+
+    /**
+     * Test 7: Ketika Admin menonaktifkan (De-provision) dan mengaktifkan kembali (Reactivate) akun karyawan,
+     * sistem mengirim pembaruan status ke Grup WhatsApp 🚨 Security & HRD Alert MGK.
+     */
+    public function test_admin_toggling_employee_status_sends_deprovisioned_and_reactivated_group_whatsapp_alerts(): void
+    {
+        config([
+            'services.whatsapp.api_url' => 'https://api.fonnte.com/send',
+            'services.whatsapp.api_token' => 'test-fonnte-token',
+            'services.whatsapp.admin_group_id' => '120363999888777@g.us',
+        ]);
+
+        Http::fake([
+            'https://api.fonnte.com/send' => Http::response(['status' => true], 200),
+        ]);
+
+        $admin = User::factory()->create(['name' => 'Hendra Manager']);
+
+        // 1. Nonaktifkan (De-provision) karyawan aktif
+        $resDeactivate = $this->actingAs($admin)->postJson(
+            route('admin.karyawan.toggle-status', $this->activeEmployee),
+            ['reason' => 'Resign selesai masa kontrak.']
+        );
+        $resDeactivate->assertOk();
+        $resDeactivate->assertJson(['success' => true, 'is_active' => false]);
+
+        Http::assertSent(function (HttpClientRequest $request) {
+            $data = $request->data();
+            $msg = (string) ($data['message'] ?? '');
+
+            return ($data['target'] ?? '') === '120363999888777@g.us'
+                && str_contains($msg, 'UPDATE STATUS: AKUN KARYAWAN DINONAKTIFKAN (DE-PROVISIONED)')
+                && str_contains($msg, 'Bagus Satoto')
+                && str_contains($msg, 'EMP-001')
+                && str_contains($msg, 'Resign selesai masa kontrak.')
+                && str_contains($msg, 'Hendra Manager')
+                && str_contains($msg, 'NON-AKTIF / AKSES DICABUT');
+        });
+
+        // 2. Aktifkan kembali (Reactivate) karyawan tersebut
+        $resReactivate = $this->actingAs($admin)->postJson(
+            route('admin.karyawan.toggle-status', $this->activeEmployee)
+        );
+        $resReactivate->assertOk();
+        $resReactivate->assertJson(['success' => true, 'is_active' => true]);
+
+        Http::assertSent(function (HttpClientRequest $request) {
+            $data = $request->data();
+            $msg = (string) ($data['message'] ?? '');
+
+            return ($data['target'] ?? '') === '120363999888777@g.us'
+                && str_contains($msg, 'UPDATE STATUS: AKUN KARYAWAN DIAKTIFKAN KEMBALI')
+                && str_contains($msg, 'Bagus Satoto')
+                && str_contains($msg, 'EMP-001')
+                && str_contains($msg, 'Hendra Manager')
+                && str_contains($msg, 'AKTIF KEMBALI');
+        });
+    }
+
+    /**
+     * Test 8: Ketika Admin menyetujui atau menolak permohonan Reset PIN/Password karyawan,
+     * sistem mengirim WhatsApp ke Karyawan dan Pembaruan Status ke Grup WhatsApp 🚨 Security & HRD Alert MGK.
+     */
+    public function test_admin_approving_and_rejecting_password_reset_sends_whatsapp_alerts_to_employee_and_group(): void
+    {
+        config([
+            'services.whatsapp.api_url' => 'https://api.fonnte.com/send',
+            'services.whatsapp.api_token' => 'test-fonnte-token',
+            'services.whatsapp.admin_group_id' => '120363999888777@g.us',
+        ]);
+
+        Http::fake([
+            'https://api.fonnte.com/send' => Http::response(['status' => true], 200),
+        ]);
+
+        $admin = User::factory()->create(['name' => 'Dewi HRD']);
+
+        // 1. Skenario Disetujui (Approved)
+        $approveReq = PasswordResetRequest::create([
+            'employee_id' => $this->activeEmployee->id,
+            'employee_name' => $this->activeEmployee->name,
+            'employee_code' => $this->activeEmployee->code,
+            'phone' => $this->activeEmployee->phone,
+            'requested_type' => 'pin',
+            'new_credential' => Hash::make('918273'),
+            'status' => 'pending',
+        ]);
+
+        $resApprove = $this->actingAs($admin)->post(
+            route('admin.karyawan.reset-password.approve', $approveReq)
+        );
+        $resApprove->assertRedirect(route('admin.karyawan.reset-password'));
+
+        Http::assertSent(function (HttpClientRequest $request) {
+            $data = $request->data();
+            $msg = (string) ($data['message'] ?? '');
+
+            return ($data['target'] ?? '') === '120363999888777@g.us'
+                && str_contains($msg, 'UPDATE STATUS: RESET PIN KARYAWAN DISETUJUI')
+                && str_contains($msg, 'Bagus Satoto')
+                && str_contains($msg, 'EMP-001')
+                && str_contains($msg, 'Dewi HRD')
+                && str_contains($msg, 'KREDENSIAL BARU AKTIF');
+        });
+
+        // 2. Skenario Ditolak (Rejected)
+        $rejectReq = PasswordResetRequest::create([
+            'employee_id' => $this->activeEmployee->id,
+            'employee_name' => $this->activeEmployee->name,
+            'employee_code' => $this->activeEmployee->code,
+            'phone' => $this->activeEmployee->phone,
+            'requested_type' => 'pin',
+            'new_credential' => Hash::make('736451'),
+            'status' => 'pending',
+        ]);
+
+        $resReject = $this->actingAs($admin)->post(
+            route('admin.karyawan.reset-password.reject', $rejectReq),
+            ['rejection_reason' => 'Belum konfirmasi langsung ke atasan cabang.']
+        );
+        $resReject->assertRedirect(route('admin.karyawan.reset-password'));
+
+        Http::assertSent(function (HttpClientRequest $request) {
+            $data = $request->data();
+            $msg = (string) ($data['message'] ?? '');
+
+            return ($data['target'] ?? '') === '120363999888777@g.us'
+                && str_contains($msg, 'UPDATE STATUS: RESET PIN KARYAWAN DITOLAK')
+                && str_contains($msg, 'Bagus Satoto')
+                && str_contains($msg, 'Belum konfirmasi langsung ke atasan cabang.')
+                && str_contains($msg, 'Dewi HRD')
+                && str_contains($msg, 'DITOLAK / KREDENSIAL LAMA TETAP BERLAKU');
+        });
     }
 }

@@ -30,6 +30,7 @@ class EmployeeRegistration extends Model
         'created_employee_id',
         'ip_address',
         'user_agent',
+        'created_at',
     ];
 
     protected $hidden = [
@@ -83,5 +84,21 @@ class EmployeeRegistration extends Model
         $limitDays = $days ?? self::EXPIRATION_DAYS;
 
         return $this->created_at ? $this->created_at->lt(now()->subDays($limitDays)) : false;
+    }
+
+    /**
+     * Tandai seluruh pendaftaran pending yang telah melewati batas hari sebagai 'expired'.
+     */
+    public static function pruneExpired(?int $days = null): int
+    {
+        $limitDays = $days ?? self::EXPIRATION_DAYS;
+        $threshold = now()->subDays($limitDays);
+
+        return self::where('status', 'pending')
+            ->where('created_at', '<', $threshold)
+            ->update([
+                'status' => 'expired',
+                'rejection_reason' => "Kedaluwarsa otomatis karena tidak diverifikasi dalam waktu {$limitDays} hari.",
+            ]);
     }
 }

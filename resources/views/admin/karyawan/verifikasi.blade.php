@@ -268,6 +268,10 @@
                                     <span style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;">
                                         ✓ Disetujui
                                     </span>
+                                @elseif($item->status === 'expired')
+                                    <span style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;" title="{{ $item->rejection_reason }}">
+                                        ⌛ Kedaluwarsa (&gt; 3 Hari)
+                                    </span>
                                 @else
                                     <span style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;" title="{{ $item->rejection_reason }}">
                                         ✕ Ditolak: {{ Str::limit($item->rejection_reason, 20) }}
@@ -275,7 +279,7 @@
                                 @endif
                             </td>
                             <td style="padding: 10px 14px; color: var(--text-muted); font-size: 12px;">
-                                👤 {{ $item->approver?->name ?? 'Admin / System' }}
+                                👤 {{ $item->approver?->name ?? ($item->status === 'expired' ? 'Otomatis (SLA 3 Hari)' : 'Admin / System') }}
                             </td>
                             <td style="padding: 10px 14px; color: var(--text-muted); font-size: 12px;">
                                 @if($item->createdEmployee)
@@ -293,7 +297,7 @@
                                         👁️ Detail
                                     </button>
 
-                                    @if($item->status === 'rejected')
+                                    @if(in_array($item->status, ['rejected', 'expired']))
                                         <!-- Update: Buka Ulang ke Pending -->
                                         <form method="POST" action="{{ route('admin.karyawan.verifikasi.reset', $item->id) }}" style="display: inline;" onsubmit="return confirm('Kembalikan berkas pendaftaran {{ $item->full_name }} ke antrean pending untuk ditinjau ulang?');">
                                             @csrf
@@ -307,7 +311,7 @@
                                             ✏️ Catatan
                                         </button>
 
-                                        <!-- Delete: Hapus Arsip Berkas Ditolak -->
+                                        <!-- Delete: Hapus Arsip Berkas Ditolak / Expired -->
                                         <form method="POST" action="{{ route('admin.karyawan.verifikasi.destroy', $item->id) }}" style="display: inline;" onsubmit="return confirm('PERINGATAN: Hapus arsip pendaftaran {{ $item->full_name }} secara permanen?');">
                                             @csrf
                                             @method('DELETE')
@@ -437,24 +441,30 @@
                         </select>
                     </div>
 
-                    <!-- 3. POSISI / JABATAN -->
+                    <!-- 3. PENJADWALAN SHIFT DEFAULT OTOMATIS -->
                     <div style="margin-bottom: 14px;">
-                        <label for="position" style="font-size: 11.5px; font-weight: 700; color: #fff; display: block; margin-bottom: 6px;">
-                            Nama Jabatan
+                        <label for="shift_id" style="font-size: 11.5px; font-weight: 700; color: #fff; display: block; margin-bottom: 6px;">
+                            Shift Kerja Awal / Default
                         </label>
-                        <input type="text" name="position" id="position" value="Staff" placeholder="Contoh: Kasir Shift Pagi" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 13px; outline: none;">
+                        <select name="shift_id" id="shift_id" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 13px; outline: none; cursor: pointer;">
+                            <option value="">-- Otomatis Mengikuti Jam Operasional --</option>
+                            @if(isset($shifts))
+                                @foreach($shifts as $s)
+                                    <option value="{{ $s->id }}">
+                                        {{ $s->name }} ({{ substr((string) $s->start_time, 0, 5) }} - {{ substr((string) $s->end_time, 0, 5) }})
+                                    </option>
+                                @endforeach
+                            @endif
+                        </select>
+                        <span style="font-size: 11px; color: var(--text-sub); display: block; margin-top: 3px;">Otomatis menjadwalkan shift karyawan baru di Roster Jadwal hari ini.</span>
                     </div>
 
-                    <!-- 4. BATAS MAKSIMAL DISKON KASIR -->
-                    <div style="margin-bottom: 14px;">
-                        <label for="max_discount_approval_percent" style="font-size: 11.5px; font-weight: 700; color: #fff; display: block; margin-bottom: 6px;">
-                            Batas Maksimal Diskon Mandiri (%)
-                        </label>
-                        <input type="number" name="max_discount_approval_percent" id="max_discount_approval_percent" value="5" min="0" max="100" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 13px; outline: none;">
-                        <span style="font-size: 11px; color: var(--text-sub); display: block; margin-top: 3px;">Di atas batas ini butuh otorisasi PIN Supervisor saat transaksi.</span>
+                    <!-- INFO KEAMANAN LEAST PRIVILEGE (PENGGANTI INPUT JABATAN & DISKON MANUAL) -->
+                    <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 8px; padding: 9px 12px; margin-bottom: 14px; font-size: 11px; color: #cbd5e1; line-height: 1.45;">
+                        🔒 <strong style="color: #38bdf8;">Prinsip Least Privilege:</strong> Nama jabatan otomatis mengikuti Peran Kerja, dan batas diskon kasir mandiri otomatis dikunci pada <strong>0%</strong> saat aktivasi awal.
                     </div>
 
-                    <!-- 5. CATATAN OTORISASI (AUDIT NOTE) -->
+                    <!-- 4. CATATAN OTORISASI (AUDIT NOTE) -->
                     <div style="margin-bottom: 6px;">
                         <label for="approval_notes" style="font-size: 11.5px; font-weight: 700; color: #fff; display: block; margin-bottom: 6px;">
                             Catatan Verifikasi (Jejak Audit ISO 27001)

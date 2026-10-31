@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domains\Attendance\Models\AuditLog;
 use App\Http\Controllers\Controller;
+use App\Models\ShiftSalesSummary;
+use App\Models\ShiftStockRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\CafePayment;
 use Modules\MasterData\Domain\Models\CafeSale;
 use Modules\MasterData\Domain\Models\Employee;
@@ -65,6 +69,10 @@ class AdminSaleController extends Controller
             $query->where('pc_station_id', (int) $request->input('pc_station_id'));
         }
 
+        if ($request->filled('branch_id') && $request->input('branch_id') !== 'all') {
+            $query->where('branch_id', (int) $request->input('branch_id'));
+        }
+
         if ($request->filled('date')) {
             $dateFilter = $request->input('date');
             if ($dateFilter === 'today') {
@@ -92,11 +100,28 @@ class AdminSaleController extends Controller
             'cancelled_count' => CafeSale::where('payment_status', 'cancelled')->count(),
         ];
 
+        $branches = Branch::orderBy('name', 'asc')->get();
         $employees = Employee::orderBy('name', 'asc')->get();
         $pcStations = PcStation::orderBy('station_code', 'asc')->get();
         $variants = ProductVariant::with('product')
             ->where('is_active', true)
             ->orderBy('name', 'asc')
+            ->get();
+
+        // Data Monitoring Rekap Tutup Shift & Audit Selisih Kas (Blind Cash Count)
+        $shiftSummaries = ShiftSalesSummary::with(['employee', 'branch', 'shift'])
+            ->when($request->filled('branch_id') && $request->input('branch_id') !== 'all', fn ($q) => $q->where('branch_id', (int) $request->input('branch_id')))
+            ->orderByDesc('work_date')
+            ->orderByDesc('id')
+            ->limit(25)
+            ->get();
+
+        // Data Permintaan Stok Barang dari Kasir Shift
+        $stockRequests = ShiftStockRequest::with(['employee', 'branch', 'shift'])
+            ->when($request->filled('branch_id') && $request->input('branch_id') !== 'all', fn ($q) => $q->where('branch_id', (int) $request->input('branch_id')))
+            ->orderByRaw("CASE WHEN status = 'pending' THEN 0 ELSE 1 END")
+            ->orderByDesc('created_at')
+            ->limit(25)
             ->get();
 
         if ($request->wantsJson()) {
@@ -105,15 +130,20 @@ class AdminSaleController extends Controller
                 'count' => $sales->count(),
                 'metrics' => $metrics,
                 'sales' => $sales,
+                'shift_summaries' => $shiftSummaries,
+                'stock_requests' => $stockRequests,
             ]);
         }
 
         return view('admin.penjualan.index', compact(
             'sales',
             'metrics',
+            'branches',
             'employees',
             'pcStations',
-            'variants'
+            'variants',
+            'shiftSummaries',
+            'stockRequests'
         ));
     }
 
@@ -260,5 +290,114 @@ class AdminSaleController extends Controller
         $sale->load(['employee', 'pcStation', 'branch', 'items.variant.product', 'payments']);
 
         return view('admin.penjualan.print', compact('sale'));
+    }
+
+    /**
+     * Setujui / Penuhi atau Tolak Permintaan Stok Barang dari Kasir Shift.
+     */
+    public function updateStockRequestStatus(Request $request, ShiftStockRequest $stockRequest): JsonResponse|RedirectResponse
+    {
+        $validated = $request->validate([
+            'status' => ['required', 'string', 'in:fulfilled,approved,rejected,pending'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $newStatus = $validated['status'] === 'approved' ? 'fulfilled' : $validated['status'];
+
+        $stockRequest->status = $newStatus;
+        if ($newStatus === 'fulfilled') {
+            $stockRequest->fulfilled_at = now();
+        }
+        if (! empty($validated['notes'])) {
+            $stockRequest->notes = trim(($stockRequest->notes ? $stockRequest->notes.' | ' : '').'Admin: '.$validated['notes']);
+        }
+        $stockRequest->save();
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => ShiftStockRequest::class,
+            'auditable_id' => $stockRequest->id,
+            'action' => 'shift_stock_request_'.$newStatus,
+            'new_values' => [
+                'request_number' => $stockRequest->request_number,
+                'item_name' => $stockRequest->item_name,
+                'qty_requested' => $stockRequest->qty_requested,
+                'status' => $newStatus,
+                'fulfilled_at' => $stockRequest->fulfilled_at?->toDateTimeString(),
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Admin ERP MGK',
+            'created_at' => now(),
+        ]));
+
+        $statusLabel = $newStatus === 'fulfilled' ? 'Disetujui / Dipenuhi' : ($newStatus === 'rejected' ? 'Ditolak' : 'Diperbarui');
+        $message = "Permintaan stok {$stockRequest->request_number} ({$stockRequest->item_name}) berhasil {$statusLabel}.";
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'stock_request' => $stockRequest,
+            ]);
+        }
+
+        return redirect()->route('admin.penjualan')->with('success', $message);
+    }
+
+    /**
+     * Verifikasi / Terima Setoran Kas Shift dari Kasir (History Setor).
+     */
+    public function verifyShiftDeposit(Request $request, ShiftSalesSummary $summary): JsonResponse|RedirectResponse
+    {
+        $validated = $request->validate([
+            'deposit_status' => ['required', 'string', 'in:verified,rejected'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $adminName = auth()->user()?->name ?? 'Admin Keuangan';
+        $status = $validated['deposit_status'];
+
+        $summary->deposit_status = $status;
+        $summary->deposit_verified_at = now();
+        $summary->deposit_verified_by = $adminName;
+        if (! empty($validated['notes'])) {
+            $summary->deposit_notes = trim(($summary->deposit_notes ? $summary->deposit_notes.' | ' : '').'Verifikasi Admin: '.$validated['notes']);
+        }
+        if ($summary->deposited_amount === null) {
+            $summary->deposited_amount = $summary->blind_cash_count ?? $summary->cash_in_drawer;
+            $summary->deposited_at = now();
+        }
+        $summary->save();
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => ShiftSalesSummary::class,
+            'auditable_id' => $summary->id,
+            'action' => 'shift_deposit_'.$status,
+            'new_values' => [
+                'summary_id' => $summary->id,
+                'employee_id' => $summary->employee_id,
+                'deposited_amount' => $summary->deposited_amount,
+                'deposit_status' => $status,
+                'verified_by' => $adminName,
+                'verified_at' => $summary->deposit_verified_at?->toDateTimeString(),
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Admin ERP MGK',
+            'created_at' => now(),
+        ]));
+
+        $label = $status === 'verified' ? 'Diverifikasi & Diterima' : 'Ditolak / Perlu Revisi';
+        $message = "Setoran kas shift #{$summary->id} berhasil {$label} oleh {$adminName}.";
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'summary' => $summary->fresh(),
+            ]);
+        }
+
+        return redirect()->route('admin.penjualan')->with('success', $message);
     }
 }

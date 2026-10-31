@@ -117,6 +117,7 @@ Route::prefix('presensi2')->name('presensi2.')->group(function () {
 
     // Halaman Rekap (Rekapitulasi Penjualan, Pendapatan Billing, Audit Stok & Kasir Selesai Shift)
     Route::get('/rekap', [AttendanceWebV2Controller::class, 'rekapIndex'])->name('rekap');
+    Route::post('/rekap/setor', [AttendanceWebV2Controller::class, 'rekapStoreSetor'])->name('rekap.setor');
 
     // Portal Login Khusus Layanan & Presensi Tambahan (GC, Meeting, BO/Training, Ambil Stok)
     Route::get('/layanan/login', [AttendanceWebV2Controller::class, 'showLayananLogin'])->name('layanan.login');
@@ -276,6 +277,8 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     // Penjualan & POS Kasir ERP
     Route::get('/penjualan', [AdminSaleController::class, 'index'])->name('admin.penjualan');
     Route::post('/penjualan', [AdminSaleController::class, 'store'])->name('admin.penjualan.store');
+    Route::post('/penjualan/permintaan-stok/{stockRequest}/status', [AdminSaleController::class, 'updateStockRequestStatus'])->name('admin.penjualan.stock-request.status');
+    Route::post('/penjualan/rekap-shift/{summary}/verify-setor', [AdminSaleController::class, 'verifyShiftDeposit'])->name('admin.penjualan.verify-setor');
     Route::get('/penjualan/{sale}', [AdminSaleController::class, 'show'])->name('admin.penjualan.show');
     Route::put('/penjualan/{sale}', [AdminSaleController::class, 'update'])->name('admin.penjualan.update');
     Route::post('/penjualan/{sale}/status', [AdminSaleController::class, 'updateStatus'])->name('admin.penjualan.status');

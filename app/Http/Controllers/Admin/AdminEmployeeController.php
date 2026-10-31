@@ -7,8 +7,10 @@ namespace App\Http\Controllers\Admin;
 use App\Domains\Attendance\Enums\ApprovalStatus;
 use App\Domains\Attendance\Enums\AttendanceStatus;
 use App\Domains\Attendance\Models\AuditLog;
+use App\Domains\Attendance\Models\RosterJadwal;
 use App\Domains\Attendance\Services\AuditLogService;
 use App\Domains\Attendance\Services\EarlyWarningNotificationService;
+use App\Domains\Employee\Models\Shift;
 use App\Http\Controllers\Controller;
 use App\Models\EmployeeRegistration;
 use App\Models\PasswordResetRequest;
@@ -319,6 +321,14 @@ class AdminEmployeeController extends Controller
             );
         }
 
+        // Kirim Pembaruan Status ke Grup WhatsApp 🚨 Security & HRD Alert MGK
+        rescue(fn () => app(EarlyWarningNotificationService::class)->sendEmployeeStatusChangedAlert(
+            $employee->loadMissing('branch'),
+            (bool) $employee->is_active,
+            $adminUser?->name ?? 'Administrator',
+            $reason
+        ));
+
         $message = "Status {$employee->name} berhasil diubah menjadi ".($employee->is_active ? 'Aktif' : 'Non-Aktif (Akses Dicabut)');
 
         if ($request->wantsJson()) {
@@ -385,13 +395,16 @@ class AdminEmployeeController extends Controller
         $isBranchAdmin = $adminUser && method_exists($adminUser, 'isBranchAdmin') && $adminUser->isBranchAdmin();
         $assignedBranchId = $isBranchAdmin ? $adminUser->assigned_branch_id : null;
 
-        $pendingRegistrations = EmployeeRegistration::where('status', 'pending')
+        // Otomasi pembersihan: tandai pendaftaran pending yang melebihi batas SLA 3 hari sebagai 'expired'
+        EmployeeRegistration::pruneExpired();
+
+        $pendingRegistrations = EmployeeRegistration::activePending()
             ->orderByRaw("CASE WHEN rejection_reason LIKE '%[Sebelumnya Ditolak]%' THEN 0 ELSE 1 END")
             ->orderBy('updated_at', 'desc')
             ->orderBy('id', 'desc')
             ->get();
 
-        $processedRegistrations = EmployeeRegistration::whereIn('status', ['approved', 'rejected'])
+        $processedRegistrations = EmployeeRegistration::whereIn('status', ['approved', 'rejected', 'expired'])
             ->with(['approver', 'createdEmployee'])
             ->orderBy('updated_at', 'desc')
             ->limit(30)
@@ -402,12 +415,14 @@ class AdminEmployeeController extends Controller
             $branchesQuery->where('id', $assignedBranchId);
         }
         $branches = $branchesQuery->orderBy('name', 'asc')->get();
+        $shifts = Shift::where('is_active', true)->orderBy('start_time', 'asc')->get();
         $profileData = AdminDashboardController::getProfileData($request);
 
         return view('admin.karyawan.verifikasi', compact(
             'pendingRegistrations',
             'processedRegistrations',
             'branches',
+            'shifts',
             'profileData'
         ));
     }
@@ -424,6 +439,8 @@ class AdminEmployeeController extends Controller
         $validated = $request->validate([
             'branch_id' => ['required', 'exists:branches,id'],
             'role' => ['required', 'string'],
+            'shift_id' => ['nullable', 'exists:shifts,id'],
+            'work_type' => ['nullable', 'in:shift,flexible'],
             'position' => ['nullable', 'string', 'max:100'],
             'max_discount_approval_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'approval_notes' => ['nullable', 'string', 'max:500'],
@@ -431,6 +448,7 @@ class AdminEmployeeController extends Controller
             'branch_id.required' => 'Silakan pilih cabang penempatan karyawan.',
             'branch_id.exists' => 'Cabang yang dipilih tidak valid.',
             'role.required' => 'Silakan tentukan peran / role karyawan.',
+            'shift_id.exists' => 'Shift kerja yang dipilih tidak valid.',
         ]);
 
         $adminUser = Auth::user();
@@ -458,11 +476,41 @@ class AdminEmployeeController extends Controller
             $nextId++;
         } while (Employee::where('code', $code)->exists());
 
+        $selectedShift = ! empty($validated['shift_id']) ? Shift::find($validated['shift_id']) : null;
+        $isBoShift = $selectedShift && (
+            str_contains(strtoupper((string) $selectedShift->code), 'BO') ||
+            str_contains(strtoupper((string) $selectedShift->name), 'BACK OFFICE')
+        );
+        $workType = $validated['work_type'] ?? ($isBoShift ? 'flexible' : 'shift');
+        $costCenter = $workType === 'flexible' ? '5-1002' : '5-1001';
+
+        $rolePositionMap = [
+            'kasir' => 'Kasir',
+            'cashier' => 'Kasir',
+            'salesman' => 'Staf Penjualan',
+            'operator' => 'Operator Warnet',
+            'supervisor' => 'Supervisor Outlet',
+            'driver' => 'Driver Logistik',
+            'otorisator' => 'Otorisator',
+        ];
+        $resolvedPosition = ! empty($validated['position'])
+            ? $validated['position']
+            : ($rolePositionMap[strtolower($validated['role'])] ?? 'Staff');
+
         // Eksekusi atomik DB::transaction
-        $employee = DB::transaction(function () use ($registration, $validated, $code, $adminUser) {
+        $employee = DB::transaction(function () use (
+            $registration,
+            $validated,
+            $code,
+            $adminUser,
+            $selectedShift,
+            $workType,
+            $costCenter,
+            $resolvedPosition
+        ) {
             $role = ($validated['role'] === 'cashier') ? EmployeeRole::KASIR : (EmployeeRole::tryFrom($validated['role']) ?? EmployeeRole::SALESMAN);
 
-            // 1. Masukkan ke Master Data resmi (SoT)
+            // 1. Masukkan ke Master Data resmi (SoT) dengan prinsip Least Privilege (Diskon default 0%)
             $emp = Employee::create([
                 'branch_id' => $validated['branch_id'],
                 'code' => $code,
@@ -471,15 +519,35 @@ class AdminEmployeeController extends Controller
                 'phone' => $registration->phone,
                 'email' => $registration->email,
                 'role' => $role,
-                'position' => $validated['position'] ?? 'Staff',
-                'jabatan' => $validated['position'] ?? 'Staff',
+                'position' => $resolvedPosition,
+                'jabatan' => $resolvedPosition,
                 'max_discount_approval_percent' => $validated['max_discount_approval_percent'] ?? 0,
+                'default_work_type' => $workType,
+                'default_contract_hours' => 8,
+                'default_cost_center' => $costCenter,
                 'password' => $registration->password,
                 'pin' => $registration->pin,
                 'is_active' => true,
             ]);
 
-            // 2. Update status staging
+            // 2. Penjadwalan Shift Default Otomatis ke RosterJadwal jika Shift / Jalur Fleksibel dipilih
+            if ($selectedShift || $workType === 'flexible') {
+                RosterJadwal::updateOrCreate(
+                    [
+                        'employee_id' => $emp->id,
+                        'work_date' => now()->toDateString(),
+                    ],
+                    [
+                        'work_type' => $workType,
+                        'shift_id' => $selectedShift?->id,
+                        'contract_hours' => 8,
+                        'cost_center' => $costCenter,
+                        'notes' => 'Penjadwalan shift otomatis saat otorisasi registrasi karyawan baru.',
+                    ]
+                );
+            }
+
+            // 3. Update status staging
             $registration->update([
                 'status' => 'approved',
                 'approved_by' => $adminUser?->id,
@@ -487,7 +555,7 @@ class AdminEmployeeController extends Controller
                 'created_employee_id' => $emp->id,
             ]);
 
-            // 3. Catat Jejak Audit (ISO 27001)
+            // 4. Catat Jejak Audit (ISO 27001)
             AuditLog::create([
                 'user_id' => $adminUser?->id,
                 'action' => 'EMPLOYEE_REGISTRATION_APPROVED',
@@ -502,6 +570,9 @@ class AdminEmployeeController extends Controller
                     'code' => $code,
                     'role' => $emp->role,
                     'branch_id' => $emp->branch_id,
+                    'shift_id' => $selectedShift?->id,
+                    'shift_name' => $selectedShift?->name,
+                    'work_type' => $workType,
                     'notes' => $validated['approval_notes'] ?? null,
                 ],
                 'ip_address' => request()->ip(),
@@ -511,6 +582,17 @@ class AdminEmployeeController extends Controller
 
             return $emp;
         });
+
+        $shiftLabel = $selectedShift
+            ? "{$selectedShift->name} (".substr((string) $selectedShift->start_time, 0, 5).' - '.substr((string) $selectedShift->end_time, 0, 5).')'
+            : ($workType === 'flexible' ? 'Jam Kerja Fleksibel / Back Office' : null);
+
+        // 5. Kirim Notifikasi WhatsApp ke Karyawan & Pembaruan Status ke Grup 🚨 Security & HRD Alert MGK
+        rescue(fn () => app(EarlyWarningNotificationService::class)->sendRegistrationApprovedAlert(
+            $employee->loadMissing('branch'),
+            $adminUser?->name ?? 'Admin HRD',
+            $shiftLabel
+        ));
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -565,6 +647,23 @@ class AdminEmployeeController extends Controller
             'created_at' => now(),
         ]);
 
+        // Kirim Notifikasi WhatsApp ke Calon Karyawan & Pembaruan Status ke Grup 🚨 Security & HRD Alert MGK
+        $reRegToken = hash_hmac(
+            'sha256',
+            $registration->id.'|'.$registration->username.'|'.($registration->created_at?->timestamp ?? 0),
+            config('app.key')
+        );
+        $reRegUrl = route('presensi2.register', [
+            're_reg' => $registration->id,
+            'token' => $reRegToken,
+        ]);
+
+        rescue(fn () => app(EarlyWarningNotificationService::class)->sendRegistrationRejectedAlert(
+            $registration,
+            $adminUser?->name ?? 'Admin HRD',
+            $reRegUrl
+        ));
+
         if ($request->wantsJson()) {
             return response()->json([
                 'success' => true,
@@ -611,6 +710,7 @@ class AdminEmployeeController extends Controller
         }
 
         $adminUser = Auth::user();
+        $oldStatus = $registration->status;
         $oldReason = $registration->rejection_reason;
 
         $registration->update([
@@ -618,6 +718,7 @@ class AdminEmployeeController extends Controller
             'rejection_reason' => null,
             'approved_by' => null,
             'approved_at' => null,
+            'created_at' => now(),
         ]);
 
         AuditLog::create([
@@ -625,7 +726,7 @@ class AdminEmployeeController extends Controller
             'action' => 'EMPLOYEE_REGISTRATION_RESET_TO_PENDING',
             'auditable_type' => EmployeeRegistration::class,
             'auditable_id' => $registration->id,
-            'old_values' => ['status' => 'rejected', 'rejection_reason' => $oldReason],
+            'old_values' => ['status' => $oldStatus, 'rejection_reason' => $oldReason],
             'new_values' => ['status' => 'pending', 'reset_by' => $adminUser?->name],
             'ip_address' => request()->ip(),
             'user_agent' => request()->userAgent(),
@@ -979,6 +1080,12 @@ class AdminEmployeeController extends Controller
             'created_at' => now(),
         ]));
 
+        rescue(fn () => app(EarlyWarningNotificationService::class)->sendPasswordResetDecisionAlert(
+            $resetRequest->loadMissing('employee.branch'),
+            true,
+            $adminUser?->name ?? 'Admin HRD'
+        ));
+
         return redirect()->route('admin.karyawan.reset-password')
             ->with('success', "Permohonan reset password/PIN untuk {$employee->name} ({$employee->code}) berhasil disetujui. Akun sudah dapat digunakan dengan kredensial baru.");
     }
@@ -1023,6 +1130,12 @@ class AdminEmployeeController extends Controller
             'user_agent' => request()->userAgent(),
             'created_at' => now(),
         ]));
+
+        rescue(fn () => app(EarlyWarningNotificationService::class)->sendPasswordResetDecisionAlert(
+            $resetRequest->loadMissing('employee.branch'),
+            false,
+            $adminUser?->name ?? 'Admin HRD'
+        ));
 
         return redirect()->route('admin.karyawan.reset-password')
             ->with('info', "Permohonan reset password/PIN untuk {$resetRequest->employee_name} telah ditolak.");

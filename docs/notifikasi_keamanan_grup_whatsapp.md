@@ -94,27 +94,239 @@ Notifikasi Otomatis Keamanan Sistem Maya Graha Kencana
 
 ---
 
-### D. Pengajuan Registrasi Karyawan Baru (Otorisasi Approve HRD)
-Pemicu: Pendaftaran akun baru yang membutuhkan verifikasi berkas dan persetujuan:
+### D. Pengajuan Registrasi Karyawan Baru / Daftar Ulang (Otorisasi Approve HRD)
+Pemicu: Pendaftaran akun baru atau daftar ulang (revisi data) yang membutuhkan verifikasi berkas dan persetujuan Admin HRD:
 
 ```text
-📋 [PENDAFTARAN KARYAWAN BARU - PERLU APPROVE]
+📋 [SECURITY & HRD ALERT MGK]
+*PENGAJUAN REGISTRASI KARYAWAN (PERLU VERIFIKASI)*
+━━━━━━━━━━━━━━━━━━━━
+Calon karyawan telah mengajukan pendaftaran akun mandiri:
 
-Calon karyawan telah mengajukan pendaftaran mandiri:
-• Nama Lengkap: [Nama Lengkap]
-• Username: [Username]
-• No. WhatsApp: [Nomor WhatsApp]
-• Waktu: [Tanggal & Waktu Pendaftaran]
+👤 Nama Lengkap: [Nama Calon Karyawan]
+🔑 Username: [Username]
+📱 No. WhatsApp: [Nomor WhatsApp]
+✉️ Alamat Email: [Email Pendaftar]
+🌐 Alamat IP: [IP Perangkat Pendaftar]
+📌 Jenis Pengajuan: [Pendaftaran Baru / Daftar Ulang (Revisi Data)]
+⏰ Waktu Pengajuan: [Tanggal & Waktu Pengajuan]
 
-👉 Aksi Diperlukan:
-Silakan buka menu Verifikasi Karyawan untuk meninjau data KTP/kontak dan menyetujui (Approve):
-http://192.168.5.10:8086/bagus/admin/karyawan-verifikasi
+🛡️ Status: Menunggu Otorisasi / Verifikasi Admin HRD
+Silakan tinjau pada menu Admin: Master Karyawan > Verifikasi Karyawan
+━━━━━━━━━━━━━━━━━━━━
+Notifikasi Otomatis Keamanan Sistem Maya Graha Kencana
 ```
 
 ---
 
-## 4. Hasil Verifikasi & Pengujian
+### E. Update Status: Registrasi Karyawan Disetujui (Approved)
+Pemicu: Admin HRD / Checker menyetujui pendaftaran karyawan mandiri pada menu Verifikasi Karyawan. Selain mengirim detail NIK baru ke WhatsApp karyawan terkait, sistem mengirim pembaruan status ke grup:
 
-- **Unit & Feature Test:** Seluruh pengujian notifikasi lockout dan penanganan pesan alert diuji melalui pengujian otomatis dan berstatus **100% Passed**.
-- **Standar Format:** Kode layanan notifikasi (`EarlyWarningNotificationService`) telah diformat rapi sesuai standar Laravel Pint.
-- **Audit Log:** Seluruh peristiwa lockout tetap tercatat di tabel audit log database untuk keperluan investigasi keamanan lebih lanjut.
+```text
+✅ [SECURITY & HRD ALERT MGK]
+*UPDATE STATUS: REGISTRASI KARYAWAN DISETUJUI*
+━━━━━━━━━━━━━━━━━━━━
+Pengajuan pendaftaran karyawan telah diverifikasi dan diaktifkan:
+
+👤 Nama Karyawan: [Nama Karyawan]
+🆔 NIP / NIK Baru: [Kode Karyawan]
+🔑 Username: [Username]
+🏢 Cabang Penempatan: [Nama Cabang]
+💼 Peran / Jabatan: [Jabatan / Role]
+👮 Disetujui Oleh: [Nama Admin Checker]
+⏰ Waktu Otorisasi: [Tanggal & Waktu Otorisasi]
+
+🛡️ Status Akun: AKTIF DI MASTER DATA 🟢
+Karyawan yang bersangkutan sudah dapat melakukan login dan presensi.
+━━━━━━━━━━━━━━━━━━━━
+Notifikasi Otomatis Keamanan Sistem Maya Graha Kencana
+```
+
+---
+
+### F. Update Status: Registrasi Karyawan Ditolak / Perlu Revisi (Rejected)
+Pemicu: Admin HRD / Checker menolak pengajuan pendaftaran mandiri dengan catatan perbaikan. Selain mengirim alasan dan tautan daftar ulang ber-token HMAC ke WhatsApp calon karyawan, sistem mengirim pembaruan status ke grup:
+
+```text
+🚫 [SECURITY & HRD ALERT MGK]
+*UPDATE STATUS: REGISTRASI KARYAWAN DITOLAK / PERLU REVISI*
+━━━━━━━━━━━━━━━━━━━━
+Pengajuan pendaftaran karyawan telah ditolak oleh verifikator:
+
+👤 Nama Pemohon: [Nama Calon Karyawan]
+🔑 Username: [Username]
+📱 No. WhatsApp: [Nomor WhatsApp]
+📝 Alasan Penolakan: [Catatan Alasan dari Admin]
+👮 Ditolak Oleh: [Nama Admin Checker]
+⏰ Waktu Keputusan: [Tanggal & Waktu Keputusan]
+
+🛡️ Status Berkas: MENUNGGU PERBAIKAN / DAFTAR ULANG ⚠️
+━━━━━━━━━━━━━━━━━━━━
+Notifikasi Otomatis Keamanan Sistem Maya Graha Kencana
+```
+
+---
+
+### G. Update Status: Akun Karyawan Dinonaktifkan (De-provisioned / Resign)
+Pemicu: Admin menonaktifkan akun karyawan (mencabut hak akses) pada menu Master Karyawan:
+
+```text
+🔒 [SECURITY & HRD ALERT MGK]
+*UPDATE STATUS: AKUN KARYAWAN DINONAKTIFKAN (DE-PROVISIONED)*
+━━━━━━━━━━━━━━━━━━━━
+Hak akses sistem presensi & operasional karyawan telah dicabut:
+
+👤 Nama Karyawan: [Nama Karyawan]
+🆔 NIP / NIK: [Kode Karyawan]
+🏢 Cabang / Unit: [Nama Cabang]
+📝 Alasan Penonaktifan: [Alasan / Keterangan Resign]
+👮 Dieksekusi Oleh: [Nama Admin]
+⏰ Waktu Eksekusi: [Tanggal & Waktu Eksekusi]
+
+🛡️ Status Akun: NON-AKTIF / AKSES DICABUT 🔴
+Karyawan yang bersangkutan tidak dapat lagi melakukan login di seluruh portal MGK.
+━━━━━━━━━━━━━━━━━━━━
+Notifikasi Otomatis Keamanan Sistem Maya Graha Kencana
+```
+
+---
+
+### H. Update Status: Akun Karyawan Diaktifkan Kembali (Reactivated)
+Pemicu: Admin mengaktifkan kembali akun karyawan yang sebelumnya non-aktif:
+
+```text
+🔓 [SECURITY & HRD ALERT MGK]
+*UPDATE STATUS: AKUN KARYAWAN DIAKTIFKAN KEMBALI*
+━━━━━━━━━━━━━━━━━━━━
+Hak akses sistem presensi & operasional karyawan telah dipulihkan:
+
+👤 Nama Karyawan: [Nama Karyawan]
+🆔 NIP / NIK: [Kode Karyawan]
+🏢 Cabang / Unit: [Nama Cabang]
+👮 Diaktifkan Oleh: [Nama Admin]
+⏰ Waktu Eksekusi: [Tanggal & Waktu Eksekusi]
+
+🛡️ Status Akun: AKTIF KEMBALI 🟢
+━━━━━━━━━━━━━━━━━━━━
+Notifikasi Otomatis Keamanan Sistem Maya Graha Kencana
+```
+
+---
+
+### I. Update Status: Permohonan Reset PIN / Password Disetujui & Ditolak
+Pemicu: Admin HRD menyetujui atau menolak permohonan pembaruan PIN/Password karyawan pada menu Reset PIN. Sistem mengirimkan pemberitahuan ke WhatsApp karyawan serta pembaruan status ke grup:
+
+**1. Saat Disetujui (Approved):**
+```text
+✅ [SECURITY & HRD ALERT MGK]
+*UPDATE STATUS: RESET [PIN / PASSWORD] KARYAWAN DISETUJUI*
+━━━━━━━━━━━━━━━━━━━━
+Permohonan pembaruan kredensial karyawan telah disetujui:
+
+👤 Nama Karyawan: [Nama Karyawan]
+🆔 NIP / NIK: [Kode Karyawan]
+🏢 Cabang / Unit: [Nama Cabang]
+📌 Tipe Kredensial: [PIN / PASSWORD]
+👮 Disetujui Oleh: [Nama Admin Checker]
+⏰ Waktu Otorisasi: [Tanggal & Waktu Otorisasi]
+
+🛡️ Status: KREDENSIAL BARU AKTIF 🟢
+━━━━━━━━━━━━━━━━━━━━
+Notifikasi Otomatis Keamanan Sistem Maya Graha Kencana
+```
+
+**2. Saat Ditolak (Rejected):**
+```text
+🚫 [SECURITY & HRD ALERT MGK]
+*UPDATE STATUS: RESET [PIN / PASSWORD] KARYAWAN DITOLAK*
+━━━━━━━━━━━━━━━━━━━━
+Permohonan pembaruan kredensial karyawan telah ditolak:
+
+👤 Nama Karyawan: [Nama Karyawan]
+🆔 NIP / NIK: [Kode Karyawan]
+🏢 Cabang / Unit: [Nama Cabang]
+📌 Tipe Kredensial: [PIN / PASSWORD]
+📝 Alasan Penolakan: [Catatan Alasan dari Admin]
+👮 Ditolak Oleh: [Nama Admin Checker]
+⏰ Waktu Keputusan: [Tanggal & Waktu Keputusan]
+
+🛡️ Status: DITOLAK / KREDENSIAL LAMA TETAP BERLAKU ⚠️
+━━━━━━━━━━━━━━━━━━━━
+Notifikasi Otomatis Keamanan Sistem Maya Graha Kencana
+```
+
+---
+
+## 4. Panduan Konfigurasi Live `.env`, CLI Uji Coba (`whatsapp:test-alert`) & Troubleshooting Fonnte
+
+### A. Konfigurasi Variabel `.env`
+Pastikan variabel berikut terisi pada file `.env` aplikasi utama:
+
+```dotenv
+# ==============================================================================
+# NOTIFIKASI EARLY WARNING & WHATSAPP GATEWAY
+# ==============================================================================
+WHATSAPP_API_URL=https://api.fonnte.com/send
+WHATSAPP_API_TOKEN=ENZ1fdpjfM1deC4AkAfB
+WHATSAPP_ADMIN_PHONE=085183324076
+WHATSAPP_ADMIN_GROUP_ID=120363412767536329@g.us
+```
+
+### B. Perintah Artisan Uji Coba Kirim Pesan Nyata (`whatsapp:test-alert`)
+Tersedia command [`app/Console/Commands/TestWhatsAppAlertCommand.php`](../app/Console/Commands/TestWhatsAppAlertCommand.php) untuk menguji pengiriman pesan langsung ke Grup WhatsApp **`🚨 Security & HRD Alert MGK`** maupun ke nomor tertentu:
+
+```bash
+# 1. Uji koneksi umum (Ping Gateway)
+php artisan whatsapp:test-alert --type=ping
+
+# 2. Simulasi Pengajuan Registrasi Karyawan Baru
+php artisan whatsapp:test-alert --type=registration
+
+# 3. Simulasi Registrasi Disetujui (Approved)
+php artisan whatsapp:test-alert --type=approved
+
+# 4. Simulasi Registrasi Ditolak / Perlu Revisi (Rejected)
+php artisan whatsapp:test-alert --type=rejected
+
+# 5. Simulasi Akun Karyawan Dinonaktifkan (De-provisioned / Resign)
+php artisan whatsapp:test-alert --type=deactivated
+
+# 6. Simulasi Akun Karyawan Diaktifkan Kembali (Reactivated)
+php artisan whatsapp:test-alert --type=reactivated
+
+# Opsional: Kirim uji coba ke nomor WA perorangan tertentu
+php artisan whatsapp:test-alert --type=ping --target=085183324076
+```
+
+### C. Troubleshooting Error Fonnte: `"request invalid on disconnected device"`
+Apabila saat menjalankan `php artisan whatsapp:test-alert` muncul pesan gagal dan pada file `storage/logs/laravel.log` tercatat respons:
+```json
+{"reason":"request invalid on disconnected device","status":false}
+```
+
+**Penyebab:**
+Sesi perangkat WhatsApp pengirim yang terhubung dengan token API di dashboard Fonnte sedang terputus (*Disconnected*).
+
+**Langkah Perbaikan:**
+1. Buka dashboard **[https://md.fonnte.com](https://md.fonnte.com)** dan masuk ke menu **Device**.
+2. Periksa status perangkat yang menggunakan token API terkait.
+3. Jika berstatus **Disconnect**, klik tombol **Connect** lalu pindai (*scan*) QR Code menggunakan aplikasi WhatsApp pada HP pengirim (**Perangkat Tertaut / Linked Devices**).
+4. Setelah status perangkat kembali **Connected**, jalankan ulang perintah `php artisan whatsapp:test-alert --type=ping`.
+
+### D. Isolasi Lingkungan Pengujian Otomatis (`phpunit.xml`)
+Agar saat menjalankan `php artisan test` sistem tidak mengirim pesan uji coba (*spam*) ke grup WhatsApp asli dan tidak terhambat *timeout* jaringan eksternal, variabel gateway dikosongkan secara otomatis di dalam [`phpunit.xml`](../phpunit.xml):
+
+```xml
+<env name="WHATSAPP_API_URL" value=""/>
+<env name="WHATSAPP_API_TOKEN" value=""/>
+<env name="TELEGRAM_BOT_TOKEN" value=""/>
+<env name="TELEGRAM_ADMIN_CHAT_ID" value=""/>
+```
+
+---
+
+## 5. Hasil Verifikasi & Pengujian
+
+- **Unit & Feature Test:** Seluruh pengujian notifikasi lockout, registrasi, approval, rejection, de-provisioning, dan reset PIN diuji melalui pengujian otomatis (`RegistrationBreachAndApprovalNotificationTest`, `EmployeeRegistrationMakerCheckerTest`, `RegistrationEarlyWarningAndUniqueValidationTest`) dan berstatus **100% Passed (43 tests / 307 assertions)**.
+- **Standar Format:** Kode layanan notifikasi (`EarlyWarningNotificationService`) dan command CLI (`TestWhatsAppAlertCommand`) telah diformat rapi sesuai standar Laravel Pint.
+- **Audit Log & SLA Antrean:** Seluruh peristiwa tercatat di tabel `audit_logs` database, dan pengajuan `pending` yang melewati batas 3 hari otomatis ditandai sebagai `expired` (`Kedaluwarsa > 3 Hari`).

@@ -1135,6 +1135,160 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- PANEL MONITORING SHIFT, AUDIT SELISIH KAS (BLIND CASH COUNT) & PERSETUJUAN PERMINTAAN STOK -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 16px; margin-top: 18px;">
+                {{-- 1. AUDIT SELISIH KAS & REKAP TUTUP SHIFT (BLIND CASH COUNT) --}}
+                <div class="table-card-box" style="padding: 14px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 2px solid #0284c7;">
+                        <strong style="font-size: 13.5px; color: #1e293b;">🛡️ Audit Selisih Kas & Rekap Tutup Shift (Blind Cash Count)</strong>
+                        <span class="badge-status badge-status-paid" style="background: #0284c7;">{{ isset($shiftSummaries) ? $shiftSummaries->count() : 0 }} Shift</span>
+                    </div>
+                    <div style="overflow-x: auto; max-height: 320px; overflow-y: auto;">
+                        <table class="sales-table">
+                            <thead>
+                                <tr>
+                                    <th>Tanggal & Shift</th>
+                                    <th>Cabang & Kasir</th>
+                                    <th style="text-align: right;">Omset Total</th>
+                                    <th style="text-align: right;">Target Kas</th>
+                                    <th style="text-align: right;">Fisik Laci</th>
+                                    <th style="text-align: center;">Selisih Kas</th>
+                                    <th style="text-align: center;">Setor Kas & Verifikasi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse($shiftSummaries ?? [] as $sum)
+                                @php
+                                    $diff = (float) $sum->cash_difference;
+                                    $depStatus = $sum->deposit_status ?? 'unsubmitted';
+                                @endphp
+                                <tr>
+                                    <td>
+                                        <strong>{{ $sum->work_date?->format('d/m/Y') }}</strong>
+                                        <div class="td-datetime">{{ $sum->shift->name ?? 'Shift' }} ({{ strtoupper((string) $sum->status) }})</div>
+                                    </td>
+                                    <td>
+                                        <strong>{{ $sum->branch->name ?? 'Cabang' }}</strong>
+                                        <div class="td-datetime">👤 {{ $sum->employee->name ?? '-' }}</div>
+                                    </td>
+                                    <td style="text-align: right; font-weight: 700;">
+                                        Rp {{ number_format((float) $sum->total_revenue, 0, ',', '.') }}
+                                        @if((float) $sum->non_cash_amount > 0)
+                                            <div class="td-datetime" style="color: #7e22ce;">QRIS: Rp {{ number_format((float) $sum->non_cash_amount, 0, ',', '.') }}</div>
+                                        @endif
+                                    </td>
+                                    <td style="text-align: right; color: #475569;">Rp {{ number_format((float) $sum->system_expected_cash, 0, ',', '.') }}</td>
+                                    <td style="text-align: right; font-weight: 700; color: #0284c7;">Rp {{ number_format((float) $sum->blind_cash_count, 0, ',', '.') }}</td>
+                                    <td style="text-align: center;">
+                                        @if(abs($diff) < 0.01)
+                                            <span class="badge-status badge-status-paid">PAS (Rp 0)</span>
+                                        @elseif($diff > 0)
+                                            <span class="badge-status" style="background: #0284c7; color: #fff;">+Rp {{ number_format($diff, 0, ',', '.') }}</span>
+                                        @else
+                                            <span class="badge-status badge-status-cancelled">-Rp {{ number_format(abs($diff), 0, ',', '.') }}</span>
+                                        @endif
+                                    </td>
+                                    <td style="text-align: center; white-space: nowrap;">
+                                        @if($sum->deposited_amount !== null)
+                                            <div style="font-weight: 700; color: #059669; font-size: 11px;">
+                                                Rp {{ number_format((float) $sum->deposited_amount, 0, ',', '.') }}
+                                            </div>
+                                            <div class="td-datetime">{{ $sum->deposit_recipient ?: '-' }}</div>
+                                        @endif
+                                        @if($depStatus === 'verified')
+                                            <span class="badge-status badge-status-paid" style="margin-top: 2px;">✓ Setor Verified</span>
+                                        @elseif($depStatus === 'pending_verification')
+                                            <form action="{{ route('admin.penjualan.verify-setor', $sum->id) }}" method="POST" style="display: inline-block; margin-top: 3px;">
+                                                @csrf
+                                                <input type="hidden" name="deposit_status" value="verified">
+                                                <button type="submit" class="btn-modal btn-modal-primary" style="padding: 2px 7px; font-size: 10.5px; background: #28a745; border-color: #1e7e34;">✓ Terima Setor</button>
+                                            </form>
+                                        @else
+                                            <span class="td-datetime">Belum Setor</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                                @empty
+                                <tr>
+                                    <td colspan="7" style="text-align: center; padding: 16px; color: #64748b;">Belum ada data penutupan shift (Blind Cash Count).</td>
+                                </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {{-- 2. PERSETUJUAN PERMINTAAN STOK BARANG KASIR SHIFT --}}
+                <div class="table-card-box" style="padding: 14px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 2px solid #2aa89b;">
+                        <strong style="font-size: 13.5px; color: #1e293b;">📦 Persetujuan Permintaan Stok Kasir Shift</strong>
+                        <span class="badge-status" style="background: #f0ad4e; color: #fff;">
+                            {{ isset($stockRequests) ? $stockRequests->where('status', 'pending')->count() : 0 }} Pending
+                        </span>
+                    </div>
+                    <div style="overflow-x: auto; max-height: 320px; overflow-y: auto;">
+                        <table class="sales-table">
+                            <thead>
+                                <tr>
+                                    <th>No. Request</th>
+                                    <th>Cabang & Kasir</th>
+                                    <th>Item & Jumlah</th>
+                                    <th style="text-align: center;">Status</th>
+                                    <th style="text-align: center;">Aksi Otorisasi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse($stockRequests ?? [] as $req)
+                                <tr>
+                                    <td>
+                                        <div class="td-invoice">{{ $req->request_number }}</div>
+                                        <div class="td-datetime">{{ $req->created_at?->format('d/m/Y H:i') }}</div>
+                                    </td>
+                                    <td>
+                                        <strong>{{ $req->branch->name ?? 'Cabang' }}</strong>
+                                        <div class="td-datetime">👤 {{ $req->employee->name ?? '-' }}</div>
+                                    </td>
+                                    <td>
+                                        <strong>{{ $req->item_name }}</strong>
+                                        <div class="td-datetime">{{ $req->qty_requested }} {{ $req->unit }} ({{ strtoupper((string) $req->urgency) }})</div>
+                                    </td>
+                                    <td style="text-align: center;">
+                                        @if($req->status === 'fulfilled' || $req->status === 'approved')
+                                            <span class="badge-status badge-status-paid">Dipenuhi</span>
+                                        @elseif($req->status === 'rejected')
+                                            <span class="badge-status badge-status-cancelled">Ditolak</span>
+                                        @else
+                                            <span class="badge-status badge-status-pending">Pending</span>
+                                        @endif
+                                    </td>
+                                    <td style="text-align: center; white-space: nowrap;">
+                                        @if($req->status === 'pending')
+                                            <form action="{{ route('admin.penjualan.stock-request.status', $req->id) }}" method="POST" style="display: inline-block;">
+                                                @csrf
+                                                <input type="hidden" name="status" value="fulfilled">
+                                                <button type="submit" class="btn-modal btn-modal-primary" style="padding: 3px 8px; font-size: 11px; background: #28a745; border-color: #1e7e34;">✓ Setujui</button>
+                                            </form>
+                                            <form action="{{ route('admin.penjualan.stock-request.status', $req->id) }}" method="POST" style="display: inline-block;">
+                                                @csrf
+                                                <input type="hidden" name="status" value="rejected">
+                                                <button type="submit" class="btn-modal btn-modal-danger" style="padding: 3px 8px; font-size: 11px;">✕ Tolak</button>
+                                            </form>
+                                        @else
+                                            <span style="font-size: 11px; color: #64748b;">{{ $req->fulfilled_at?->format('H:i d/m') ?? 'Selesai' }}</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                                @empty
+                                <tr>
+                                    <td colspan="5" style="text-align: center; padding: 16px; color: #64748b;">Belum ada pengajuan permintaan stok dari kasir shift.</td>
+                                </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </main>
     </div>
 

@@ -9,6 +9,7 @@ use App\Domains\Attendance\Models\AttendanceRecord;
 use App\Domains\Attendance\Models\AuditLog;
 use App\Domains\Employee\Models\Shift;
 use App\Models\ShiftSalesSummary;
+use App\Models\ShiftStockRequest;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -449,5 +450,318 @@ class PosDualControlAndBlindCashCountTest extends TestCase
             'auditable_id' => $sale->id,
             'action' => 'pos_sale_discount_authorized',
         ]);
+    }
+
+    /**
+     * Test 9: Isolasi Data Transaksi per Cabang (Branch Isolation) pada Halaman Penjualan, Tutup Shift, dan Rekap.
+     * Semua kasir di cabang yang sama melihat & menggabungkan transaksi cabang tersebut pada hari yang sama,
+     * namun terpisah sepenuhnya dari transaksi cabang lain.
+     */
+    public function test_branch_isolation_combines_same_branch_sales_and_excludes_other_branch_sales(): void
+    {
+        // Buat Cabang Kedua (MGK Cabang 2) dan Kasir Cabang 2
+        $otherBranch = Branch::create([
+            'name' => 'MGK Cabang Kedua',
+            'code' => 'MGK-02',
+            'latitude' => -6.210000,
+            'longitude' => 106.820000,
+            'radius_meters' => 100,
+            'is_active' => true,
+        ]);
+
+        $sameBranchSecondCashier = Employee::create([
+            'branch_id' => $this->branch->id,
+            'name' => 'Rina Kasir Cabang 1',
+            'code' => 'EMP-KSR-02',
+            'position' => 'Kasir',
+            'role' => EmployeeRole::KASIR,
+            'password' => Hash::make('password123'),
+            'pin' => Hash::make('123456'),
+            'is_active' => true,
+        ]);
+
+        $otherBranchCashier = Employee::create([
+            'branch_id' => $otherBranch->id,
+            'name' => 'Doni Kasir Cabang 2',
+            'code' => 'EMP-KSR-03',
+            'position' => 'Kasir',
+            'role' => EmployeeRole::KASIR,
+            'password' => Hash::make('password123'),
+            'pin' => Hash::make('123456'),
+            'is_active' => true,
+        ]);
+
+        // 1. Transaksi Kasir 1 di Cabang 1: Rp 30.000
+        CafeSale::create([
+            'invoice_number' => 'INV-CBG1-A',
+            'branch_id' => $this->branch->id,
+            'employee_id' => $this->cashier->id,
+            'customer_name' => 'Pelanggan Cabang 1A',
+            'total_fnb' => 30000.0,
+            'total_billing' => 0.0,
+            'gross_amount' => 30000.0,
+            'net_amount' => 30000.0,
+            'amount_paid' => 30000.0,
+            'payment_method' => 'cash',
+            'payment_status' => 'paid',
+            'created_at' => now(),
+        ]);
+
+        // 2. Transaksi Kasir 2 di Cabang 1 (Cabang yang sama): Rp 45.000
+        CafeSale::create([
+            'invoice_number' => 'INV-CBG1-B',
+            'branch_id' => $this->branch->id,
+            'employee_id' => $sameBranchSecondCashier->id,
+            'customer_name' => 'Pelanggan Cabang 1B',
+            'total_fnb' => 45000.0,
+            'total_billing' => 0.0,
+            'gross_amount' => 45000.0,
+            'net_amount' => 45000.0,
+            'amount_paid' => 45000.0,
+            'payment_method' => 'cash',
+            'payment_status' => 'paid',
+            'created_at' => now(),
+        ]);
+
+        // 3. Transaksi Kasir 3 di Cabang 2 (Cabang berbeda): Rp 200.000
+        CafeSale::create([
+            'invoice_number' => 'INV-CBG2-X',
+            'branch_id' => $otherBranch->id,
+            'employee_id' => $otherBranchCashier->id,
+            'customer_name' => 'Pelanggan Cabang 2X',
+            'total_fnb' => 200000.0,
+            'total_billing' => 0.0,
+            'gross_amount' => 200000.0,
+            'net_amount' => 200000.0,
+            'amount_paid' => 200000.0,
+            'payment_method' => 'cash',
+            'payment_status' => 'paid',
+            'created_at' => now(),
+        ]);
+
+        // Buka halaman penjualan sebagai Kasir Cabang 1
+        $pageResponse = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->get(route('presensi2.penjualan'));
+
+        $pageResponse->assertOk();
+        // Harus menampilkan kedua invoice Cabang 1 (30.000 + 45.000 = 75.000) dan TIDAK menampilkan invoice Cabang 2
+        $pageResponse->assertSee('INV-CBG1-A');
+        $pageResponse->assertSee('INV-CBG1-B');
+        $pageResponse->assertDontSee('INV-CBG2-X');
+        $this->assertEquals(75000.0, (float) $pageResponse->viewData('totalFnbIncome'));
+
+        // Tutup shift pada Cabang 1 -> total_fnb_sales harus Rp 75.000 (bukan Rp 275.000)
+        $closeResponse = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->post(route('presensi2.penjualan.selesai'), [
+                'blind_cash_count' => 75000,
+                'auto_internet_income' => 0,
+            ]);
+
+        $closeResponse->assertRedirect(route('presensi2.rekap'));
+
+        $summary = ShiftSalesSummary::where('branch_id', $this->branch->id)->latest('id')->first();
+        $this->assertNotNull($summary);
+        $this->assertEquals(75000.0, (float) $summary->total_fnb_sales);
+        $this->assertEquals(0.0, (float) $summary->cash_difference);
+    }
+
+    /**
+     * Test 10: Pemisahan Pembayaran Tunai (Cash) vs Non-Tunai (QRIS) & Potongan Diskon saat Tutup Shift (Blind Cash Count).
+     * Uang fisik di laci (system_expected_cash) hanya mengharapkan uang tunai bersih (setelah diskon) dan tidak membebankan transaksi QRIS ke laci kasir.
+     */
+    public function test_shift_close_reconciles_net_cash_excluding_qris_and_discounts(): void
+    {
+        // 1. Transaksi Tunai dengan Diskon 10% (Gross Rp 50.000, Diskon Rp 5.000, Net Tunai Rp 45.000)
+        CafeSale::create([
+            'invoice_number' => 'INV-CASH-DISC-01',
+            'branch_id' => $this->branch->id,
+            'employee_id' => $this->cashier->id,
+            'customer_name' => 'Pelanggan Tunai Diskon',
+            'total_fnb' => 50000.0,
+            'total_billing' => 0.0,
+            'gross_amount' => 50000.0,
+            'discount_percent' => 10.0,
+            'discount_amount' => 5000.0,
+            'discount_authorized_by' => $this->supervisor->id,
+            'net_amount' => 45000.0,
+            'amount_paid' => 45000.0,
+            'payment_method' => 'cash',
+            'payment_status' => 'paid',
+            'created_at' => now(),
+        ]);
+
+        // 2. Transaksi Non-Tunai QRIS (Gross Rp 30.000, Net QRIS Rp 30.000 -> Masuk rekening bank, bukan laci kasir)
+        CafeSale::create([
+            'invoice_number' => 'INV-QRIS-01',
+            'branch_id' => $this->branch->id,
+            'employee_id' => $this->cashier->id,
+            'customer_name' => 'Pelanggan QRIS',
+            'total_fnb' => 30000.0,
+            'total_billing' => 0.0,
+            'gross_amount' => 30000.0,
+            'discount_percent' => 0.0,
+            'discount_amount' => 0.0,
+            'net_amount' => 30000.0,
+            'amount_paid' => 30000.0,
+            'payment_method' => 'qris',
+            'payment_status' => 'paid',
+            'created_at' => now(),
+        ]);
+
+        // Total Omset F&B Bersih = 45.000 + 30.000 = 75.000
+        // Non-Tunai (QRIS) = 30.000
+        // Target Kas Tunai di Laci (system_expected_cash) = 45.000 (dengan auto_internet_income = 0)
+        $response = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->post(route('presensi2.penjualan.selesai'), [
+                'blind_cash_count' => 45000,
+                'auto_internet_income' => 0,
+                'handover_notes' => 'Uang tunai di laci Rp 45.000 pas, QRIS Rp 30.000 masuk rekening.',
+            ]);
+
+        $response->assertRedirect(route('presensi2.rekap'));
+
+        $summary = ShiftSalesSummary::where('branch_id', $this->branch->id)->latest('id')->first();
+        $this->assertNotNull($summary);
+        $this->assertEquals(75000.0, (float) $summary->total_fnb_sales);
+        $this->assertEquals(75000.0, (float) $summary->total_revenue);
+        $this->assertEquals(30000.0, (float) $summary->non_cash_amount);
+        $this->assertEquals(45000.0, (float) $summary->system_expected_cash);
+        $this->assertEquals(45000.0, (float) $summary->blind_cash_count);
+        $this->assertEquals(0.0, (float) $summary->cash_difference);
+
+        // Verifikasi tampilan halaman Rekap menampilkan kartu ber-tab (Rincian Item F&B, Daftar Nota, Audit Stok, Riwayat Shift)
+        $rekapPage = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->get(route('presensi2.rekap'));
+
+        $rekapPage->assertOk();
+        $rekapPage->assertSee('1. Rincian Item F&B', false);
+        $rekapPage->assertSee('2. Daftar Nota', false);
+        $rekapPage->assertSee('3. Audit Stok Barang', false);
+        $rekapPage->assertSee('4. Riwayat Shift', false);
+        $rekapPage->assertSee('INV-CASH-DISC-01');
+        $rekapPage->assertSee('INV-QRIS-01');
+        $rekapPage->assertSee('QRIS');
+        $rekapPage->assertSee('TUNAI');
+        $rekapPage->assertSee('Check Out Presensi Pulang (1-Klik)');
+        $rekapPage->assertSee('print-table-report', false);
+        $rekapPage->assertSee('print-scale-select', false);
+        $rekapPage->assertSee('print-paper-mode', false);
+        $rekapPage->assertSee('Cetak Tabel Rekap', false);
+    }
+
+    /**
+     * Test 11: Modul Admin Penjualan menampilkan Audit Selisih Kas (Blind Cash Count) & dapat menyetujui Permintaan Stok Kasir Shift.
+     */
+    public function test_admin_can_view_shift_cash_audit_and_approve_stock_request(): void
+    {
+        $stockRequest = ShiftStockRequest::create([
+            'request_number' => 'REQ-STK-TEST-01',
+            'employee_id' => $this->cashier->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift->id,
+            'item_category' => 'kertas',
+            'item_name' => 'Kertas HVS A4 70gsm',
+            'qty_requested' => 4,
+            'unit' => 'Rim',
+            'urgency' => 'high',
+            'notes' => 'Stok kertas A4 tinggal setengah rim',
+            'status' => 'pending',
+        ]);
+
+        ShiftSalesSummary::create([
+            'employee_id' => $this->cashier->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift->id,
+            'work_date' => now()->toDateString(),
+            'total_fnb_sales' => 120000,
+            'total_internet_sales' => 80000,
+            'total_revenue' => 200000,
+            'non_cash_amount' => 50000,
+            'system_expected_cash' => 150000,
+            'blind_cash_count' => 150000,
+            'cash_in_drawer' => 150000,
+            'cash_difference' => 0,
+            'status' => 'closed',
+            'closed_at' => now(),
+        ]);
+
+        // 1. Buka halaman Admin Penjualan
+        $adminResponse = $this->get(route('admin.penjualan'));
+        $adminResponse->assertOk();
+        $adminResponse->assertSee('Audit Selisih Kas & Rekap Tutup Shift (Blind Cash Count)', false);
+        $adminResponse->assertSee('Persetujuan Permintaan Stok Kasir Shift', false);
+        $adminResponse->assertSee('REQ-STK-TEST-01');
+
+        // 2. Admin menyetujui permintaan stok kasir
+        $approveResponse = $this->postJson(route('admin.penjualan.stock-request.status', $stockRequest->id), [
+            'status' => 'fulfilled',
+            'notes' => 'Stok 4 Rim A4 dikirim dari gudang pusat',
+        ]);
+
+        $approveResponse->assertOk();
+        $approveResponse->assertJson(['success' => true]);
+
+        $this->assertEquals('fulfilled', $stockRequest->fresh()->status);
+        $this->assertNotNull($stockRequest->fresh()->fulfilled_at);
+    }
+
+    /**
+     * Test 12: Kasir dapat melakukan Setor Kas Shift (Lanjutan Rekap), melihat History Setor di Beranda & Rekap, serta Admin dapat memverifikasi setoran.
+     */
+    public function test_cashier_can_submit_shift_deposit_and_view_deposit_history_in_presensi2_and_rekap(): void
+    {
+        $summary = ShiftSalesSummary::create([
+            'employee_id' => $this->cashier->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift->id,
+            'work_date' => now()->toDateString(),
+            'total_fnb_sales' => 100000,
+            'total_internet_sales' => 150000,
+            'total_revenue' => 250000,
+            'non_cash_amount' => 50000,
+            'system_expected_cash' => 200000,
+            'blind_cash_count' => 200000,
+            'cash_in_drawer' => 200000,
+            'cash_difference' => 0,
+            'status' => 'closed',
+            'closed_at' => now(),
+        ]);
+
+        // 1. Kasir submit Setor Kas dari halaman Rekap (otomatis selesai / disetor ke shift selanjutnya tanpa menunggu verifikasi admin)
+        $depositResponse = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->post(route('presensi2.rekap.setor'), [
+                'summary_id' => $summary->id,
+                'deposited_amount' => 180000,
+                'retained_drawer_cash' => 20000,
+                'deposit_method' => 'next_shift_handover',
+                'deposit_recipient' => 'Shift 2 (Grace)',
+                'deposit_notes' => 'Setor uang tunai Rp 180.000 otomatis ke shift selanjutnya, sisa Rp 20.000 receh di laci',
+            ]);
+
+        $depositResponse->assertRedirect(route('presensi2.rekap'));
+
+        $summary->refresh();
+        $this->assertEquals('verified', $summary->deposit_status);
+        $this->assertEquals(180000.0, (float) $summary->deposited_amount);
+        $this->assertEquals(20000.0, (float) $summary->retained_drawer_cash);
+        $this->assertEquals('Shift 2 (Grace)', $summary->deposit_recipient);
+        $this->assertNotNull($summary->deposit_verified_at);
+
+        // 2. Beranda presensi2/ menampilkan History Setor Kas sebagai Disetor ke Shift Selanjutnya
+        $indexPage = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->get(route('presensi2.index'));
+
+        $indexPage->assertOk();
+        $indexPage->assertSee('Status & History Setor Kas', false);
+        $indexPage->assertSee('Disetor ke Shift Selanjutnya', false);
+        $indexPage->assertSee('Shift 2 (Grace)');
+
+        // 3. Halaman rekap menampilkan status Otomatis Disetor ke Shift Selanjutnya
+        $rekapPage = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->get(route('presensi2.rekap'));
+
+        $rekapPage->assertOk();
+        $rekapPage->assertSee('Otomatis Disetor ke Shift Selanjutnya', false);
+        $rekapPage->assertSee('Shift 2 (Grace)');
     }
 }

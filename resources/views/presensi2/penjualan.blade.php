@@ -184,46 +184,32 @@
                     </button>
                 </div>
 
-                {{-- 2. 4 QUICK ACTION BUTTONS (2x2 GRID) --}}
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
-                    {{-- 1. Ganti / Kunci Billing (Orange/Amber) --}}
+                {{-- 2. 2 TOMBOL RINGKAS: DATA BILLING & DATA PRINT --}}
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                    {{-- 1. Data & Kunci Billing (Orange/Green Unified) --}}
                     <button type="button" onclick="openModalBilling()" 
-                            style="background: {{ $isBillingLocked ? '#b45309' : '#f39c12' }}; color: #ffffff; border: none; padding: 7px 8px; font-size: 11px; font-weight: 700; border-radius: 3px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.25; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.2); transition: filter 0.15s;"
+                            style="background: {{ $isBillingLocked ? '#b45309' : '#00a65a' }}; color: #ffffff; border: none; padding: 8px 10px; font-size: 11.5px; font-weight: 700; border-radius: 4px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.3; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.2); transition: filter 0.15s;"
                             onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">
-                        @if($isBillingLocked)
-                            <span style="display: flex; align-items: center; gap: 4px;"><span>🔒</span> Billing Terkunci</span>
-                            <span style="font-size: 9.5px; opacity: 0.95;">Rp {{ number_format($totalInternetIncome, 0, ',', '.') }}</span>
-                        @else
-                            <span style="display: flex; align-items: center; gap: 4px;"><span>🔄</span> Ganti Billing</span>
-                            <span style="font-size: 9.5px; opacity: 0.95;">(Kunci Shift Data)</span>
-                        @endif
-                    </button>
-                    
-                    {{-- 2. cek data billing (Green) --}}
-                    <button type="button" onclick="openModalCekBilling()" 
-                            style="background: #00a65a; color: #ffffff; border: none; padding: 9px 8px; font-size: 11.5px; font-weight: 700; border-radius: 3px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.2); transition: filter 0.15s;"
-                            onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">
-                        <span>👁️</span> cek data billing
+                        <span style="display: flex; align-items: center; gap: 4px;">
+                            <span>{{ $isBillingLocked ? '🔒' : '💻' }}</span>
+                            <span>{{ $isBillingLocked ? 'Billing Terkunci' : 'Data & Kunci Billing' }}</span>
+                        </span>
+                        <span style="font-size: 10px; opacity: 0.95; font-family: monospace;">
+                            Rp {{ number_format($totalInternetIncome, 0, ',', '.') }} ({{ $occupiedPcCount ?? 0 }}/{{ $totalPcCount ?? 15 }} PC)
+                        </span>
                     </button>
 
-                    {{-- 3. Ganti data print. (penjualan kertas auto) (Cyan) --}}
+                    {{-- 2. Data & Kunci Print Kertas (Cyan Unified) --}}
                     <button type="button" onclick="openModalPrintKertas()" 
-                            style="background: {{ $isPrintLocked ? '#0891b2' : '#00c0ef' }}; color: #ffffff; border: none; padding: 7px 6px; font-size: 10.5px; font-weight: 700; border-radius: 3px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.25; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.2); transition: filter 0.15s;"
+                            style="background: {{ $isPrintLocked ? '#0891b2' : '#00c0ef' }}; color: #ffffff; border: none; padding: 8px 10px; font-size: 11.5px; font-weight: 700; border-radius: 4px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.3; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.2); transition: filter 0.15s;"
                             onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">
-                        @if($isPrintLocked)
-                            <span style="display: flex; align-items: center; gap: 4px;"><span>🔒</span> Print Terkunci</span>
-                            <span style="font-size: 9.5px; opacity: 0.95;">{{ $totalPrintPages }} lbr (Rp {{ number_format($totalPrintIncome, 0, ',', '.') }})</span>
-                        @else
-                            <span style="display: flex; align-items: center; gap: 4px;"><span>🔄</span> Ganti data print.</span>
-                            <span style="font-size: 9.5px; opacity: 0.95;">(penjualan kertas auto)</span>
-                        @endif
-                    </button>
-
-                    {{-- 4. cek printing (Dark Teal/Green) --}}
-                    <button type="button" onclick="openModalCekPrinting()" 
-                            style="background: #008d4c; color: #ffffff; border: none; padding: 9px 8px; font-size: 11.5px; font-weight: 700; border-radius: 3px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.2); transition: filter 0.15s;"
-                            onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">
-                        <span>👁️</span> cek printing
+                        <span style="display: flex; align-items: center; gap: 4px;">
+                            <span>{{ $isPrintLocked ? '🔒' : '🖨️' }}</span>
+                            <span>{{ $isPrintLocked ? 'Print Terkunci' : 'Data & Kunci Print' }}</span>
+                        </span>
+                        <span style="font-size: 10px; opacity: 0.95; font-family: monospace;">
+                            {{ $totalPrintPages }} lbr (Rp {{ number_format($totalPrintIncome, 0, ',', '.') }})
+                        </span>
                     </button>
                 </div>
 
@@ -316,78 +302,91 @@
                             </table>
                         </div>
 
-                        {{-- TARGET PELANGGAN & METODE PEMBAYARAN --}}
+                        {{-- TARGET PELANGGAN & METODE PEMBAYARAN (RINGKAS) --}}
                         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-top: auto;">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                                 <div>
-                                    <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Target Pelanggan / PC:</label>
-                                    <div style="display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 4px;" class="scroll-chips">
-                                        <button type="button" onclick="selectPcTarget('Pelanggan Umum')" class="pc-chip active" style="padding: 2px 6px; font-size: 10px; border-radius: 4px; background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; white-space: nowrap; cursor: pointer;">Umum</button>
-                                        @for($i = 1; $i <= 10; $i++)
-                                        @php $pcCode = 'PC-' . str_pad($i, 2, '0', STR_PAD_LEFT); @endphp
-                                        <button type="button" onclick="selectPcTarget('{{ $pcCode }}')" class="pc-chip" style="padding: 2px 6px; font-size: 10px; border-radius: 4px; background: #ffffff; color: #64748b; border: 1px solid #cbd5e1; white-space: nowrap; cursor: pointer;">{{ $pcCode }}</button>
-                                        @endfor
+                                    <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Pelanggan / Unit PC:</label>
+                                    <div style="display: flex; gap: 4px;">
+                                        <select id="pos-pc-quick-select" onchange="selectPcTarget(this.value)" style="width: 92px; padding: 6px 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11.5px; color: #0284c7; font-weight: 700; background: #e0f2fe; cursor: pointer;">
+                                            <option value="Pelanggan Umum">Umum</option>
+                                            @forelse($pcStations as $st)
+                                                <option value="{{ $st->station_code }}">{{ $st->station_code }}</option>
+                                            @empty
+                                                @for($i = 1; $i <= 10; $i++)
+                                                    @php $pcCode = 'PC-' . str_pad($i, 2, '0', STR_PAD_LEFT); @endphp
+                                                    <option value="{{ $pcCode }}">{{ $pcCode }}</option>
+                                                @endfor
+                                            @endforelse
+                                        </select>
+                                        <input type="text" id="pos-customer-input" value="Pelanggan Umum" placeholder="Nama / PC..." style="flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; color: #0f172a; background: #ffffff;">
                                     </div>
-                                    <input type="text" id="pos-customer-input" value="Pelanggan Umum" style="width: 100%; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; color: #0f172a; background: #ffffff;">
                                 </div>
                                 <div>
                                     <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Metode Pembayaran:</label>
-                                    <select id="pos-payment-select" onchange="onPaymentMethodChanged(this.value)" style="width: 100%; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; color: #0f172a; background: #ffffff;">
+                                    <select id="pos-payment-select" onchange="onPaymentMethodChanged(this.value)" style="width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; color: #0f172a; font-weight: 600; background: #ffffff;">
                                         <option value="cash">💵 Tunai (Cash)</option>
                                         <option value="qris">📱 QRIS</option>
                                     </select>
-                                    <div style="font-size: 11px; color: #64748b; margin-top: 6px; display: flex; justify-content: space-between;">
-                                        <span>Total Kotor:</span>
-                                        <strong id="pos-gross-display" style="color: #475569; font-size: 12.5px;">Rp 0</strong>
-                                    </div>
+                                </div>
+                            </div>
 
-                                    {{-- DISKON TRANSAKSI POS & DUAL CONTROL --}}
-                                    <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed #cbd5e1;">
-                                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-                                            <span style="font-size: 11px; font-weight: 600; color: #475569;">Diskon Transaksi (%):</span>
-                                            <span class="badge" style="background: #e0f2fe; color: #0369a1; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px;">
-                                                Maks Kasir: {{ (float) ($currentEmployee->max_discount_approval_percent ?? 0) }}%
-                                            </span>
-                                        </div>
-                                        <div style="display: flex; gap: 6px; align-items: center;">
-                                            <input type="number" id="pos-discount-percent" min="0" max="100" value="0" oninput="calculateDiscountAndChange()" placeholder="0%" style="width: 70px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; font-weight: 700; color: #dc2626; background: #ffffff;">
+                            {{-- RINGKASAN TAGIHAN & TOMBOL TOGGLE DISKON OPSIONAL --}}
+                            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 5px; padding: 8px 10px; margin-bottom: 8px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-size: 12px; font-weight: 700; color: #1e293b;">Total Tagihan:</span>
+                                        <button type="button" id="btn-toggle-discount" onclick="togglePosDiscountBox()" style="background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; cursor: pointer;">
+                                            🏷️ + Diskon
+                                        </button>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <span id="pos-gross-display" style="display: none; font-size: 11px; color: #94a3b8; text-decoration: line-through; margin-right: 4px;">Rp 0</span>
+                                        <strong id="pos-total-display" style="color: #059669; font-size: 15px; font-family: monospace;">Rp 0</strong>
+                                    </div>
+                                </div>
+
+                                {{-- PANEL DISKON OPSIONAL (DEFAULT TERSEMBUNYI AGAR BERSIH) --}}
+                                <div id="pos-discount-collapsible" style="display: none; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #cbd5e1;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <span style="font-size: 11px; font-weight: 600; color: #475569;">Diskon (%):</span>
+                                            <input type="number" id="pos-discount-percent" min="0" max="100" value="0" oninput="calculateDiscountAndChange()" placeholder="0%" style="width: 64px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; font-weight: 700; color: #dc2626; background: #ffffff;">
                                             <span id="pos-discount-amount-text" style="font-size: 11px; color: #dc2626; font-weight: 700;">-Rp 0</span>
                                         </div>
-
-                                        {{-- PROMPT DUAL CONTROL SUPERVISOR PIN JIKA MELEBIHI BATAS KASIR --}}
-                                        <div id="pos-supervisor-discount-box" style="display: none; margin-top: 6px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 8px;">
-                                            <div style="font-size: 10.5px; font-weight: 700; color: #991b1b; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
-                                                <span>🛡️</span> Diskon Melebihi Batas Kasir — Butuh PIN Supervisor:
-                                            </div>
-                                            <input type="password" id="pos-supervisor-discount-pin" maxlength="6" placeholder="Masukkan 6-digit PIN Supervisor..." style="width: 100%; padding: 5px 8px; border: 1px solid #f87171; border-radius: 4px; font-size: 12px; font-weight: bold; background: #ffffff; color: #1e293b;">
-                                        </div>
+                                        <span class="badge" style="background: #e0f2fe; color: #0369a1; font-size: 9.5px; font-weight: 700; padding: 2px 6px; border-radius: 4px;">
+                                            Maks Mandiri: {{ (float) ($currentEmployee->max_discount_approval_percent ?? 0) }}%
+                                        </span>
                                     </div>
 
-                                    <div style="font-size: 11px; color: #64748b; margin-top: 8px; padding-top: 6px; border-top: 1px solid #cbd5e1; display: flex; justify-content: space-between; align-items: center;">
-                                        <span style="font-weight: 700; color: #1e293b;">Total Tagihan Bersih:</span>
-                                        <strong id="pos-total-display" style="color: #059669; font-size: 14px;">Rp 0</strong>
+                                    {{-- PROMPT DUAL CONTROL SUPERVISOR PIN JIKA MELEBIHI BATAS KASIR --}}
+                                    <div id="pos-supervisor-discount-box" style="display: none; margin-top: 6px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 5px; padding: 7px 8px;">
+                                        <div style="font-size: 10.5px; font-weight: 700; color: #991b1b; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
+                                            <span>🛡️</span> Melebihi Batas Kasir — Masukkan PIN Supervisor:
+                                        </div>
+                                        <input type="password" id="pos-supervisor-discount-pin" maxlength="6" placeholder="6-digit PIN Supervisor..." style="width: 100%; padding: 5px 8px; border: 1px solid #f87171; border-radius: 4px; font-size: 12px; font-weight: bold; background: #ffffff; color: #1e293b;">
                                     </div>
                                 </div>
                             </div>
 
                             {{-- CASH CALCULATOR --}}
-                            <div id="cash-calculator-section" style="display: block; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 4px; padding: 8px 10px;">
+                            <div id="cash-calculator-section" style="display: block; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 5px; padding: 8px 10px;">
                                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-                                    <span style="font-size: 11px; font-weight: 600; color: #065f46;">Uang Tunai Diterima:</span>
-                                    <button type="button" onclick="setCashPreset('exact')" style="font-size: 11px; color: #059669; font-weight: 700; background: none; border: none; cursor: pointer;">[Uang Pas]</button>
-                                </div>
-                                <div style="display: flex; gap: 6px;">
-                                    <input type="number" id="pos-cash-amount" oninput="calculateChange()" placeholder="Rp Tunai..." style="flex: 1; padding: 6px 8px; border: 1px solid #6ee7b7; border-radius: 4px; font-size: 12px; font-weight: 700; color: #065f46; background: #ffffff;">
+                                    <span style="font-size: 11px; font-weight: 600; color: #065f46;">Tunai Diterima:</span>
                                     <div style="display: flex; gap: 3px;">
+                                        <button type="button" onclick="setCashPreset('exact')" style="background: #059669; color: #ffffff; border: none; border-radius: 3px; padding: 2px 7px; font-size: 10px; font-weight: 700; cursor: pointer;">Uang Pas</button>
                                         <button type="button" onclick="setCashPreset(10000)" style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 3px; padding: 2px 6px; font-size: 10px; cursor: pointer;">10k</button>
                                         <button type="button" onclick="setCashPreset(20000)" style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 3px; padding: 2px 6px; font-size: 10px; cursor: pointer;">20k</button>
                                         <button type="button" onclick="setCashPreset(50000)" style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 3px; padding: 2px 6px; font-size: 10px; cursor: pointer;">50k</button>
                                         <button type="button" onclick="setCashPreset(100000)" style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 3px; padding: 2px 6px; font-size: 10px; cursor: pointer;">100k</button>
                                     </div>
                                 </div>
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 12px;">
-                                    <span style="color: #047857; font-weight: 600;">Kembalian:</span>
-                                    <strong id="pos-change-text" style="color: #059669; font-size: 13px;">Rp 0</strong>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="number" id="pos-cash-amount" oninput="calculateChange()" placeholder="Nominal Rp..." style="flex: 1; padding: 5px 8px; border: 1px solid #6ee7b7; border-radius: 4px; font-size: 12px; font-weight: 700; color: #065f46; background: #ffffff;">
+                                    <div style="font-size: 11.5px; white-space: nowrap;">
+                                        <span style="color: #047857; font-weight: 600;">Kembali:</span>
+                                        <strong id="pos-change-text" style="color: #059669; font-size: 13px; font-family: monospace;">Rp 0</strong>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -514,322 +513,13 @@
 
     </div>
 
-    {{-- 2. PENDAPATAN INTERNET (OTOMATIS PENUH) --}}
-    <div class="glass-card" style="padding: 20px; margin-bottom: 16px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; border-bottom: 1px solid var(--border-glass); padding-bottom: 12px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <div style="width: 38px; height: 38px; border-radius: 12px; background: rgba(6, 182, 212, 0.18); display: flex; align-items: center; justify-content: center; font-size: 20px;">
-                    🌐
-                </div>
-                <div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <h3 style="font-size: 15px; font-weight: 700; color: #fff;">2. Pendapatan Internet</h3>
-                        <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 10px; padding: 2px 8px;">
-                            ⚡ OTOMATIS SISTEM
-                        </span>
-                    </div>
-                    <span style="font-size: 11px; color: var(--text-muted);">Tersinkronisasi otomatis dari Server Billing &amp; Sesi PC Client (Tanpa Input Manual)</span>
-                </div>
-            </div>
-            <button type="button" onclick="window.location.reload()" class="btn" style="padding: 6px 14px; font-size: 12px; background: rgba(6, 182, 212, 0.15); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.3); display: inline-flex; align-items: center; gap: 6px;">
-                <span>🔄</span> Segarkan Billing Otomatis
-            </button>
-        </div>
-
-        {{-- KARTU STATISTIK BILLING OTOMATIS --}}
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px;">
-            <div style="background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.2); border-radius: 12px; padding: 12px 14px;">
-                <span style="font-size: 11px; color: var(--text-muted); display: block;">Total Omset Billing Shift Ini:</span>
-                <div style="font-size: 22px; font-weight: 800; color: #22d3ee; font-family: 'Outfit', monospace; margin-top: 2px;">
-                    Rp {{ number_format($totalInternetIncome, 0, ',', '.') }}
-                </div>
-                <span style="font-size: 10px; color: #34d399; font-weight: 600;">✓ Dihitung Otomatis</span>
-            </div>
-            <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 12px; padding: 12px 14px;">
-                <span style="font-size: 11px; color: var(--text-muted); display: block;">PC Sedang Main (Online):</span>
-                <div style="font-size: 20px; font-weight: 800; color: #34d399; font-family: 'Outfit', monospace; margin-top: 2px;">
-                    {{ $occupiedPcCount ?? 0 }} <span style="font-size: 13px; font-weight: 500; color: var(--text-muted);">/ {{ $totalPcCount ?? 15 }} Unit</span>
-                </div>
-                <span style="font-size: 10px; color: var(--text-sub);">Sesi berjalan saat ini</span>
-            </div>
-            <div style="background: rgba(148, 163, 184, 0.08); border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 12px; padding: 12px 14px;">
-                <span style="font-size: 11px; color: var(--text-muted); display: block;">PC Kosong / Siap Pakai:</span>
-                <div style="font-size: 20px; font-weight: 800; color: #cbd5e1; font-family: 'Outfit', monospace; margin-top: 2px;">
-                    {{ $availablePcCount ?? 0 }} <span style="font-size: 13px; font-weight: 500; color: var(--text-muted);">Unit Tersedia</span>
-                </div>
-                <span style="font-size: 10px; color: var(--text-sub);">Siap digunakan tamu</span>
-            </div>
-        </div>
-
-        {{-- MONITOR LIVE UNIT PC STATIONS (OTOMATIS) --}}
-        <div style="margin-bottom: 16px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                <span style="font-size: 12px; font-weight: 700; color: #e2e8f0;">Live Monitor Status PC Station:</span>
-                <span style="font-size: 11px; color: var(--text-muted);">Update otomatis dari server client</span>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(135px, 1fr)); gap: 8px;">
-                @foreach($pcStations as $station)
-                <div style="background: {{ $station->status === 'occupied' ? 'rgba(6, 182, 212, 0.12)' : 'rgba(15, 23, 42, 0.5)' }}; border: 1px solid {{ $station->status === 'occupied' ? 'rgba(6, 182, 212, 0.35)' : 'rgba(255, 255, 255, 0.07)' }}; border-radius: 10px; padding: 10px; text-align: center; position: relative;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-                        <span style="font-size: 12px; font-weight: 800; color: {{ $station->status === 'occupied' ? '#38bdf8' : '#cbd5e1' }}; font-family: 'Outfit', monospace;">
-                            {{ $station->station_code }}
-                        </span>
-                        <span style="width: 8px; height: 8px; border-radius: 50%; background: {{ $station->status === 'occupied' ? '#22d3ee' : '#64748b' }}; box-shadow: 0 0 6px {{ $station->status === 'occupied' ? '#22d3ee' : 'transparent' }};"></span>
-                    </div>
-                    @if($station->status === 'occupied')
-                        <div style="font-size: 11px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                            {{ $station->current_user_name ?? 'User Main' }}
-                        </div>
-                        <div style="font-size: 10px; color: #34d399; margin-top: 2px;">
-                            ⏱️ {{ $station->duration_minutes }} Mnt
-                        </div>
-                        <div style="font-size: 11px; font-weight: 700; color: #38bdf8; font-family: 'Outfit', monospace; margin-top: 2px;">
-                            Rp {{ number_format($station->billing_amount, 0, ',', '.') }}
-                        </div>
-                    @else
-                        <div style="font-size: 10px; color: var(--text-sub); margin-top: 4px;">
-                            Siap Pakai
-                        </div>
-                        <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
-                            Rp {{ number_format($station->hourly_rate, 0, ',', '.') }}/jam
-                        </div>
-                    @endif
-                </div>
-                @endforeach
-            </div>
-        </div>
-
-        {{-- TABEL RIWAYAT TRANSAKSI BILLING INTERNET OTOMATIS --}}
-        <div>
-            <span style="font-size: 12px; font-weight: 700; color: #e2e8f0; display: block; margin-bottom: 8px;">
-                Riwayat Sesi Billing Internet Shift Berjalan:
-            </span>
-            @if($internetSales->count() > 0)
-            <div style="overflow-x: auto;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
-                    <thead>
-                        <tr style="border-bottom: 1px solid var(--border-glass); color: var(--text-muted);">
-                            <th style="padding: 8px 10px;">Jam</th>
-                            <th style="padding: 8px 10px;">Invoice Billing</th>
-                            <th style="padding: 8px 10px;">PC Unit</th>
-                            <th style="padding: 8px 10px;">Pengguna / Member</th>
-                            <th style="padding: 8px 10px; text-align: right;">Billing</th>
-                            <th style="padding: 8px 10px; text-align: center;">Status</th>
-                            <th style="padding: 8px 10px; text-align: center;">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($internetSales as $sale)
-                        @php
-                            $isCancelled = $sale->payment_status === 'cancelled';
-                        @endphp
-                        <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05); {{ $isCancelled ? 'opacity: 0.65; background: rgba(239, 68, 68, 0.05);' : '' }}">
-                            <td style="padding: 10px; color: var(--text-sub); white-space: nowrap;">
-                                {{ $sale->created_at->format('H:i') }}
-                            </td>
-                            <td style="padding: 10px;">
-                                <button type="button" 
-                                    onclick='openInvoiceModal(@json($sale))'
-                                    title="Klik untuk membuka rincian / batalkan sesi"
-                                    style="background: rgba(6, 182, 212, 0.14); border: 1px solid rgba(6, 182, 212, 0.4); color: #67e8f9; padding: 5px 10px; border-radius: 6px; font-family: monospace; font-size: 11px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s;"
-                                    onmouseover="this.style.background='rgba(6, 182, 212, 0.3)'; this.style.borderColor='#22d3ee';"
-                                    onmouseout="this.style.background='rgba(6, 182, 212, 0.14)'; this.style.borderColor='rgba(6, 182, 212, 0.4)';">
-                                    <span>🌐</span>
-                                    <span style="{{ $isCancelled ? 'text-decoration: line-through; color: #fca5a5;' : '' }}">{{ $sale->invoice_number }}</span>
-                                </button>
-                            </td>
-                            <td style="padding: 10px; color: #fff;">
-                                <span class="badge" style="background: rgba(6, 182, 212, 0.15); color: #22d3ee; font-weight: 700;">
-                                    {{ $sale->pcStation->station_code ?? 'Billing Kasir' }}
-                                </span>
-                            </td>
-                            <td style="padding: 10px; color: var(--text-muted);">
-                                {{ $sale->customer_name }}
-                            </td>
-                            <td style="padding: 10px; text-align: right; font-weight: 700; color: {{ $isCancelled ? '#94a3b8' : '#22d3ee' }};">
-                                <span style="{{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
-                                    Rp {{ number_format($sale->total_billing, 0, ',', '.') }}
-                                </span>
-                            </td>
-                            <td style="padding: 10px; text-align: center;">
-                                @if($isCancelled)
-                                    <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); font-size: 10px; font-weight: 700; padding: 3px 8px;">
-                                        DIBATALKAN
-                                    </span>
-                                @else
-                                    <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 10px; padding: 3px 8px;">
-                                        ✓ Tersinkron
-                                    </span>
-                                @endif
-                            </td>
-                            <td style="padding: 10px; text-align: center;">
-                                <button type="button" onclick='openInvoiceModal(@json($sale))' class="btn" style="padding: 4px 10px; font-size: 11px; background: rgba(255, 255, 255, 0.06); color: var(--text-muted); border-radius: 6px;">
-                                    Detail
-                                </button>
-                            </td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-            @else
-            <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 12px; background: rgba(15, 23, 42, 0.3); border-radius: 12px;">
-                ⚡ Sesi billing internet aktif otomatis tercatat dan masuk ke akumulasi omset di atas secara realtime.
-            </div>
-            @endif
-        </div>
-    </div>
-
-    {{-- AUDIT PERBANDINGAN STOK: SEBELUMNYA VS TERJUAL VS SESUDAHNYA --}}
-    <div class="glass-card" style="padding: 20px; margin-bottom: 16px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid var(--border-glass); padding-bottom: 10px; flex-wrap: wrap; gap: 10px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <div style="width: 36px; height: 36px; border-radius: 10px; background: rgba(59, 130, 246, 0.18); display: flex; align-items: center; justify-content: center; font-size: 18px;">
-                    📦
-                </div>
-                <div>
-                    <h3 style="font-size: 15px; font-weight: 700; color: #fff;">Audit Perbandingan Stok (Sebelumnya vs Terjual vs Sesudahnya)</h3>
-                    <span style="font-size: 11px; color: var(--text-muted);">Pelacakan realtime stok kertas, makanan, dan minuman dalam satuan pcs/lembar</span>
-                </div>
-            </div>
-            {{-- TAB SWITCHER --}}
-            <div style="display: flex; gap: 6px;">
-                <button type="button" onclick="showStockTab('tab-stock-kertas', this)" class="btn-stock-tab active" style="padding: 6px 14px; font-size: 11px; font-weight: 700; border-radius: 8px; border: 1px solid rgba(139, 92, 246, 0.4); background: rgba(139, 92, 246, 0.25); color: #fff; cursor: pointer;">
-                    🖨️ Kertas Print
-                </button>
-                <button type="button" onclick="showStockTab('tab-stock-makanan', this)" class="btn-stock-tab" style="padding: 6px 14px; font-size: 11px; font-weight: 700; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(15, 23, 42, 0.6); color: var(--text-muted); cursor: pointer;">
-                    🍜 Makanan ({{ count($stockComparisons['makanan'] ?? []) }})
-                </button>
-                <button type="button" onclick="showStockTab('tab-stock-minuman', this)" class="btn-stock-tab" style="padding: 6px 14px; font-size: 11px; font-weight: 700; border-radius: 8px; border: 1px solid var(--border-glass); background: rgba(15, 23, 42, 0.6); color: var(--text-muted); cursor: pointer;">
-                    🥤 Minuman ({{ count($stockComparisons['minuman'] ?? []) }})
-                </button>
-            </div>
-        </div>
-
-        {{-- TAB 1: KERTAS PRINT --}}
-        <div id="tab-stock-kertas" class="stock-tab-content">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px;">
-                @foreach($stockComparisons['kertas'] ?? [] as $kItem)
-                <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 14px;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                        <span style="font-size: 13px; font-weight: 700; color: #fff;">{{ $kItem['name'] }}</span>
-                        <span class="badge" style="background: rgba(139, 92, 246, 0.15); color: #c4b5fd; font-size: 10px;">{{ $kItem['rim_info'] }}</span>
-                    </div>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; background: rgba(0, 0, 0, 0.25); padding: 10px; border-radius: 8px;">
-                        <div>
-                            <span style="font-size: 10px; color: var(--text-muted); display: block;">Sebelumnya</span>
-                            <span style="font-size: 16px; font-weight: 700; color: #93c5fd;">{{ $kItem['sebelumnya'] }}</span>
-                            <span style="font-size: 10px; color: var(--text-muted);">{{ $kItem['unit'] }}</span>
-                        </div>
-                        <div>
-                            <span style="font-size: 10px; color: #fbbf24; display: block;">Terpakai</span>
-                            <span style="font-size: 16px; font-weight: 700; color: #fbbf24;">-{{ $kItem['terpakai'] }}</span>
-                            <span style="font-size: 10px; color: var(--text-muted);">{{ $kItem['unit'] }}</span>
-                        </div>
-                        <div>
-                            <span style="font-size: 10px; color: #34d399; display: block;">Sesudahnya</span>
-                            <span style="font-size: 16px; font-weight: 700; color: #34d399;">{{ $kItem['sesudahnya'] }}</span>
-                            <span style="font-size: 10px; color: var(--text-muted);">{{ $kItem['unit'] }}</span>
-                        </div>
-                    </div>
-                </div>
-                @endforeach
-            </div>
-        </div>
-
-        {{-- TAB 2: MAKANAN --}}
-        <div id="tab-stock-makanan" class="stock-tab-content" style="display: none;">
-            <div style="overflow-x: auto;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
-                    <thead>
-                        <tr style="border-bottom: 1px solid var(--border-glass); color: var(--text-muted);">
-                            <th style="padding: 8px 10px;">Nama Makanan / Snack</th>
-                            <th style="padding: 8px 10px; text-align: center;">Stok Sebelumnya</th>
-                            <th style="padding: 8px 10px; text-align: center;">Terjual (Shift Ini)</th>
-                            <th style="padding: 8px 10px; text-align: center;">Stok Sesudahnya (Sisa)</th>
-                            <th style="padding: 8px 10px; text-align: right;">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($stockComparisons['makanan'] ?? [] as $mItem)
-                        <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
-                            <td style="padding: 10px; color: #fff; font-weight: 600;">
-                                {{ $mItem['name'] }}
-                            </td>
-                            <td style="padding: 10px; text-align: center; color: #93c5fd; font-weight: 700;">
-                                {{ $mItem['sebelumnya'] }} <span style="font-size: 10px; color: var(--text-muted);">pcs</span>
-                            </td>
-                            <td style="padding: 10px; text-align: center; color: #fbbf24; font-weight: 700;">
-                                {{ $mItem['terjual'] > 0 ? '-'.$mItem['terjual'] : '0' }} <span style="font-size: 10px; color: var(--text-muted);">pcs</span>
-                            </td>
-                            <td style="padding: 10px; text-align: center; color: #34d399; font-weight: 700;">
-                                {{ $mItem['sesudahnya'] }} <span style="font-size: 10px; color: var(--text-muted);">pcs</span>
-                            </td>
-                            <td style="padding: 10px; text-align: right;">
-                                @if($mItem['sesudahnya'] <= 5)
-                                    <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; font-size: 10px;">Menipis</span>
-                                @else
-                                    <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 10px;">Aman</span>
-                                @endif
-                            </td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        {{-- TAB 3: MINUMAN --}}
-        <div id="tab-stock-minuman" class="stock-tab-content" style="display: none;">
-            <div style="overflow-x: auto;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
-                    <thead>
-                        <tr style="border-bottom: 1px solid var(--border-glass); color: var(--text-muted);">
-                            <th style="padding: 8px 10px;">Nama Minuman / Kopi</th>
-                            <th style="padding: 8px 10px; text-align: center;">Stok Sebelumnya</th>
-                            <th style="padding: 8px 10px; text-align: center;">Terjual (Shift Ini)</th>
-                            <th style="padding: 8px 10px; text-align: center;">Stok Sesudahnya (Sisa)</th>
-                            <th style="padding: 8px 10px; text-align: right;">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($stockComparisons['minuman'] ?? [] as $dItem)
-                        <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
-                            <td style="padding: 10px; color: #fff; font-weight: 600;">
-                                {{ $dItem['name'] }}
-                            </td>
-                            <td style="padding: 10px; text-align: center; color: #93c5fd; font-weight: 700;">
-                                {{ $dItem['sebelumnya'] }} <span style="font-size: 10px; color: var(--text-muted);">pcs</span>
-                            </td>
-                            <td style="padding: 10px; text-align: center; color: #fbbf24; font-weight: 700;">
-                                {{ $dItem['terjual'] > 0 ? '-'.$dItem['terjual'] : '0' }} <span style="font-size: 10px; color: var(--text-muted);">pcs</span>
-                            </td>
-                            <td style="padding: 10px; text-align: center; color: #34d399; font-weight: 700;">
-                                {{ $dItem['sesudahnya'] }} <span style="font-size: 10px; color: var(--text-muted);">pcs</span>
-                            </td>
-                            <td style="padding: 10px; text-align: right;">
-                                @if($dItem['sesudahnya'] <= 5)
-                                    <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; font-size: 10px;">Menipis</span>
-                                @else
-                                    <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 10px;">Aman</span>
-                                @endif
-                            </td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-
     {{-- 4 & 5. TOMBOL SELESAI & CHECK OUT PRESENSI --}}
     <div class="glass-card" style="padding: 24px; border-color: rgba(139, 92, 246, 0.3); background: rgba(139, 92, 246, 0.05); text-align: center;">
         <h3 style="font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 6px;">
             🏁 Penutupan Shift & Check Out Presensi
         </h3>
         <p style="font-size: 12px; color: var(--text-muted); max-width: 540px; margin: 0 auto 20px auto;">
-            Ketika jam kerja shift telah selesai dan pergantian shift tiba, silakan klik <strong>4. Selesai (Rekap Kasir)</strong> lalu lanjutkan dengan <strong>5. Check Out Presensi</strong> untuk konfirmasi kepulangan.
+            Ketika jam kerja shift telah selesai dan pergantian shift tiba, silakan klik <strong>4. Selesai (Rekap Shift)</strong> lalu lanjutkan dengan <strong>5. Check Out Presensi</strong> untuk konfirmasi kepulangan.
         </p>
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; max-width: 600px; margin: 0 auto;">
@@ -867,19 +557,27 @@
             </h4>
             <form action="{{ route('presensi2.penjualan.selesai') }}" method="POST">
                 @csrf
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
-                    <div style="background: rgba(0, 0, 0, 0.3); padding: 12px; border-radius: 10px;">
-                        <span style="font-size: 11px; color: var(--text-muted);">Total Omset F&B:</span>
-                        <div style="font-size: 16px; font-weight: 700; color: #fbbf24;">Rp {{ number_format($totalFnbIncome, 0, ',', '.') }}</div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px;">
+                    <div style="background: rgba(0, 0, 0, 0.3); padding: 10px 12px; border-radius: 10px;">
+                        <span style="font-size: 11px; color: var(--text-muted);">1. Omset F&B (Net):</span>
+                        <div style="font-size: 15px; font-weight: 700; color: #fbbf24;">Rp {{ number_format($totalFnbIncome, 0, ',', '.') }}</div>
+                        @if(($totalDiscountAmount ?? 0) > 0)
+                            <span style="font-size: 10px; color: #f87171;">Diskon: -Rp {{ number_format($totalDiscountAmount, 0, ',', '.') }}</span>
+                        @endif
                     </div>
-                    <div style="background: rgba(0, 0, 0, 0.3); padding: 12px; border-radius: 10px;">
-                        <span style="font-size: 11px; color: var(--text-muted);">Total Omset Internet:</span>
-                        <div style="font-size: 16px; font-weight: 700; color: #22d3ee;">Rp {{ number_format($totalInternetIncome, 0, ',', '.') }}</div>
+                    <div style="background: rgba(0, 0, 0, 0.3); padding: 10px 12px; border-radius: 10px;">
+                        <span style="font-size: 11px; color: var(--text-muted);">2. Pendapatan Internet:</span>
+                        <div style="font-size: 15px; font-weight: 700; color: #22d3ee;">Rp {{ number_format($totalInternetIncome, 0, ',', '.') }}</div>
+                    </div>
+                    <div style="background: rgba(0, 0, 0, 0.3); padding: 10px 12px; border-radius: 10px;">
+                        <span style="font-size: 11px; color: var(--text-muted);">💳 Non-Tunai (QRIS):</span>
+                        <div style="font-size: 15px; font-weight: 700; color: #c4b5fd;">Rp {{ number_format($totalNonCashAmount ?? 0, 0, ',', '.') }}</div>
+                        <span style="font-size: 10px; color: #94a3b8;">Masuk Rek. QRIS</span>
                     </div>
                 </div>
                 <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 12px; margin-bottom: 14px;">
                     <div style="font-size: 11px; font-weight: 700; color: #c4b5fd; margin-bottom: 8px;">
-                        📦 Rekap Audit Stok Sesudahnya (Serah Terima Keluar Shift):
+                        📦 Audit Perbandingan Stok (Sebelumnya vs Sesudahnya):
                     </div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; font-size: 11px;">
                         <div style="background: rgba(0,0,0,0.3); padding: 6px 10px; border-radius: 6px;">
@@ -984,19 +682,34 @@
         <div id="checkout-result-box" style="display: none; margin-top: 14px; padding: 12px; border-radius: 12px;"></div>
     </div>
 
-    {{-- 1. MODAL GANTI / KUNCI BILLING SHIFT --}}
+    {{-- 1. MODAL TERPADU: DATA & KUNCI BILLING SHIFT --}}
     <div id="modal-billing" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.78); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 99999; align-items: center; justify-content: center; padding: 16px;">
-        <div style="background: #ffffff; border-radius: 8px; width: 100%; max-width: 540px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column; color: #1e293b;">
-            <div style="background: {{ $isBillingLocked ? '#b45309' : '#f39c12' }}; color: #ffffff; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
+        <div style="background: #ffffff; border-radius: 8px; width: 100%; max-width: 580px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column; color: #1e293b;">
+            <div style="background: {{ $isBillingLocked ? '#b45309' : '#00a65a' }}; color: #ffffff; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
                 <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px;">
-                    <span>{{ $isBillingLocked ? '🔒' : '🔄' }}</span> Ganti / Kunci Billing Shift
+                    <span>{{ $isBillingLocked ? '🔒' : '💻' }}</span> Data & Kunci Billing Shift
                 </div>
                 <button type="button" onclick="closeModal('modal-billing')" style="background: none; border: none; color: #ffffff; font-size: 18px; font-weight: bold; cursor: pointer;">✕</button>
             </div>
             <div style="padding: 18px; max-height: 75vh; overflow-y: auto;">
-                
+                {{-- RINGKASAN DATA BILLING & PC --}}
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px;">
+                    <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 10px; text-align: center;">
+                        <span style="font-size: 11px; color: #065f46; display: block;">Total Omset Billing:</span>
+                        <strong style="font-size: 15px; color: #059669;">Rp {{ number_format($totalInternetIncome, 0, ',', '.') }}</strong>
+                    </div>
+                    <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 10px; text-align: center;">
+                        <span style="font-size: 11px; color: #991b1b; display: block;">PC Sedang Main:</span>
+                        <strong style="font-size: 15px; color: #dc2626;">{{ $occupiedPcCount ?? 0 }} Unit</strong>
+                    </div>
+                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 10px; text-align: center;">
+                        <span style="font-size: 11px; color: #166534; display: block;">PC Tersedia:</span>
+                        <strong style="font-size: 15px; color: #15803d;">{{ $availablePcCount ?? 0 }} Unit</strong>
+                    </div>
+                </div>
+
                 {{-- SECTION KUNCI DATA TUTUP SHIFT BILLING --}}
-                <div style="background: {{ $isBillingLocked ? '#fef3c7' : '#f8fafc' }}; border: 1px solid {{ $isBillingLocked ? '#f59e0b' : '#e2e8f0' }}; border-radius: 6px; padding: 12px; margin-bottom: 16px;">
+                <div style="background: {{ $isBillingLocked ? '#fef3c7' : '#f8fafc' }}; border: 1px solid {{ $isBillingLocked ? '#f59e0b' : '#e2e8f0' }}; border-radius: 6px; padding: 12px; margin-bottom: 14px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                         <div style="font-weight: 700; font-size: 13px; color: {{ $isBillingLocked ? '#92400e' : '#1e293b' }}; display: flex; align-items: center; gap: 6px;">
                             <span>{{ $isBillingLocked ? '🔒' : '🔓' }}</span> Status Kunci Billing Shift
@@ -1007,61 +720,26 @@
                     </div>
 
                     @if($isBillingLocked)
-                        <div style="font-size: 12px; color: #78350f; margin-bottom: 8px; line-height: 1.4;">
-                            Data omset internet billing untuk shift ini telah <strong>dikunci / dibekukan</strong> agar tidak berubah saat pergantian shift.
-                        </div>
                         <div style="background: #ffffff; padding: 8px 12px; border-radius: 4px; border: 1px solid #fde68a; font-size: 12px; color: #1e293b; margin-bottom: 10px;">
                             <div>Total Billing Dikunci: <strong style="color: #b45309; font-size: 14px;">Rp {{ number_format($totalInternetIncome, 0, ',', '.') }}</strong></div>
                             <div style="font-size: 10.5px; color: #6b7280; margin-top: 2px;">Waktu Kunci: {{ $salesSummary?->locked_billing_at ? \Carbon\Carbon::parse($salesSummary->locked_billing_at)->format('H:i - d/m/Y') : '-' }}</div>
                         </div>
                         <button type="button" onclick="submitToggleLockBilling('unlock')" 
-                                style="width: 100%; background: #ffffff; color: #dc2626; border: 1px solid #dc2626; padding: 7px 12px; font-size: 11.5px; font-weight: 700; border-radius: 4px; cursor: pointer; transition: background 0.15s;"
-                                onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='#ffffff'">
+                                style="width: 100%; background: #ffffff; color: #dc2626; border: 1px solid #dc2626; padding: 7px 12px; font-size: 11.5px; font-weight: 700; border-radius: 4px; cursor: pointer;">
                             🔓 Buka Kunci Billing (Izinkan Perubahan)
                         </button>
                     @else
-                        <div style="font-size: 11.5px; color: #475569; margin-bottom: 8px; line-height: 1.4;">
-                            Kunci & bekukan total omset billing saat ini agar nominalnya tetap saat serah terima ganti shift.
-                        </div>
-                        <div style="display: flex; gap: 8px; align-items: flex-end; margin-bottom: 6px;">
-                            
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="number" id="input-lock-billing-amount" value="{{ (int) $totalInternetIncome }}" min="0" style="flex: 1; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px; font-weight: 700; color: #0f172a;">
                             <button type="button" onclick="submitToggleLockBilling('lock')" 
-                                    style="background: #f39c12; color: #ffffff; border: none; padding: 7px 14px; font-size: 11.5px; font-weight: 700; border-radius: 4px; cursor: pointer; white-space: nowrap; height: 33px;">
+                                    style="background: #f39c12; color: #ffffff; border: none; padding: 8px 14px; font-size: 11.5px; font-weight: 700; border-radius: 4px; cursor: pointer; white-space: nowrap;">
                                 🔒 Kunci Billing Shift
                             </button>
                         </div>
                     @endif
                 </div>
-            </div>
-        </div>
-    </div>
 
-    {{-- 2. MODAL CEK DATA BILLING --}}
-    <div id="modal-cek-billing" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.78); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 99999; align-items: center; justify-content: center; padding: 16px;">
-        <div style="background: #ffffff; border-radius: 8px; width: 100%; max-width: 580px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column; color: #1e293b;">
-            <div style="background: #00a65a; color: #ffffff; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
-                <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px;">
-                    <span>👁️</span> Status & Ringkasan Data Billing
-                </div>
-                <button type="button" onclick="closeModal('modal-cek-billing')" style="background: none; border: none; color: #ffffff; font-size: 18px; font-weight: bold; cursor: pointer;">✕</button>
-            </div>
-            <div style="padding: 18px; max-height: 75vh; overflow-y: auto;">
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px;">
-                    <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 10px; text-align: center;">
-                        <span style="font-size: 11px; color: #065f46; display: block;">Total Omset Billing:</span>
-                        <strong style="font-size: 16px; color: #059669;">Rp {{ number_format($totalInternetIncome, 0, ',', '.') }}</strong>
-                    </div>
-                    <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 10px; text-align: center;">
-                        <span style="font-size: 11px; color: #991b1b; display: block;">PC Sedang Main:</span>
-                        <strong style="font-size: 16px; color: #dc2626;">{{ $occupiedPcCount ?? 0 }} Unit</strong>
-                    </div>
-                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 10px; text-align: center;">
-                        <span style="font-size: 11px; color: #166534; display: block;">PC Tersedia:</span>
-                        <strong style="font-size: 16px; color: #15803d;">{{ $availablePcCount ?? 0 }} Unit</strong>
-                    </div>
-                </div>
-
-                <div style="font-weight: 700; font-size: 12px; margin-bottom: 8px; color: #334155;">Status Real-time Seluruh PC:</div>
+                <div style="font-weight: 700; font-size: 12px; margin-bottom: 8px; color: #334155;">Status Real-time Unit PC Cabang:</div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px;">
                     @foreach($pcStations as $pc)
                     @php $isOcc = $pc->status === 'occupied'; @endphp
@@ -1080,19 +758,30 @@
         </div>
     </div>
 
-    {{-- 3. MODAL GANTI / KUNCI DATA PRINT (PENJUALAN KERTAS AUTO) --}}
+    {{-- 2. MODAL TERPADU: DATA & KUNCI PRINT KERTAS --}}
     <div id="modal-print-kertas" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.78); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 99999; align-items: center; justify-content: center; padding: 16px;">
         <div style="background: #ffffff; border-radius: 8px; width: 100%; max-width: 540px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column; color: #1e293b;">
             <div style="background: {{ $isPrintLocked ? '#0891b2' : '#00c0ef' }}; color: #ffffff; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
                 <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px;">
-                    <span>{{ $isPrintLocked ? '🔒' : '🔄' }}</span> Ganti / Kunci Data Print (Penjualan Kertas Auto)
+                    <span>{{ $isPrintLocked ? '🔒' : '🖨️' }}</span> Data & Kunci Print Kertas Shift
                 </div>
                 <button type="button" onclick="closeModal('modal-print-kertas')" style="background: none; border: none; color: #ffffff; font-size: 18px; font-weight: bold; cursor: pointer;">✕</button>
             </div>
             <div style="padding: 18px; max-height: 75vh; overflow-y: auto;">
-                
+                {{-- STATUS PRINTER & KERTAS --}}
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
+                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 10px;">
+                        <span style="font-size: 11px; color: #166534; display: block;">Status Printer Kasir:</span>
+                        <strong style="font-size: 13px; color: #15803d;">🟢 Siap Digunakan (Online)</strong>
+                    </div>
+                    <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 10px;">
+                        <span style="font-size: 11px; color: #1e40af; display: block;">Sisa Kertas A4 / F4:</span>
+                        <strong style="font-size: 13px; color: #2563eb;">{{ $stockComparisons['kertas'][0]['sesudahnya'] ?? 475 }} A4 / {{ $stockComparisons['kertas'][1]['sesudahnya'] ?? 490 }} F4</strong>
+                    </div>
+                </div>
+
                 {{-- SECTION KUNCI DATA TUTUP SHIFT PRINT --}}
-                <div style="background: {{ $isPrintLocked ? '#ecfeff' : '#f8fafc' }}; border: 1px solid {{ $isPrintLocked ? '#06b6d4' : '#e2e8f0' }}; border-radius: 6px; padding: 12px; margin-bottom: 16px;">
+                <div style="background: {{ $isPrintLocked ? '#ecfeff' : '#f8fafc' }}; border: 1px solid {{ $isPrintLocked ? '#06b6d4' : '#e2e8f0' }}; border-radius: 6px; padding: 12px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                         <div style="font-weight: 700; font-size: 13px; color: {{ $isPrintLocked ? '#155e75' : '#1e293b' }}; display: flex; align-items: center; gap: 6px;">
                             <span>{{ $isPrintLocked ? '🔒' : '🔓' }}</span> Status Kunci Data Print Kertas Shift
@@ -1103,9 +792,6 @@
                     </div>
 
                     @if($isPrintLocked)
-                        <div style="font-size: 12px; color: #164e63; margin-bottom: 8px; line-height: 1.4;">
-                            Data print kertas untuk shift ini telah <strong>dikunci / dibekukan</strong> sebagai acuan resmi serah terima shift.
-                        </div>
                         <div style="background: #ffffff; padding: 8px 12px; border-radius: 4px; border: 1px solid #a5f3fc; font-size: 12px; color: #1e293b; margin-bottom: 10px;">
                             <div style="display: flex; justify-content: space-between;">
                                 <div>Total Lembar: <strong style="color: #0891b2; font-size: 13px;">{{ $totalPrintPages }} lembar</strong></div>
@@ -1114,52 +800,25 @@
                             <div style="font-size: 10.5px; color: #6b7280; margin-top: 3px;">Waktu Kunci: {{ $salesSummary?->locked_print_at ? \Carbon\Carbon::parse($salesSummary->locked_print_at)->format('H:i - d/m/Y') : '-' }}</div>
                         </div>
                         <button type="button" onclick="submitToggleLockPrint('unlock')" 
-                                style="width: 100%; background: #ffffff; color: #dc2626; border: 1px solid #dc2626; padding: 7px 12px; font-size: 11.5px; font-weight: 700; border-radius: 4px; cursor: pointer; transition: background 0.15s;"
-                                onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='#ffffff'">
+                                style="width: 100%; background: #ffffff; color: #dc2626; border: 1px solid #dc2626; padding: 7px 12px; font-size: 11.5px; font-weight: 700; border-radius: 4px; cursor: pointer;">
                             🔓 Buka Kunci Data Print (Izinkan Perubahan)
                         </button>
                     @else
-                        <div style="font-size: 11.5px; color: #475569; margin-bottom: 8px; line-height: 1.4;">
-                            Kunci & bekukan total lembar dan omset print kertas saat ini untuk rekap tutup shift kasir.
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                            <div>
+                                <label style="font-size: 10.5px; font-weight: 600; color: #475569; display: block; margin-bottom: 2px;">Jumlah Lembar Print:</label>
+                                <input type="number" id="input-lock-print-pages" value="{{ (int) $totalPrintPages }}" min="0" style="width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px; font-weight: 700; color: #0f172a;">
+                            </div>
+                            <div>
+                                <label style="font-size: 10.5px; font-weight: 600; color: #475569; display: block; margin-bottom: 2px;">Nominal Print (Rp):</label>
+                                <input type="number" id="input-lock-print-amount" value="{{ (int) $totalPrintIncome }}" min="0" style="width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px; font-weight: 700; color: #0f172a;">
+                            </div>
                         </div>
                         <button type="button" onclick="submitToggleLockPrint('lock')" 
                                 style="width: 100%; background: #00c0ef; color: #ffffff; border: none; padding: 8px 14px; font-size: 11.5px; font-weight: 700; border-radius: 4px; cursor: pointer;">
                             🔒 Kunci Data Print Shift Ini
                         </button>
                     @endif
-                </div>
-
-                {{-- SUBSECTION: ATAU TAMBAH KE KERANJANG --}}
-                
-
-            </div>
-        </div>
-    </div>
-
-    {{-- 4. MODAL CEK PRINTING --}}
-    <div id="modal-cek-printing" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.78); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 99999; align-items: center; justify-content: center; padding: 16px;">
-        <div style="background: #ffffff; border-radius: 8px; width: 100%; max-width: 500px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column; color: #1e293b;">
-            <div style="background: #008d4c; color: #ffffff; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
-                <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px;">
-                    <span>👁️</span> Data & Monitoring Printing
-                </div>
-                <button type="button" onclick="closeModal('modal-cek-printing')" style="background: none; border: none; color: #ffffff; font-size: 18px; font-weight: bold; cursor: pointer;">✕</button>
-            </div>
-            <div style="padding: 18px;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
-                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 12px;">
-                        <span style="font-size: 11px; color: #166534; display: block;">Status Printer Kasir:</span>
-                        <strong style="font-size: 14px; color: #15803d;">🟢 Siap Digunakan (Online)</strong>
-                    </div>
-                    <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 12px;">
-                        <span style="font-size: 11px; color: #1e40af; display: block;">Stok Kertas HVS:</span>
-                        <strong style="font-size: 14px; color: #2563eb;">✓ 5 Rim Siap Pakai</strong>
-                    </div>
-                </div>
-                <div style="border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; background: #f8fafc; font-size: 12px; color: #475569;">
-                    <div style="font-weight: 700; margin-bottom: 4px; color: #0f172a;">Pengaturan Cetak Nota / Slip Otomatis:</div>
-                    <div>Mode Auto-Print Nota: <strong>Aktif (Thermal 58mm / 80mm)</strong></div>
-                    <div style="margin-top: 4px;">Cetak Kertas Dokumen: <strong>Epson L3210 Inkjet</strong></div>
                 </div>
             </div>
         </div>
@@ -1409,18 +1068,26 @@
     }
 
     function selectPcTarget(val) {
-        document.getElementById('pos-customer-input').value = val;
-        document.querySelectorAll('.pc-chip').forEach(c => {
-            if (c.innerText.trim() === val || (val === 'Pelanggan Umum' && c.innerText.trim() === 'Umum')) {
-                c.style.background = '#e0f2fe';
-                c.style.color = '#0284c7';
-                c.style.borderColor = '#bae6fd';
-            } else {
-                c.style.background = '#ffffff';
-                c.style.color = '#64748b';
-                c.style.borderColor = '#cbd5e1';
-            }
-        });
+        const input = document.getElementById('pos-customer-input');
+        if (input) input.value = val;
+        const quickSelect = document.getElementById('pos-pc-quick-select');
+        if (quickSelect && quickSelect.value !== val) {
+            quickSelect.value = val;
+        }
+    }
+
+    function togglePosDiscountBox() {
+        const box = document.getElementById('pos-discount-collapsible');
+        const btn = document.getElementById('btn-toggle-discount');
+        if (!box) return;
+        const isHidden = box.style.display === 'none' || !box.style.display;
+        box.style.display = isHidden ? 'block' : 'none';
+        if (btn) {
+            btn.innerText = isHidden ? '🏷️ Tutup Diskon' : '🏷️ + Diskon';
+        }
+        if (isHidden) {
+            document.getElementById('pos-discount-percent')?.focus();
+        }
     }
 
     function onPaymentMethodChanged(method) {
@@ -1472,6 +1139,14 @@
 
     function clearCart() {
         posCart = {};
+        const discountInput = document.getElementById('pos-discount-percent');
+        if (discountInput) discountInput.value = '0';
+        const pinInput = document.getElementById('pos-supervisor-discount-pin');
+        if (pinInput) pinInput.value = '';
+        const discountBox = document.getElementById('pos-discount-collapsible');
+        if (discountBox) discountBox.style.display = 'none';
+        const btnDisc = document.getElementById('btn-toggle-discount');
+        if (btnDisc) btnDisc.innerText = '🏷️ + Diskon';
         renderCart();
     }
 
@@ -1564,7 +1239,10 @@
         const btnSubmitText = document.getElementById('pos-btn-submit-text');
         const supervisorBox = document.getElementById('pos-supervisor-discount-box');
 
-        if (grossDisplay) grossDisplay.innerText = 'Rp ' + grossTotal.toLocaleString('id-ID');
+        if (grossDisplay) {
+            grossDisplay.innerText = 'Rp ' + grossTotal.toLocaleString('id-ID');
+            grossDisplay.style.display = discountPercent > 0 ? 'inline' : 'none';
+        }
         if (discountText) discountText.innerText = '-Rp ' + discountAmount.toLocaleString('id-ID');
         if (netDisplay) netDisplay.innerText = 'Rp ' + netTotal.toLocaleString('id-ID');
         if (btnSubmitText) btnSubmitText.innerText = 'Simpan Order Penjualan (Rp ' + netTotal.toLocaleString('id-ID') + ')';
@@ -1611,8 +1289,7 @@
     }
 
     function openModalCekBilling() {
-        const modal = document.getElementById('modal-cek-billing');
-        if (modal) modal.style.display = 'flex';
+        openModalBilling();
     }
 
     function openModalPrintKertas() {
@@ -1621,8 +1298,7 @@
     }
 
     function openModalCekPrinting() {
-        const modal = document.getElementById('modal-cek-printing');
-        if (modal) modal.style.display = 'flex';
+        openModalPrintKertas();
     }
 
     function closeModal(id) {

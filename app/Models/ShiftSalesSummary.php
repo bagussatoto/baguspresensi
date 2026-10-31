@@ -43,6 +43,15 @@ class ShiftSalesSummary extends Model
         'locked_print_pages',
         'locked_print_at',
         'status',
+        'deposit_status',
+        'deposited_amount',
+        'retained_drawer_cash',
+        'deposit_method',
+        'deposit_recipient',
+        'deposit_notes',
+        'deposited_at',
+        'deposit_verified_at',
+        'deposit_verified_by',
         'closed_at',
     ];
 
@@ -65,8 +74,48 @@ class ShiftSalesSummary extends Model
         'locked_print_amount' => 'decimal:2',
         'locked_print_pages' => 'integer',
         'locked_print_at' => 'datetime',
+        'deposited_amount' => 'decimal:2',
+        'retained_drawer_cash' => 'decimal:2',
+        'deposited_at' => 'datetime',
+        'deposit_verified_at' => 'datetime',
         'closed_at' => 'datetime',
     ];
+
+    public function depositMethodLabel(): string
+    {
+        return match ($this->deposit_method) {
+            'cash_collector' => 'Tunai ke Kolektor / SPV',
+            'safe_dropbox' => 'Brankas / Drop Box Outlet',
+            'bank_transfer' => 'Transfer Rekening Bank',
+            'next_shift_handover' => 'Serah Terima Kasir Berikutnya',
+            default => $this->deposit_method ?: '-',
+        };
+    }
+
+    public function shiftNumber(): int
+    {
+        $code = (string) ($this->shift?->code ?? '');
+        if (preg_match('/(\d+)/', $code, $m)) {
+            return max(1, min(4, (int) $m[1]));
+        }
+
+        $name = (string) ($this->shift?->name ?? '');
+        if (preg_match('/(\d+)/', $name, $m)) {
+            return max(1, min(4, (int) $m[1]));
+        }
+
+        return max(1, min(4, (int) ($this->shift_id ?? 1)));
+    }
+
+    public function rekapNumber(): string
+    {
+        $datePart = $this->work_date ? $this->work_date->format('Ymd') : now()->format('Ymd');
+        $branchPart = (int) ($this->branch_id ?? 1);
+        $shiftPart = $this->shiftNumber();
+        $idPart = str_pad((string) ($this->id ?? 1), 4, '0', STR_PAD_LEFT);
+
+        return "{$datePart}-B{$branchPart}-S{$shiftPart}-{$idPart}";
+    }
 
     public function employee(): BelongsTo
     {
