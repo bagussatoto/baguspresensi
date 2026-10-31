@@ -754,4 +754,62 @@ class ShiftStockAndSalesFlowTest extends TestCase
         $sale->refresh();
         $this->assertEquals('cancelled', $sale->payment_status);
     }
+
+    public function test_can_record_printer_job_via_api_and_sync_counter(): void
+    {
+        $this->clockInStaff();
+
+        $response = $this->postJson(route('api.v1.printer.log-job'), [
+            'branch_id' => $this->branch->id,
+            'printer_name' => 'Canon G2000 Series',
+            'document_name' => 'Laporan_Tugas.pdf',
+            'client_computer' => 'PC-KASIR-01',
+            'pages' => 4,
+            'color_mode' => 'bw',
+            'unit_price' => 1000,
+        ]);
+
+        $response->assertOk();
+        $response->assertJson([
+            'success' => true,
+            'pages' => 4,
+            'total_shift_pages' => 4,
+            'total_shift_amount' => 4000,
+        ]);
+
+        $this->assertDatabaseHas('printer_print_jobs', [
+            'printer_name' => 'Canon G2000 Series',
+            'pages' => 4,
+            'total_amount' => 4000,
+        ]);
+
+        // Test sinkron manual di halaman POS
+        $syncResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.penjualan.printer.manual-sync'));
+
+        $syncResponse->assertOk();
+        $syncResponse->assertJson([
+            'success' => true,
+            'pages' => 4,
+            'amount' => 4000,
+        ]);
+
+        // Test status printer
+        $statusResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->getJson(route('presensi2.penjualan.printer.status'));
+
+        $statusResponse->assertOk();
+        $statusResponse->assertJson([
+            'success' => true,
+            'is_online' => true,
+            'total_pages' => 4,
+        ]);
+
+        // Test download agent script
+        $agentResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.penjualan.printer.agent-script', ['format' => 'bat']));
+
+        $agentResponse->assertOk();
+        $this->assertStringContainsString('MGK Canon USB Printer Agent', $agentResponse->getContent());
+    }
 }

@@ -24,6 +24,7 @@ use App\Domains\Employee\Models\Shift;
 use App\Domains\Leave\Models\LeaveRequest;
 use App\Models\EmployeeRegistration;
 use App\Models\PasswordResetRequest;
+use App\Models\PrinterPrintJob;
 use App\Models\ShiftHandoverChecklist;
 use App\Models\ShiftSalesSummary;
 use App\Models\ShiftStockRequest;
@@ -49,6 +50,7 @@ use Modules\MasterData\Domain\Models\PcStation;
 use Modules\MasterData\Domain\Models\ProductVariant;
 use Modules\MasterData\Domain\Models\StockInventory;
 use Modules\MasterData\Domain\Models\Warehouse;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Controller: Portal Presensi Karyawan v2 (Credential-Based).
@@ -2559,9 +2561,24 @@ class AttendanceWebV2Controller extends Controller
         $autoPrintPages = (int) $printSalesItems->sum('qty');
         $autoPrintAmount = (float) $printSalesItems->sum('subtotal');
 
+        // Integrasi Counter Riil Printer Fisik (Canon USB / Windows Print Spooler Agent)
+        $printerJobs = PrinterPrintJob::whereDate('work_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->orderBy('id', 'desc')
+            ->get();
+        $realHardwarePages = (int) $printerJobs->sum('pages');
+        $realHardwareAmount = (float) $printerJobs->sum('total_amount');
+        $latestPrinterJob = $printerJobs->first();
+        $isPrinterOnline = cache()->get('canon_printer_online_branch_'.$branchId, false)
+            || ($latestPrinterJob && $latestPrinterJob->created_at->diffInMinutes(now()) <= 15);
+        $connectedPrinterName = cache()->get('canon_printer_name_branch_'.$branchId, $latestPrinterJob?->printer_name ?? 'Canon USB Printer');
+
+        $spoolerPages = max($autoPrintPages, $realHardwarePages);
+        $spoolerAmount = max($autoPrintAmount, $realHardwareAmount);
+
         $isPrintLocked = (bool) ($salesSummary?->is_print_locked);
-        $totalPrintPages = $isPrintLocked ? (int) ($salesSummary->locked_print_pages ?? $autoPrintPages) : $autoPrintPages;
-        $totalPrintIncome = $isPrintLocked ? (float) ($salesSummary->locked_print_amount ?? $autoPrintAmount) : $autoPrintAmount;
+        $totalPrintPages = $isPrintLocked ? (int) ($salesSummary->locked_print_pages ?? $spoolerPages) : $spoolerPages;
+        $totalPrintIncome = $isPrintLocked ? (float) ($salesSummary->locked_print_amount ?? $spoolerAmount) : $spoolerAmount;
 
         // 4. Monitoring Perbandingan Stok: Sebelumnya vs Terjual vs Sesudahnya
         $stockComparisons = $this->buildStockComparison($workDate, $employee);
@@ -2597,6 +2614,12 @@ class AttendanceWebV2Controller extends Controller
             'isPrintLocked' => $isPrintLocked,
             'autoPrintPages' => $autoPrintPages,
             'autoPrintAmount' => $autoPrintAmount,
+            'realHardwarePages' => $realHardwarePages,
+            'realHardwareAmount' => $realHardwareAmount,
+            'isPrinterOnline' => $isPrinterOnline,
+            'connectedPrinterName' => $connectedPrinterName,
+            'latestPrinterJob' => $latestPrinterJob,
+            'printerJobs' => $printerJobs->take(5),
             'totalPrintPages' => $totalPrintPages,
             'totalPrintIncome' => $totalPrintIncome,
         ]);
@@ -3275,6 +3298,251 @@ class AttendanceWebV2Controller extends Controller
         }
 
         return redirect()->route('presensi2.penjualan')->with('success', $message);
+    }
+
+    /**
+     * Menerima Webhook / API Log Cetak dari Windows Print Spooler Agent (Canon USB).
+     */
+    public function recordPrinterJobApi(Request $request): JsonResponse
+    {
+        $branchId = (int) ($request->input('branch_id') ?: 3);
+        $pages = max(1, (int) $request->input('pages', 1));
+        $colorMode = (string) $request->input('color_mode', 'bw');
+        $defaultUnitPrice = ($colorMode === 'color') ? 2000.00 : 1000.00;
+        $unitPrice = (float) ($request->input('unit_price') ?: $defaultUnitPrice);
+        $totalAmount = $pages * $unitPrice;
+
+        $printerName = (string) ($request->input('printer_name') ?: 'Canon USB Printer');
+        $docName = (string) $request->input('document_name', 'Dokumen Cetak Pelanggan');
+        $clientPc = (string) $request->input('client_computer', 'PC-KASIR');
+
+        $now = Carbon::now();
+        $activeShift = $this->shiftResolverService->resolveShift(null, $now);
+        $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
+
+        $activeEmployee = AttendanceRecord::where('work_date', $workDate->toDateString())
+            ->whereNull('clock_out_at')
+            ->whereNotNull('clock_in_at')
+            ->latest('id')
+            ->value('employee_id');
+
+        $job = PrinterPrintJob::create([
+            'branch_id' => $branchId,
+            'employee_id' => $activeEmployee,
+            'printer_name' => $printerName,
+            'document_name' => $docName,
+            'client_computer' => $clientPc,
+            'pages' => $pages,
+            'color_mode' => $colorMode,
+            'unit_price' => $unitPrice,
+            'total_amount' => $totalAmount,
+            'work_date' => $workDate->toDateString(),
+            'ip_address' => $request->ip(),
+            'printed_at' => $now,
+        ]);
+
+        cache()->put('canon_printer_online_branch_'.$branchId, true, now()->addMinutes(15));
+        cache()->put('canon_printer_last_seen_branch_'.$branchId, $now->toDateTimeString(), now()->addDays(1));
+        cache()->put('canon_printer_name_branch_'.$branchId, $printerName, now()->addDays(7));
+
+        $totalShiftPages = (int) PrinterPrintJob::whereDate('work_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->sum('pages');
+        $totalShiftAmount = (float) PrinterPrintJob::whereDate('work_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->sum('total_amount');
+
+        return response()->json([
+            'success' => true,
+            'message' => "Job cetak {$pages} lembar berhasil dicatat dari {$printerName}.",
+            'job_id' => $job->id,
+            'pages' => $pages,
+            'total_shift_pages' => $totalShiftPages,
+            'total_shift_amount' => $totalShiftAmount,
+            'work_date' => $workDate->toDateString(),
+        ]);
+    }
+
+    /**
+     * Status Hardware Printer Real-Time (Canon USB).
+     */
+    public function getPrinterStatus(Request $request): JsonResponse
+    {
+        $employee = $this->getAuthenticatedEmployee();
+        $branchId = (int) ($employee->branch_id ?? 3);
+
+        $now = Carbon::now();
+        $activeShift = $this->shiftResolverService->resolveShift(null, $now);
+        $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
+
+        $jobs = PrinterPrintJob::whereDate('work_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->orderBy('id', 'desc')
+            ->get();
+
+        $latestJob = $jobs->first();
+        $isOnline = cache()->get('canon_printer_online_branch_'.$branchId, false)
+            || ($latestJob && $latestJob->created_at->diffInMinutes(now()) <= 15);
+
+        $printerName = cache()->get('canon_printer_name_branch_'.$branchId, $latestJob?->printer_name ?? 'Canon USB Printer');
+
+        return response()->json([
+            'success' => true,
+            'is_online' => $isOnline,
+            'printer_name' => $printerName,
+            'total_pages' => (int) $jobs->sum('pages'),
+            'total_amount' => (float) $jobs->sum('total_amount'),
+            'last_job_at' => $latestJob?->printed_at?->format('H:i:s d/m/Y'),
+            'latest_jobs' => $jobs->take(5)->map(fn ($j) => [
+                'id' => $j->id,
+                'doc' => $j->document_name,
+                'pages' => $j->pages,
+                'time' => $j->printed_at?->format('H:i:s'),
+                'amount' => $j->total_amount,
+            ]),
+        ]);
+    }
+
+    public function getPrinterStatusApi(Request $request): JsonResponse
+    {
+        return $this->getPrinterStatus($request);
+    }
+
+    /**
+     * Sinkron Manual Data Printer ke Modal Print Kertas.
+     */
+    public function manualSyncPrinterData(Request $request): JsonResponse
+    {
+        $employee = $this->getAuthenticatedEmployee();
+        $branchId = (int) ($employee->branch_id ?? 3);
+
+        $now = Carbon::now();
+        $activeShift = $this->shiftResolverService->resolveShift(null, $now);
+        $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
+
+        $jobs = PrinterPrintJob::whereDate('work_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->get();
+
+        $realPages = (int) $jobs->sum('pages');
+        $realAmount = (float) $jobs->sum('total_amount');
+
+        cache()->put('canon_printer_online_branch_'.$branchId, true, now()->addMinutes(15));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data counter printer Canon USB berhasil disinkronkan.',
+            'pages' => $realPages,
+            'amount' => $realAmount,
+        ]);
+    }
+
+    /**
+     * Download Script Agent Windows untuk PC Kasir (PowerShell & BAT).
+     */
+    public function downloadPrinterAgentScript(Request $request): Response
+    {
+        $serverUrl = url('/api/v1/printer/log-job');
+        $employee = $this->getAuthenticatedEmployee();
+        $branchId = $employee->branch_id ?? 3;
+
+        $psScript = <<<POWERSHELL
+# ==============================================================================
+# CANON USB PRINT SPOOLER MONITOR AGENT - MAYA GRAHA KENCANA
+# ==============================================================================
+# Skrip ini otomatis memonitor print job printer Canon USB di PC Kasir
+# dan mengirimkan jumlah halaman yang dicetak ke server POS web presensi.
+# ==============================================================================
+
+\$ServerUrl = "$serverUrl"
+\$BranchId = $branchId
+
+Write-Host "==========================================================" -ForegroundColor Cyan
+Write-Host " [MGK] AGENT MONITOR PRINTER CANON USB AKTIF " -ForegroundColor Green
+Write-Host " Server POS: \$ServerUrl" -ForegroundColor Gray
+Write-Host " Menunggu dokumen dicetak di PC Kasir..." -ForegroundColor Yellow
+Write-Host "==========================================================" -ForegroundColor Cyan
+
+# Pastikan Event Log PrintService aktif di Windows
+try {
+    wevtutil sl "Microsoft-Windows-PrintService/Operational" /e:true 2>\$null
+} catch {}
+
+\$query = @"
+<QueryList>
+  <Query Id="0" Path="Microsoft-Windows-PrintService/Operational">
+    <Select Path="Microsoft-Windows-PrintService/Operational">*[System[(EventID=307)]]</Select>
+  </Query>
+</QueryList>
+"@
+
+\$lastEventTime = (Get-Date).AddMinutes(-1)
+
+while (\$true) {
+    try {
+        \$events = Get-WinEvent -FilterXml \$query -MaxEvents 10 -ErrorAction SilentlyContinue | Where-Object { \$_.TimeCreated -gt \$lastEventTime }
+
+        if (\$events) {
+            foreach (\$ev in \$events) {
+                \$xml = [xml]\$ev.ToXml()
+                \$printer = \$xml.Event.UserData.DocumentPrinted.param5
+                \$doc = \$xml.Event.UserData.DocumentPrinted.param2
+                \$pages = [int]\$xml.Event.UserData.DocumentPrinted.param8
+                \$user = \$xml.Event.UserData.DocumentPrinted.param3
+
+                if (\$pages -le 0) { \$pages = 1 }
+
+                Write-Host "[PRINT TERDETEKSI] Printer: \$printer | Dokumen: \$doc | Lembar: \$pages" -ForegroundColor Green
+
+                \$payload = @{
+                    branch_id = \$BranchId
+                    printer_name = \$printer
+                    document_name = \$doc
+                    pages = \$pages
+                    client_computer = \$env:COMPUTERNAME
+                    color_mode = "bw"
+                } | ConvertTo-Json
+
+                try {
+                    \$resp = Invoke-RestMethod -Uri \$ServerUrl -Method Post -Body \$payload -ContentType "application/json"
+                    Write-Host "  -> Berhasil dikirim ke Server POS! Total shift: \$(\$resp.total_shift_pages) lembar." -ForegroundColor Cyan
+                } catch {
+                    Write-Host "  -> Gagal kirim ke server: \$(\$_.Exception.Message)" -ForegroundColor Red
+                }
+
+                if (\$ev.TimeCreated -gt \$lastEventTime) {
+                    \$lastEventTime = \$ev.TimeCreated
+                }
+            }
+        }
+    } catch {
+        # Fallback
+    }
+    Start-Sleep -Seconds 3
+}
+POWERSHELL;
+
+        $batScript = <<<'BAT'
+@echo off
+title MGK Canon USB Printer Agent
+echo ==========================================================
+echo  MENJALANKAN MONITOR PRINTER CANON USB PC KASIR
+echo ==========================================================
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0canon_print_agent.ps1"
+pause
+BAT;
+
+        if ($request->query('format') === 'bat') {
+            return response($batScript, 200, [
+                'Content-Type' => 'application/x-bat',
+                'Content-Disposition' => 'attachment; filename="Jalankan_Agent_Printer_Canon.bat"',
+            ]);
+        }
+
+        return response($psScript, 200, [
+            'Content-Type' => 'text/plain',
+            'Content-Disposition' => 'attachment; filename="canon_print_agent.ps1"',
+        ]);
     }
 
     /**

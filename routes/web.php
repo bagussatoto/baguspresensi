@@ -113,6 +113,9 @@ Route::prefix('presensi2')->name('presensi2.')->group(function () {
     Route::post('/penjualan/permintaan-stok', [AttendanceWebV2Controller::class, 'penjualanStoreStockRequest'])->name('penjualan.permintaan-stok');
     Route::post('/penjualan/kunci-billing', [AttendanceWebV2Controller::class, 'penjualanKunciBilling'])->name('penjualan.kunci-billing');
     Route::post('/penjualan/kunci-print', [AttendanceWebV2Controller::class, 'penjualanKunciPrint'])->name('penjualan.kunci-print');
+    Route::get('/penjualan/printer/status', [AttendanceWebV2Controller::class, 'getPrinterStatus'])->name('penjualan.printer.status');
+    Route::get('/penjualan/printer/agent-script', [AttendanceWebV2Controller::class, 'downloadPrinterAgentScript'])->name('penjualan.printer.agent-script');
+    Route::post('/penjualan/printer/manual-sync', [AttendanceWebV2Controller::class, 'manualSyncPrinterData'])->name('penjualan.printer.manual-sync');
     Route::post('/penjualan/selesai', [AttendanceWebV2Controller::class, 'penjualanSelesai'])->name('penjualan.selesai');
 
     // Halaman Rekap (Rekapitulasi Penjualan, Pendapatan Billing, Audit Stok & Kasir Selesai Shift)

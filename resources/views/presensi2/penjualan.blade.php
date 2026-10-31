@@ -768,15 +768,50 @@
                 <button type="button" onclick="closeModal('modal-print-kertas')" style="background: none; border: none; color: #ffffff; font-size: 18px; font-weight: bold; cursor: pointer;">✕</button>
             </div>
             <div style="padding: 18px; max-height: 75vh; overflow-y: auto;">
-                {{-- STATUS PRINTER & KERTAS --}}
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
-                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 10px;">
-                        <span style="font-size: 11px; color: #166534; display: block;">Status Printer Kasir:</span>
-                        <strong style="font-size: 13px; color: #15803d;">🟢 Siap Digunakan (Online)</strong>
+                {{-- STATUS PRINTER HARDWARE & KERTAS --}}
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                    <div style="background: {{ ($isPrinterOnline ?? false) ? '#f0fdf4' : '#f8fafc' }}; border: 1px solid {{ ($isPrinterOnline ?? false) ? '#bbf7d0' : '#cbd5e1' }}; border-radius: 6px; padding: 10px;">
+                        <span style="font-size: 11px; color: #475569; display: block;">Printer Canon Kasir (USB):</span>
+                        <div style="display: flex; align-items: center; gap: 5px; margin-top: 2px;">
+                            <span style="font-size: 13px;">{{ ($isPrinterOnline ?? false) ? '🟢' : '🔌' }}</span>
+                            <strong style="font-size: 12.5px; color: {{ ($isPrinterOnline ?? false) ? '#15803d' : '#334155' }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                {{ $connectedPrinterName ?? 'Canon USB Printer' }}
+                            </strong>
+                        </div>
+                        <span style="font-size: 10px; color: {{ ($isPrinterOnline ?? false) ? '#166534' : '#64748b' }}; display: block; margin-top: 2px;">
+                            {{ ($isPrinterOnline ?? false) ? 'Tersambung (Online)' : 'Siap Terhubung ke PC Kasir' }}
+                        </span>
                     </div>
                     <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 10px;">
-                        <span style="font-size: 11px; color: #1e40af; display: block;">Sisa Kertas A4 / F4:</span>
-                        <strong style="font-size: 13px; color: #2563eb;">{{ $stockComparisons['kertas'][0]['sesudahnya'] ?? 475 }} A4 / {{ $stockComparisons['kertas'][1]['sesudahnya'] ?? 490 }} F4</strong>
+                        <span style="font-size: 11px; color: #1e40af; display: block;">Sisa Kertas Fisik:</span>
+                        <strong style="font-size: 13px; color: #2563eb; display: block; margin-top: 2px;">
+                            {{ $stockComparisons['kertas'][0]['sesudahnya'] ?? 475 }} A4 / {{ $stockComparisons['kertas'][1]['sesudahnya'] ?? 490 }} F4
+                        </strong>
+                        <span style="font-size: 10px; color: #64748b; display: block; margin-top: 2px;">Stok Laci Kasir</span>
+                    </div>
+                </div>
+
+                {{-- PANEL KONTROL COUNTER HARDWARE CANON USB --}}
+                <div style="background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 6px; padding: 11px; margin-bottom: 14px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                        <div style="font-size: 11.5px; font-weight: 700; color: #0f766e; display: flex; align-items: center; gap: 5px;">
+                            <span>📊</span> Counter Fisik Printer Canon Shift Ini:
+                        </div>
+                        <span id="hardware-counter-display" style="background: #ccfbf1; color: #0f766e; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; font-family: monospace;">
+                            {{ (int) ($realHardwarePages ?? 0) }} lembar
+                        </span>
+                    </div>
+
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" id="btn-sync-printer" onclick="syncPrinterHardwareData()" 
+                                style="flex: 1; background: #0d9488; color: #ffffff; border: none; padding: 7px 10px; font-size: 11px; font-weight: 700; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px;">
+                            <span>🔄</span> Ambil Data dari Printer Canon
+                        </button>
+                        <a href="{{ route('presensi2.penjualan.printer.agent-script', ['format' => 'bat']) }}" download="Jalankan_Agent_Printer_Canon.bat"
+                           title="Unduh file bat untuk dijalankan di PC Kasir agar otomatis mendeteksi setiap print Canon"
+                           style="background: #ffffff; border: 1px solid #0d9488; color: #0d9488; padding: 7px 10px; font-size: 11px; font-weight: 700; border-radius: 4px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
+                            <span>📥</span> Agent PC Kasir (.bat)
+                        </a>
                     </div>
                 </div>
 
@@ -1394,6 +1429,46 @@
         } catch (err) {
             console.error(err);
             alert('Terjadi kesalahan jaringan.');
+        }
+    }
+
+    async function syncPrinterHardwareData() {
+        const btn = document.getElementById('btn-sync-printer');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Menyinkronkan...';
+        }
+        try {
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const token = csrfMeta ? csrfMeta.content : '{{ csrf_token() }}';
+            const resp = await fetch('{{ route("presensi2.penjualan.printer.manual-sync") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': token,
+                    'Accept': 'application/json'
+                }
+            });
+            const data = await resp.json();
+            if (data.success) {
+                showPosToast(data.message || 'Counter printer berhasil disinkronkan!');
+                const pagesInput = document.getElementById('input-lock-print-pages');
+                const amountInput = document.getElementById('input-lock-print-amount');
+                if (pagesInput && data.pages > 0) pagesInput.value = data.pages;
+                if (amountInput && data.amount > 0) amountInput.value = data.amount;
+                const counterDisplay = document.getElementById('hardware-counter-display');
+                if (counterDisplay) counterDisplay.innerText = data.pages + ' lembar';
+            } else {
+                showPosToast(data.message || 'Gagal sinkron data printer.', false);
+            }
+        } catch (err) {
+            console.error(err);
+            showPosToast('Koneksi printer belum menerima job hari ini.', false);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<span>🔄</span> Ambil Data dari Printer Canon';
+            }
         }
     }
 

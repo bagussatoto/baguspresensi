@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Api\V1\AttendanceController;
 use App\Http\Controllers\Api\V1\LeaveController;
+use App\Http\Controllers\AttendanceWebV2Controller;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -26,4 +27,8 @@ Route::prefix('v1')->middleware('throttle:api')->group(function (): void {
     // Permohonan Cuti & Izin
     Route::post('leave/request', [LeaveController::class, 'requestLeave'])->name('api.v1.leave.request');
     Route::get('leave/history', [LeaveController::class, 'history'])->name('api.v1.leave.history');
+
+    // Integrasi Hardware Printer Kertas Kasir (Canon USB / Windows Print Spooler Agent)
+    Route::post('printer/log-job', [AttendanceWebV2Controller::class, 'recordPrinterJobApi'])->name('api.v1.printer.log-job');
+    Route::get('printer/status', [AttendanceWebV2Controller::class, 'getPrinterStatusApi'])->name('api.v1.printer.status');
 });
