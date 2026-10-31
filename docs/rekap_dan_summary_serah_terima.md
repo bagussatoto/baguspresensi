@@ -1,6 +1,6 @@
 # Laporan Summary Harian, History Setor & Konfirmasi Serah Terima Shift
 
-Dokumen ini merangkum penyelarasan tampilan **History Setor Shift**, cetak slip **Laporan Summary Harian**, serta penyempurnaan alur **Konfirmasi Kas & Serah Terima Shift Sebelumnya** pada sistem Kasir POS Presensi v2.
+Dokumen ini merangkum penyelarasan tampilan **History Setor Shift**, cetak slip **Laporan Summary Harian** (dengan tabel tetap 4 shift serah terima), serta penyempurnaan alur **Konfirmasi Kas & Serah Terima Shift Sebelumnya** pada sistem Kasir POS Presensi v2.
 
 ---
 
@@ -44,9 +44,15 @@ Slip cetak `#print-table-report` (Thermal / Kertas Struk) telah disusun beruruta
    - `SOFTDRINK` (Daftar minuman terjual) & Subtotal SOFTDRINK
    - `WARNET` (Billing internet) & Subtotal WARNET
    - `Grand Total`
-6. **Summary Serah Terima**:
+6. **Summary Serah Terima (Format Tetap 4 Shift Lengkap)**:
    - Tabel: `No | Shif | Penyerah | Penerima | Nilai`
-   - Rekap serah terima per shift 1 s/d 4 beserta total nilainya.
+   - Selalu menampilkan 4 baris tetap:
+     - **Baris 1**: Shift 1 (Penyerah Shift 1 ke Penerima Shift 2).
+     - **Baris 2**: Shift 2 (Penyerah Shift 2 ke Penerima Shift 3).
+     - **Baris 3**: Shift 3 (Penyerah Shift 3 ke Penerima Shift 4).
+     - **Baris 4**: Shift 4 (Penyerah Shift 4 ke Penerima Shift 1, menutup siklus harian).
+     - Shift yang belum berjalan hari ini otomatis menampilkan operator `-` dan nilai `0` sehingga struktur struk selalu utuh dan konsisten.
+   - Total nilai serah terima kasir harian.
 7. **Terbilang (Disetor)**:
    - Kalimat terbilang bahasa Indonesia bertanda strip (contoh: `--------------- EMPAT RATUS TIGA PULUH RIBU ENAM RATUS LIMA PULUH RUPIAH ---------------`).
 8. **Tanda Tangan Serah Terima**:
@@ -86,5 +92,5 @@ Semua pengujian fitur berhasil lulus 100%:
 - `tests/Feature/ShiftStockAndSalesFlowTest.php`
 - `tests/Feature/PosDualControlAndBlindCashCountTest.php`
 - `tests/Feature/AttendanceWebV2PortalTest.php`
-- **Total: 68 tests, 411 assertions (Passed)**.
+- **Total: 68 tests, 416 assertions (Passed)**.
 - Kode telah diformat menggunakan **Laravel Pint** (`vendor/bin/pint --dirty --format agent`).

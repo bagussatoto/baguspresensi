@@ -604,54 +604,90 @@
             </tbody>
         </table>
 
-        {{-- 5. TABEL SUMMARY SERAH TERIMA (SESUAI CONTOH) --}}
+        {{-- 5. TABEL SUMMARY SERAH TERIMA (4 SHIFT TETAP SESUAI CONTOH GAMBAR 2) --}}
         <div class="print-section-title" style="text-transform: uppercase;">Summary Serah Terima</div>
         <table class="print-grid-table">
             <thead>
                 <tr>
-                    <th style="width: 10%; text-align: center;">No</th>
+                    <th style="width: 8%; text-align: center;">No</th>
                     <th style="width: 14%; text-align: center;">Shif</th>
                     <th style="width: 27%; text-align: left;">Penyerah</th>
                     <th style="width: 27%; text-align: left;">Penerima</th>
-                    <th style="width: 22%; text-align: right;">Nilai</th>
+                    <th style="width: 24%; text-align: right;">Nilai</th>
                 </tr>
             </thead>
             <tbody>
                 @php
-                    $serahTerimaItems = collect($dayShiftSummaries ?? []);
-                    if ($serahTerimaItems->isEmpty() && $salesSummary) {
-                        $serahTerimaItems = collect([$salesSummary]);
+                    $shiftMap = [];
+                    foreach ($dayShiftSummaries as $sItem) {
+                        $shiftMap[$sItem->shiftNumber()] = $sItem;
                     }
-                    $stNo = 1;
+                    $currentShiftNum = $activeShift ? (int) preg_replace('/\D/', '', $activeShift->code ?? (string)$activeShift->id) : 1;
+                    if ($currentShiftNum < 1 || $currentShiftNum > 4) {
+                        $currentShiftNum = max(1, min(4, (int) ($activeShift?->id ?? 1)));
+                    }
+                    if (!isset($shiftMap[$currentShiftNum]) && $salesSummary) {
+                        $shiftMap[$currentShiftNum] = $salesSummary;
+                    }
+
+                    $operatorByShift = [];
+                    for ($s = 1; $s <= 4; $s++) {
+                        if (isset($shiftMap[$s])) {
+                            $operatorByShift[$s] = strtoupper($shiftMap[$s]->employee->name ?? '-');
+                        } elseif ($s === $currentShiftNum) {
+                            $operatorByShift[$s] = strtoupper($cashierName);
+                        } else {
+                            $operatorByShift[$s] = null;
+                        }
+                    }
+
                     $stTotalNilai = 0;
+                    $fourShiftRows = [];
+                    for ($s = 1; $s <= 4; $s++) {
+                        $nextShiftIndex = ($s % 4) + 1; // 1->2, 2->3, 3->4, 4->1
+                        $summary = $shiftMap[$s] ?? null;
+
+                        if ($summary) {
+                            $penyerah = strtoupper($summary->employee->name ?? '-');
+                            $penerima = strtoupper(
+                                $summary->deposit_recipient 
+                                ?: ($operatorByShift[$nextShiftIndex] ?: 'SHIFT ' . $nextShiftIndex)
+                            );
+                            $nilai = (float) ($summary->deposited_amount ?? $summary->blind_cash_count ?? $summary->cash_in_drawer ?? $summary->total_revenue);
+                        } elseif ($s === $currentShiftNum) {
+                            $penyerah = strtoupper($cashierName);
+                            $penerima = strtoupper(
+                                $salesSummary?->deposit_recipient 
+                                ?: ($operatorByShift[$nextShiftIndex] ?: ($nextShiftLabel ?? 'SHIFT ' . $nextShiftIndex))
+                            );
+                            $nilai = (float) ($salesSummary?->deposited_amount ?? $cashInDrawer ?? $totalGrossRevenue);
+                        } else {
+                            $penyerah = '-';
+                            $penerima = strtoupper($operatorByShift[$nextShiftIndex] ?: 'SHIFT ' . $nextShiftIndex);
+                            $nilai = 0.0;
+                        }
+
+                        $stTotalNilai += $nilai;
+                        $fourShiftRows[] = [
+                            'shift' => $s,
+                            'penyerah' => $penyerah,
+                            'penerima' => $penerima,
+                            'nilai' => $nilai,
+                        ];
+                    }
                 @endphp
-                @forelse($serahTerimaItems as $stItem)
-                    @php
-                        $stNilai = (float) ($stItem->deposited_amount ?? $stItem->blind_cash_count ?? $stItem->cash_in_drawer);
-                        $stTotalNilai += $stNilai;
-                        $stPenyerah = strtoupper($stItem->employee->name ?? '-');
-                        $stPenerima = strtoupper($stItem->deposit_recipient ?: ($nextShiftLabel ?? 'Shift ' . (($stItem->shiftNumber() % 4) + 1)));
-                    @endphp
+
+                @foreach($fourShiftRows as $rowIdx => $row)
                     <tr>
-                        <td style="text-align: center;">{{ $stNo++ }}</td>
-                        <td style="text-align: center; font-weight: 700;">{{ $stItem->shiftNumber() }}</td>
-                        <td>{{ $stPenyerah }}</td>
-                        <td>{{ $stPenerima }}</td>
-                        <td style="text-align: right; font-weight: 700;">{{ number_format($stNilai, 0, ',', '.') }}</td>
+                        <td style="text-align: center;">{{ $rowIdx + 1 }}</td>
+                        <td style="text-align: center; font-weight: 700;">{{ $row['shift'] }}</td>
+                        <td>{{ $row['penyerah'] }}</td>
+                        <td>{{ $row['penerima'] }}</td>
+                        <td style="text-align: right; font-weight: 700;">
+                            {{ $row['nilai'] > 0 ? number_format($row['nilai'], 0, ',', '.') : '0' }}
+                        </td>
                     </tr>
-                @empty
-                    @php
-                        $stNilai = (float) ($salesSummary?->deposited_amount ?? $cashInDrawer);
-                        $stTotalNilai = $stNilai;
-                    @endphp
-                    <tr>
-                        <td style="text-align: center;">1</td>
-                        <td style="text-align: center; font-weight: 700;">{{ $activeShift?->id ?? 1 }}</td>
-                        <td>{{ strtoupper($cashierName) }}</td>
-                        <td>{{ strtoupper($salesSummary?->deposit_recipient ?: ($nextShiftLabel ?? 'Shift Selanjutnya')) }}</td>
-                        <td style="text-align: right; font-weight: 700;">{{ number_format($stNilai, 0, ',', '.') }}</td>
-                    </tr>
-                @endforelse
+                @endforeach
                 <tr class="row-bold" style="font-weight: 700;">
                     <td colspan="4" style="text-align: right;">Total</td>
                     <td style="text-align: right;">{{ number_format($stTotalNilai > 0 ? $stTotalNilai : $totalGrossRevenue, 0, ',', '.') }}</td>
@@ -661,7 +697,7 @@
 
         {{-- 8. TERBILANG (DISETOR) --}}
         @php
-            $terbilangTargetVal = (float) ($salesSummary?->deposited_amount ?? ($stTotalNilai > 0 ? $stTotalNilai : $cashInDrawer));
+            $terbilangTargetVal = (float) ($stTotalNilai > 0 ? $stTotalNilai : ($salesSummary?->deposited_amount ?? $totalGrossRevenue));
             $terbilangTeks = trim(preg_replace('/\s+/', ' ', $formatTerbilang($terbilangTargetVal)));
         @endphp
         <div class="print-box-panel" style="margin-top: 4px; text-align: center;">
