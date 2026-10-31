@@ -93,6 +93,7 @@ Dokumentasi proyek **Bagus (Sistem Presensi, POS Kasir, & ERP MGK)** diorganisas
 ---
 
 ### 📁 `docs/2026-10-31/` — Operasional Kasir POS, Notifikasi WhatsApp, Rekap Shift & Printer
+* [`LAPORAN_IMPLEMENTASI_5_MODUL_DDD_PRAGMATIS.md`](2026-10-31/LAPORAN_IMPLEMENTASI_5_MODUL_DDD_PRAGMATIS.md) — Laporan resmi implementasi tuntas 5 modul ERP DDD Pragmatis (MasterData, Kas, Pembelian, Distribusi, Penjualan).
 * [`dokumentasi_data_print_dan_printer_canon.md`](2026-10-31/dokumentasi_data_print_dan_printer_canon.md) — Dokumentasi arsitektur monitoring counter cetak USB Printer Canon dan sinkronisasi ke server.
 * [`notifikasi_keamanan_grup_whatsapp.md`](2026-10-31/notifikasi_keamanan_grup_whatsapp.md) — Standarisasi notifikasi otomatis ke grup WhatsApp *🚨 Security & HRD Alert MGK*.
 * [`panduan_operasional_kasir_stok_rekap.md`](2026-10-31/panduan_operasional_kasir_stok_rekap.md) — Panduan operasional Kasir Shift, Stok Awal, Rekapitulasi Shift (`presensi2`), dan Admin ERP.

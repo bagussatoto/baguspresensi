@@ -7,6 +7,7 @@ namespace Modules\MasterData\Domain\Models;
 use App\Domains\Attendance\Models\AttendanceRecord;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Kas\Domain\Models\KasAccount;
 
 class Branch extends Model
 {
@@ -80,5 +81,10 @@ class Branch extends Model
     public function attendanceRecords(): HasMany
     {
         return $this->hasMany(AttendanceRecord::class, 'branch_id');
+    }
+
+    public function kasAccounts(): HasMany
+    {
+        return $this->hasMany(KasAccount::class, 'branch_id');
     }
 }
