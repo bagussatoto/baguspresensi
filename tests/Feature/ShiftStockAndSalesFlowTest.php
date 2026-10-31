@@ -10,6 +10,7 @@ use App\Domains\Attendance\Enums\AttendanceStatus;
 use App\Domains\Attendance\Enums\VerificationMethod;
 use App\Domains\Attendance\Models\AttendanceRecord;
 use App\Domains\Employee\Models\Shift;
+use App\Models\PrinterPrintJob;
 use App\Models\ShiftHandoverChecklist;
 use App\Models\ShiftSalesSummary;
 use Carbon\Carbon;
@@ -811,5 +812,55 @@ class ShiftStockAndSalesFlowTest extends TestCase
 
         $agentResponse->assertOk();
         $this->assertStringContainsString('MGK Canon USB Printer Agent', $agentResponse->getContent());
+    }
+
+    public function test_rekap_page_and_closing_sales_synchronizes_canon_usb_printer_jobs(): void
+    {
+        $this->clockInStaff();
+
+        $workDate = Carbon::today();
+
+        // 1. Simulasikan print job dari Canon USB Spooler
+        PrinterPrintJob::create([
+            'branch_id' => $this->branch->id,
+            'employee_id' => $this->employee->id,
+            'printer_name' => 'Canon G2000 Series',
+            'document_name' => 'Skripsi_Final.docx',
+            'client_computer' => 'PC-KASIR-01',
+            'pages' => 7,
+            'color_mode' => 'bw',
+            'unit_price' => 1000,
+            'total_amount' => 7000,
+            'work_date' => $workDate->toDateString(),
+            'printed_at' => Carbon::now(),
+        ]);
+
+        // 2. Akses halaman rekap harian
+        $rekapResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.rekap'));
+
+        $rekapResponse->assertOk();
+        $rekapResponse->assertViewHas('totalPrintPages', 7);
+        $rekapResponse->assertViewHas('totalPrintIncome', 7000.0);
+        $rekapResponse->assertViewHas('realHardwarePages', 7);
+        $rekapResponse->assertViewHas('realHardwareAmount', 7000.0);
+        $rekapResponse->assertSee('7 Lembar');
+        $rekapResponse->assertSee('Canon USB Live');
+
+        // 3. Simulasikan Penjualan Selesai (closing shift)
+        $closeResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->post(route('presensi2.penjualan.selesai'), [
+                'cash_in_drawer' => 157000,
+                'system_expected_cash' => 157000,
+            ]);
+
+        $closeResponse->assertRedirect(route('presensi2.rekap'));
+
+        $this->assertDatabaseHas('shift_sales_summaries', [
+            'employee_id' => $this->employee->id,
+            'locked_print_pages' => 7,
+            'locked_print_amount' => 7000,
+            'is_print_locked' => true,
+        ]);
     }
 }

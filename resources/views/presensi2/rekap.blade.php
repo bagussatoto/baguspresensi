@@ -421,7 +421,7 @@
 
             $kertasSoldItems = collect($stockComparisons['kertas'] ?? [])->filter(fn($item) => (int)($item['terpakai'] ?? 0) > 0);
             $kertasTotalQty = (int) ($totalPrintPages > 0 ? $totalPrintPages : $kertasSoldItems->sum('terpakai'));
-            $kertasTotalVal = (float) ($totalPrintIncome > 0 ? $totalPrintIncome : ($kertasTotalQty * 500));
+            $kertasTotalVal = (float) ($totalPrintIncome > 0 ? $totalPrintIncome : ($kertasTotalQty * 1000));
 
             $warnetQty = (int) ($occupiedPcCount > 0 ? $occupiedPcCount : ($internetSales->count() > 0 ? $internetSales->count() : 4));
             $warnetTotalVal = (float) $totalInternetIncome;
@@ -502,10 +502,14 @@
                     <td colspan="4">KERTAS</td>
                 </tr>
                 @if($kertasSoldItems->isNotEmpty())
+                    @php
+                        $kSumQty = (int) $kertasSoldItems->sum('terpakai');
+                        $unitPriceKertas = ($kSumQty > 0 && $kertasTotalVal > 0) ? round($kertasTotalVal / $kSumQty) : 1000;
+                    @endphp
                     @foreach($kertasSoldItems as $kItem)
                     @php
                         $kQty = (int) ($kItem['terpakai'] ?? 0);
-                        $kVal = $kQty * 500;
+                        $kVal = $kQty * $unitPriceKertas;
                         $kCode = str_contains($kItem['name'], 'A4') ? 'A4' : (str_contains($kItem['name'], 'F4') ? 'F4' : $kItem['name']);
                     @endphp
                     <tr>
@@ -518,7 +522,7 @@
                 @else
                     <tr>
                         <td style="text-align: center;">{{ $prodNo++ }}</td>
-                        <td>A4</td>
+                        <td>A4 (PRINT)</td>
                         <td style="text-align: right;">{{ $kertasTotalQty }}</td>
                         <td style="text-align: right;">{{ number_format($kertasTotalVal, 0, ',', '.') }}</td>
                     </tr>
@@ -873,17 +877,28 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach($stockComparisons['kertas'] ?? [] as $kertas)
+                @forelse($stockComparisons['kertas'] ?? [] as $kertas)
                     @php
                         $shortKertas = str_contains($kertas['name'], 'A4') ? 'KERTAS A4' : (str_contains($kertas['name'], 'F4') ? 'KERTAS F4' : $kertas['name']);
+                        $pakaiKertas = (int) ($kertas['terpakai'] ?? 0);
+                        if ($pakaiKertas === 0 && str_contains($kertas['name'], 'A4') && $totalPrintPages > 0) {
+                            $pakaiKertas = $totalPrintPages;
+                        }
                     @endphp
                     <tr>
                         <td>{{ $shortKertas }}</td>
                         <td style="text-align: right;">{{ $kertas['sebelumnya'] }}</td>
-                        <td style="text-align: right;">{{ $kertas['terpakai'] ?? 0 }}</td>
+                        <td style="text-align: right;">{{ $pakaiKertas }}</td>
                         <td style="text-align: right; font-weight: 700;">{{ $kertas['sesudahnya'] }}</td>
                     </tr>
-                @endforeach
+                @empty
+                    <tr>
+                        <td>KERTAS A4</td>
+                        <td style="text-align: right;">-</td>
+                        <td style="text-align: right;">{{ $totalPrintPages }}</td>
+                        <td style="text-align: right; font-weight: 700;">-</td>
+                    </tr>
+                @endforelse
             </tbody>
         </table>
 
@@ -965,8 +980,8 @@
                 </div>
             </div>
             <div style="font-size: 11px; color: #ddd6fe; margin-top: 8px; display: flex; align-items: center; justify-content: space-between;">
-                <span>{{ $isPrintLocked ? '🔒 Nilai Terkunci' : 'Otomatis' }}</span>
-                <span>{{ $totalPrintPages }} Lembar</span>
+                <span>{{ $isPrintLocked ? '🔒 Nilai Terkunci' : (($realHardwarePages ?? 0) > 0 ? '🖨️ Canon USB Live' : '🔄 POS Otomatis') }}</span>
+                <span>{{ $totalPrintPages }} Lembar @if(($realHardwarePages ?? 0) > 0)<small style="opacity: 0.8;">(USB: {{ $realHardwarePages }})</small>@endif</span>
             </div>
         </div>
     </div>

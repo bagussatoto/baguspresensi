@@ -3645,7 +3645,7 @@ BAT;
             }
         }
 
-        // Pendapatan Print Kertas (Isolasi per Cabang)
+        // Pendapatan Print Kertas (Isolasi per Cabang & Integrasi Counter Canon USB)
         $printSalesItems = CafeSaleItem::whereHas('sale', function ($q) use ($workDate, $branchId) {
             $q->whereDate('created_at', $workDate->toDateString())
                 ->where('payment_status', '!=', 'cancelled')
@@ -3653,9 +3653,20 @@ BAT;
         })->whereHas('variant.product.category', function ($q) {
             $q->where('code', 'CAT-PAPER');
         })->get();
+
+        $printerJobs = PrinterPrintJob::whereDate('work_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->get();
+        $realHardwarePages = (int) $printerJobs->sum('pages');
+        $realHardwareAmount = (float) $printerJobs->sum('total_amount');
+        $autoPrintAmount = (float) $printSalesItems->sum('subtotal');
+        $autoPrintPages = (int) $printSalesItems->sum('qty');
+        $spoolerAmount = max($autoPrintAmount, $realHardwareAmount);
+        $spoolerPages = max($autoPrintPages, $realHardwarePages);
+
         $totalPrintIncome = ($existingSummary && $existingSummary->is_print_locked && $existingSummary->locked_print_amount !== null)
             ? (float) $existingSummary->locked_print_amount
-            : (float) $printSalesItems->sum('subtotal');
+            : $spoolerAmount;
 
         $totalRevenue = $totalFnb + $totalInternet + $totalPrintIncome;
         $systemExpectedCash = max(0.0, $totalRevenue - $nonCashAmount);
@@ -3716,6 +3727,10 @@ BAT;
                 'non_cash_amount' => $nonCashAmount,
                 'handover_notes' => $notes,
                 'stock_audit' => $stockAudit,
+                'is_print_locked' => true,
+                'locked_print_amount' => $totalPrintIncome,
+                'locked_print_pages' => ($existingSummary?->locked_print_pages ?? $spoolerPages),
+                'locked_print_at' => ($existingSummary?->locked_print_at ?? Carbon::now()),
                 'status' => 'closed',
                 'deposit_status' => 'verified',
                 'deposited_amount' => $blindCashCount,
@@ -3916,7 +3931,7 @@ BAT;
         $occupiedPcCount = $pcStations->where('status', 'occupied')->count();
         $availablePcCount = $pcStations->where('status', 'available')->count();
 
-        // 4. Data Penjualan Kertas Print (Otomatis & Terkunci per Cabang)
+        // 4. Data Penjualan Kertas Print (Otomatis POS & Integrasi Canon USB & Terkunci per Cabang)
         $printSalesItems = CafeSaleItem::whereHas('sale', function ($q) use ($workDate, $branchId) {
             $q->whereDate('created_at', $workDate->toDateString())
                 ->where('payment_status', '!=', 'cancelled')
@@ -3925,12 +3940,22 @@ BAT;
             $q->where('code', 'CAT-PAPER');
         })->get();
 
+        $printerJobs = PrinterPrintJob::whereDate('work_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->orderByDesc('id')
+            ->get();
+        $realHardwarePages = (int) $printerJobs->sum('pages');
+        $realHardwareAmount = (float) $printerJobs->sum('total_amount');
+
         $autoPrintPages = (int) $printSalesItems->sum('qty');
         $autoPrintAmount = (float) $printSalesItems->sum('subtotal');
 
+        $spoolerPages = max($autoPrintPages, $realHardwarePages);
+        $spoolerAmount = max($autoPrintAmount, $realHardwareAmount);
+
         $isPrintLocked = (bool) ($salesSummary?->is_print_locked);
-        $totalPrintPages = $isPrintLocked ? (int) ($salesSummary->locked_print_pages ?? $autoPrintPages) : $autoPrintPages;
-        $totalPrintIncome = $isPrintLocked ? (float) ($salesSummary->locked_print_amount ?? $autoPrintAmount) : $autoPrintAmount;
+        $totalPrintPages = $isPrintLocked ? (int) ($salesSummary->locked_print_pages ?? $spoolerPages) : $spoolerPages;
+        $totalPrintIncome = $isPrintLocked ? (float) ($salesSummary->locked_print_amount ?? $spoolerAmount) : $spoolerAmount;
 
         // 5. Total Pendapatan Kotor (Gross Revenue) & Non-Tunai (QRIS)
         $totalGrossRevenue = $totalFnbIncome + $totalInternetIncome + $totalPrintIncome;
@@ -4037,6 +4062,9 @@ BAT;
             'availablePcCount' => $availablePcCount,
             'totalPrintPages' => $totalPrintPages,
             'totalPrintIncome' => $totalPrintIncome,
+            'realHardwarePages' => $realHardwarePages,
+            'realHardwareAmount' => $realHardwareAmount,
+            'printerJobs' => $printerJobs,
             'isPrintLocked' => $isPrintLocked,
             'totalGrossRevenue' => $totalGrossRevenue,
             'cashInDrawer' => $cashInDrawer,
