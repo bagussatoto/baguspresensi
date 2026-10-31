@@ -760,7 +760,7 @@
 
     {{-- 2. MODAL TERPADU: DATA & KUNCI PRINT KERTAS --}}
     <div id="modal-print-kertas" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.78); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 99999; align-items: center; justify-content: center; padding: 16px;">
-        <div style="background: #ffffff; border-radius: 8px; width: 100%; max-width: 540px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column; color: #1e293b;">
+        <div style="background: #ffffff; border-radius: 8px; width: 100%; max-width: 580px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column; color: #1e293b;">
             <div style="background: {{ $isPrintLocked ? '#0891b2' : '#00c0ef' }}; color: #ffffff; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
                 <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px;">
                     <span>{{ $isPrintLocked ? '🔒' : '🖨️' }}</span> Data & Kunci Print Kertas Shift
@@ -854,6 +854,59 @@
                             🔒 Kunci Data Print Shift Ini
                         </button>
                     @endif
+                </div>
+
+                {{-- 3. HISTORI LEMBAR KERTAS YANG DI-PRINT SHIFT INI --}}
+                <div style="margin-top: 14px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">
+                    <div style="background: #f8fafc; padding: 10px 14px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between;">
+                        <div style="font-weight: 700; font-size: 12px; color: #1e293b; display: flex; align-items: center; gap: 6px;">
+                            <span>📄</span> Histori Lembar Kertas yang Di-Print (Shift Ini)
+                        </div>
+                        <span id="badge-total-print-jobs" class="badge" style="background: #e0f2fe; color: #0369a1; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px;">
+                            {{ count($allPrintLogs ?? []) }} Dokumen
+                        </span>
+                    </div>
+
+                    <div style="max-height: 180px; overflow-y: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
+                            <thead style="background: #f1f5f9; color: #475569; position: sticky; top: 0; z-index: 2;">
+                                <tr>
+                                    <th style="padding: 7px 10px; font-weight: 600;">Waktu</th>
+                                    <th style="padding: 7px 10px; font-weight: 600;">Dokumen / Item</th>
+                                    <th style="padding: 7px 8px; font-weight: 600; text-align: center;">Lembar</th>
+                                    <th style="padding: 7px 10px; font-weight: 600; text-align: right;">Total Nilai</th>
+                                    <th style="padding: 7px 8px; font-weight: 600; text-align: center;">Sumber</th>
+                                </tr>
+                            </thead>
+                            <tbody id="printer-jobs-tbody">
+                                @forelse($allPrintLogs ?? [] as $log)
+                                <tr style="border-bottom: 1px solid #f1f5f9;">
+                                    <td style="padding: 6px 10px; color: #64748b; white-space: nowrap; font-family: monospace;">{{ $log['time'] }}</td>
+                                    <td style="padding: 6px 10px; color: #1e293b; font-weight: 600; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ $log['doc'] }}">
+                                        {{ $log['doc'] }}
+                                    </td>
+                                    <td style="padding: 6px 8px; text-align: center; font-weight: 700; color: #0284c7;">
+                                        {{ $log['pages'] }} lbr
+                                    </td>
+                                    <td style="padding: 6px 10px; text-align: right; font-weight: 600; color: #059669; font-family: monospace;">
+                                        Rp {{ number_format($log['amount'], 0, ',', '.') }}
+                                    </td>
+                                    <td style="padding: 6px 8px; text-align: center;">
+                                        <span style="font-size: 9.5px; padding: 2px 6px; border-radius: 4px; font-weight: 700; background: {{ $log['source'] === 'Canon USB' ? '#dcfce7' : '#e0f2fe' }}; color: {{ $log['source'] === 'Canon USB' ? '#15803d' : '#0369a1' }}; border: 1px solid {{ $log['source'] === 'Canon USB' ? '#bbf7d0' : '#bae6fd' }};">
+                                            {{ $log['source'] }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                @empty
+                                <tr id="empty-print-jobs-row">
+                                    <td colspan="5" style="text-align: center; padding: 16px 10px; color: #94a3b8; font-style: italic;">
+                                        Belum ada histori cetak dokumen pada shift ini.
+                                    </td>
+                                </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1458,6 +1511,29 @@
                 if (amountInput && data.amount > 0) amountInput.value = data.amount;
                 const counterDisplay = document.getElementById('hardware-counter-display');
                 if (counterDisplay) counterDisplay.innerText = data.pages + ' lembar';
+
+                if (data.jobs && data.jobs.length > 0) {
+                    const tbody = document.getElementById('printer-jobs-tbody');
+                    const badge = document.getElementById('badge-total-print-jobs');
+                    if (badge) badge.innerText = data.jobs.length + ' Dokumen';
+                    if (tbody) {
+                        tbody.innerHTML = '';
+                        data.jobs.forEach(j => {
+                            const tr = document.createElement('tr');
+                            tr.style.borderBottom = '1px solid #f1f5f9';
+                            tr.innerHTML = `
+                                <td style="padding: 6px 10px; color: #64748b; white-space: nowrap; font-family: monospace;">\${j.time}</td>
+                                <td style="padding: 6px 10px; color: #1e293b; font-weight: 600; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${j.doc}">\${j.doc}</td>
+                                <td style="padding: 6px 8px; text-align: center; font-weight: 700; color: #0284c7;">\${j.pages} lbr</td>
+                                <td style="padding: 6px 10px; text-align: right; font-weight: 600; color: #059669; font-family: monospace;">Rp \${Number(j.amount).toLocaleString('id-ID')}</td>
+                                <td style="padding: 6px 8px; text-align: center;">
+                                    <span style="font-size: 9.5px; padding: 2px 6px; border-radius: 4px; font-weight: 700; background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0;">Canon USB</span>
+                                </td>
+                            `;
+                            tbody.appendChild(tr);
+                        });
+                    }
+                }
             } else {
                 showPosToast(data.message || 'Gagal sinkron data printer.', false);
             }

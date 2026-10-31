@@ -2576,6 +2576,32 @@ class AttendanceWebV2Controller extends Controller
         $spoolerPages = max($autoPrintPages, $realHardwarePages);
         $spoolerAmount = max($autoPrintAmount, $realHardwareAmount);
 
+        // Rekapitulasi Gabungan Histori Lembar Cetak Shift Ini (Hardware Canon USB + POS Kasir)
+        $allPrintLogs = collect();
+        foreach ($printerJobs as $pj) {
+            $allPrintLogs->push([
+                'time' => $pj->printed_at ? $pj->printed_at->format('H:i') : $pj->created_at->format('H:i'),
+                'doc' => $pj->document_name ?: 'Dokumen Cetak Pelanggan',
+                'pages' => (int) $pj->pages,
+                'amount' => (float) $pj->total_amount,
+                'source' => 'Canon USB',
+                'timestamp' => $pj->printed_at ?? $pj->created_at,
+            ]);
+        }
+
+        foreach ($printSalesItems as $psi) {
+            $allPrintLogs->push([
+                'time' => $psi->created_at ? $psi->created_at->format('H:i') : '-',
+                'doc' => $psi->item_name ?: 'Print Kertas Kasir',
+                'pages' => (int) $psi->qty,
+                'amount' => (float) $psi->subtotal,
+                'source' => 'POS Kasir',
+                'timestamp' => $psi->created_at,
+            ]);
+        }
+
+        $allPrintLogs = $allPrintLogs->sortByDesc('timestamp')->values();
+
         $isPrintLocked = (bool) ($salesSummary?->is_print_locked);
         $totalPrintPages = $isPrintLocked ? (int) ($salesSummary->locked_print_pages ?? $spoolerPages) : $spoolerPages;
         $totalPrintIncome = $isPrintLocked ? (float) ($salesSummary->locked_print_amount ?? $spoolerAmount) : $spoolerAmount;
@@ -2620,6 +2646,7 @@ class AttendanceWebV2Controller extends Controller
             'connectedPrinterName' => $connectedPrinterName,
             'latestPrinterJob' => $latestPrinterJob,
             'printerJobs' => $printerJobs->take(5),
+            'allPrintLogs' => $allPrintLogs,
             'totalPrintPages' => $totalPrintPages,
             'totalPrintIncome' => $totalPrintIncome,
         ]);
@@ -3429,11 +3456,20 @@ class AttendanceWebV2Controller extends Controller
 
         cache()->put('canon_printer_online_branch_'.$branchId, true, now()->addMinutes(15));
 
+        $latestJobs = $jobs->sortByDesc('id')->take(10)->map(fn ($j) => [
+            'time' => $j->printed_at ? $j->printed_at->format('H:i') : $j->created_at->format('H:i'),
+            'doc' => $j->document_name ?: 'Dokumen Cetak Pelanggan',
+            'pages' => (int) $j->pages,
+            'amount' => (float) $j->total_amount,
+            'source' => 'Canon USB',
+        ])->values();
+
         return response()->json([
             'success' => true,
             'message' => 'Data counter printer Canon USB berhasil disinkronkan.',
             'pages' => $realPages,
             'amount' => $realAmount,
+            'jobs' => $latestJobs,
         ]);
     }
 

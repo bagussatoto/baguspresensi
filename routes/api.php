@@ -31,4 +31,8 @@ Route::prefix('v1')->middleware('throttle:api')->group(function (): void {
     // Integrasi Hardware Printer Kertas Kasir (Canon USB / Windows Print Spooler Agent)
     Route::post('printer/log-job', [AttendanceWebV2Controller::class, 'recordPrinterJobApi'])->name('api.v1.printer.log-job');
     Route::get('printer/status', [AttendanceWebV2Controller::class, 'getPrinterStatusApi'])->name('api.v1.printer.status');
+
+    // Integrasi Hardware Printer Kertas Kasir (Canon USB / Windows Print Spooler Agent)
+    Route::post('printer/log-job', [AttendanceWebV2Controller::class, 'recordPrinterJobApi'])->name('api.v1.printer.log-job');
+    Route::get('printer/status', [AttendanceWebV2Controller::class, 'getPrinterStatusApi'])->name('api.v1.printer.status');
 });
