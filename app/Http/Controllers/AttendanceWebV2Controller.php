@@ -1467,7 +1467,7 @@ class AttendanceWebV2Controller extends Controller
 
         // Catat log login ke database
         rescue(fn () => AuditLog::create([
-            'user_id' => $employee->id,
+            'user_id' => Auth::id(),
             'auditable_type' => Employee::class,
             'auditable_id' => $employee->id,
             'action' => 'portal_login',
@@ -1535,7 +1535,7 @@ class AttendanceWebV2Controller extends Controller
         $employeeId = session('presensi2_employee_id');
         if ($employeeId) {
             rescue(fn () => AuditLog::create([
-                'user_id' => $employeeId,
+                'user_id' => Auth::id(),
                 'auditable_type' => Employee::class,
                 'auditable_id' => $employeeId,
                 'action' => 'portal_logout',
@@ -2609,6 +2609,14 @@ class AttendanceWebV2Controller extends Controller
     {
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Sesi login kasir telah berakhir. Silakan login kembali.',
+                    'redirect' => route('presensi2.login'),
+                ], 401);
+            }
+
             return redirect()->route('presensi2.login');
         }
 
@@ -2617,28 +2625,34 @@ class AttendanceWebV2Controller extends Controller
         $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
 
         $attendanceToday = AttendanceRecord::where('employee_id', $employee->id)
-            ->where(function ($q) use ($workDate): void {
-                $q->whereNull('clock_out_at')
-                    ->orWhere('work_date', $workDate->toDateString());
-            })
+            ->whereNull('clock_out_at')
             ->whereNotNull('clock_in_at')
             ->latest('id')
-            ->first();
+            ->first()
+            ?: AttendanceRecord::where('employee_id', $employee->id)
+                ->where('work_date', $workDate->toDateString())
+                ->whereNotNull('clock_in_at')
+                ->latest('id')
+                ->first();
 
         if (! $attendanceToday) {
-            if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Presensi dulu! Anda wajib Clock-In sebelum melakukan transaksi kasir POS.',
-                ], 403);
-            }
+            $isPrivileged = in_array((string) ($employee->role?->value ?? $employee->role), ['admin', 'superadmin', 'supervisor', 'otorisator', 'manager'], true);
 
-            return redirect()->route('presensi2.index')
-                ->with('error', 'Presensi dulu! Anda wajib Clock-In sebelum melakukan transaksi kasir POS.');
+            if (! $isPrivileged) {
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Presensi dulu! Anda wajib Clock-In sebelum melakukan transaksi kasir POS.',
+                    ], 403);
+                }
+
+                return redirect()->route('presensi2.index')
+                    ->with('error', 'Presensi dulu! Anda wajib Clock-In sebelum melakukan transaksi kasir POS.');
+            }
         }
 
         $type = (string) $request->input('transaction_type', 'fnb');
-        $branchId = (int) ($employee->branch_id ?? 3);
+        $branchId = (int) ($employee->branch_id ?? Branch::value('id') ?? 1);
         $inv = 'INV-POS-'.date('Ymd').'-'.strtoupper(substr(uniqid(), -5));
 
         if ($type === 'fnb') {
@@ -2671,10 +2685,10 @@ class AttendanceWebV2Controller extends Controller
                 $variantId = (int) $request->input('variant_id');
                 $qty = max(1, (int) $request->input('qty', 1));
                 $variant = ProductVariant::find($variantId);
-                $price = $variant ? (float) $variant->base_price : 10000.0;
-                $subtotal = $price * $qty;
-                $totalGross = $subtotal;
                 if ($variant) {
+                    $price = (float) $variant->base_price;
+                    $subtotal = $price * $qty;
+                    $totalGross = $subtotal;
                     $orderItems[] = [
                         'variant' => $variant,
                         'qty' => $qty,
@@ -2685,7 +2699,7 @@ class AttendanceWebV2Controller extends Controller
             }
 
             if (empty($orderItems)) {
-                if ($request->wantsJson()) {
+                if ($request->wantsJson() || $request->ajax()) {
                     return response()->json(['success' => false, 'message' => 'Pilih setidaknya 1 item menu untuk dijual.'], 422);
                 }
 
@@ -2710,7 +2724,7 @@ class AttendanceWebV2Controller extends Controller
                     $supervisorPin = (string) $request->input('supervisor_pin');
                     if (empty($supervisorPin)) {
                         $errMsg = "Diskon {$discountPercent}% melebihi batas wewenang kasir ({$cashierMaxDiscount}%). Diperlukan otorisasi PIN Supervisor / Otorisator.";
-                        if ($request->wantsJson()) {
+                        if ($request->wantsJson() || $request->ajax()) {
                             return response()->json(['success' => false, 'message' => $errMsg, 'require_supervisor' => true], 422);
                         }
 
@@ -2720,7 +2734,7 @@ class AttendanceWebV2Controller extends Controller
                     $supervisor = $this->resolveSupervisorByPin($supervisorPin, $branchId);
                     if (! $supervisor) {
                         $errMsg = "PIN Supervisor tidak valid atau wewenang tidak mencukupi untuk mengotorisasi diskon {$discountPercent}%.";
-                        if ($request->wantsJson()) {
+                        if ($request->wantsJson() || $request->ajax()) {
                             return response()->json(['success' => false, 'message' => $errMsg, 'require_supervisor' => true], 422);
                         }
 
@@ -2729,7 +2743,7 @@ class AttendanceWebV2Controller extends Controller
 
                     if (! $supervisor->canAuthorizeDiscount($discountPercent)) {
                         $errMsg = "Batas otorisasi Supervisor {$supervisor->name} ({$supervisor->max_discount_approval_percent}%) tidak mencukupi untuk diskon {$discountPercent}%.";
-                        if ($request->wantsJson()) {
+                        if ($request->wantsJson() || $request->ajax()) {
                             return response()->json(['success' => false, 'message' => $errMsg, 'require_supervisor' => true], 422);
                         }
 
@@ -2749,142 +2763,202 @@ class AttendanceWebV2Controller extends Controller
             }
             $changeAmount = max(0.0, $amountPaid - $netAmount);
 
-            $sale = CafeSale::create([
-                'invoice_number' => $inv,
-                'branch_id' => $branchId,
-                'employee_id' => $employee->id,
-                'customer_name' => $customerName,
-                'total_fnb' => $totalGross,
-                'total_billing' => 0,
-                'gross_amount' => $totalGross,
-                'discount_percent' => $discountPercent,
-                'discount_amount' => $discountAmount,
-                'discount_authorized_by' => $discountAuthorizedBy,
-                'tax_amount' => 0,
-                'net_amount' => $netAmount,
-                'amount_paid' => $amountPaid,
-                'change_amount' => $changeAmount,
-                'payment_method' => $paymentMethod,
-                'payment_status' => 'paid',
-                'cashier_notes' => 'Kasir Presensi v2 (Shift)',
-            ]);
+            try {
+                DB::beginTransaction();
 
-            CafePayment::create([
-                'cafe_sale_id' => $sale->id,
-                'payment_number' => 'PAY-'.date('Ymd').'-'.strtoupper(substr(uniqid(), -5)),
-                'payment_method' => $paymentMethod,
-                'amount_due' => $netAmount,
-                'amount_paid' => $amountPaid,
-                'change_amount' => $changeAmount,
-                'status' => 'completed',
-                'paid_at' => now(),
-                'cashier_employee_id' => $employee->id,
-            ]);
+                $sale = CafeSale::create([
+                    'invoice_number' => $inv,
+                    'branch_id' => $branchId,
+                    'employee_id' => $employee->id,
+                    'customer_name' => $customerName,
+                    'total_fnb' => $totalGross,
+                    'total_billing' => 0,
+                    'gross_amount' => $totalGross,
+                    'discount_percent' => $discountPercent,
+                    'discount_amount' => $discountAmount,
+                    'discount_authorized_by' => $discountAuthorizedBy,
+                    'tax_amount' => 0,
+                    'net_amount' => $netAmount,
+                    'amount_paid' => $amountPaid,
+                    'change_amount' => $changeAmount,
+                    'payment_method' => $paymentMethod,
+                    'payment_status' => 'paid',
+                    'cashier_notes' => 'Kasir Presensi v2 (Shift)',
+                ]);
 
-            if ($discountPercent > 0 && $discountAuthorizedBy) {
-                rescue(fn () => AuditLog::create([
-                    'user_id' => auth()->id(),
-                    'auditable_type' => CafeSale::class,
-                    'auditable_id' => $sale->id,
-                    'action' => 'pos_sale_discount_authorized',
-                    'new_values' => [
+                CafePayment::create([
+                    'cafe_sale_id' => $sale->id,
+                    'payment_number' => 'PAY-'.date('Ymd').'-'.strtoupper(substr(uniqid(), -5)),
+                    'payment_method' => $paymentMethod,
+                    'amount_due' => $netAmount,
+                    'amount_paid' => $amountPaid,
+                    'change_amount' => $changeAmount,
+                    'status' => 'completed',
+                    'paid_at' => now(),
+                    'cashier_employee_id' => $employee->id,
+                ]);
+
+                if ($discountPercent > 0 && $discountAuthorizedBy) {
+                    rescue(fn () => AuditLog::create([
+                        'user_id' => Auth::id(),
+                        'auditable_type' => CafeSale::class,
+                        'auditable_id' => $sale->id,
+                        'action' => 'pos_sale_discount_authorized',
+                        'new_values' => [
+                            'invoice_number' => $sale->invoice_number,
+                            'gross_amount' => $totalGross,
+                            'discount_percent' => $discountPercent,
+                            'discount_amount' => $discountAmount,
+                            'net_amount' => $netAmount,
+                            'discount_authorized_by' => $discountAuthorizedBy,
+                            'cashier_employee_id' => $employee->id,
+                        ],
+                        'ip_address' => $request->ip() ?? '127.0.0.1',
+                        'user_agent' => $request->userAgent() ?? 'POS Presensi v2',
+                        'created_at' => now(),
+                    ]), report: false);
+                }
+
+                $warehouseId = ($branchId ? Warehouse::where('branch_id', $branchId)->value('id') : null)
+                    ?? Warehouse::where('id', 5)->value('id')
+                    ?? Warehouse::first()?->id;
+
+                foreach ($orderItems as $oi) {
+                    CafeSaleItem::create([
+                        'cafe_sale_id' => $sale->id,
+                        'product_variant_id' => $oi['variant']->id,
+                        'item_type' => 'fnb',
+                        'item_name' => $oi['variant']->name,
+                        'qty' => $oi['qty'],
+                        'unit_price' => $oi['unit_price'],
+                        'subtotal' => $oi['subtotal'],
+                    ]);
+
+                    if ($warehouseId) {
+                        StockInventory::firstOrCreate(
+                            [
+                                'warehouse_id' => $warehouseId,
+                                'product_variant_id' => $oi['variant']->id,
+                            ],
+                            [
+                                'qty_on_hand' => 0,
+                                'safety_stock' => 5,
+                            ]
+                        );
+
+                        StockInventory::where('product_variant_id', $oi['variant']->id)
+                            ->where('warehouse_id', $warehouseId)
+                            ->decrement('qty_on_hand', $oi['qty']);
+                    }
+                }
+
+                DB::commit();
+
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Penjualan F&B senilai Rp '.number_format($netAmount, 0, ',', '.').' berhasil dicatat!',
                         'invoice_number' => $sale->invoice_number,
-                        'gross_amount' => $totalGross,
-                        'discount_percent' => $discountPercent,
-                        'discount_amount' => $discountAmount,
-                        'net_amount' => $netAmount,
-                        'discount_authorized_by' => $discountAuthorizedBy,
-                        'cashier_employee_id' => $employee->id,
-                    ],
-                    'ip_address' => $request->ip() ?? '127.0.0.1',
-                    'user_agent' => $request->userAgent() ?? 'POS Presensi v2',
-                    'created_at' => now(),
-                ]));
+                        'sale' => $sale->load(['items.variant', 'employee']),
+                        'total_fnb' => $netAmount,
+                    ]);
+                }
+
+                return redirect()->route('presensi2.penjualan')
+                    ->with('success', 'Penjualan F&B senilai Rp '.number_format($netAmount, 0, ',', '.').' ('.$sale->invoice_number.') berhasil dicatat!');
+            } catch (\Throwable $e) {
+                DB::rollBack();
+                Log::error('POS transaction save error: '.$e->getMessage(), [
+                    'exception' => $e,
+                    'employee_id' => $employee->id,
+                ]);
+
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Gagal menyimpan transaksi kasir: '.$e->getMessage(),
+                    ], 500);
+                }
+
+                return back()->with('error', 'Gagal menyimpan transaksi: '.$e->getMessage());
             }
+        } else {
+            try {
+                DB::beginTransaction();
 
-            $warehouseId = ($branchId ? Warehouse::where('branch_id', $branchId)->value('id') : null)
-                ?? Warehouse::where('id', 5)->value('id')
-                ?? Warehouse::first()?->id;
+                $billingAmount = (float) $request->input('billing_amount', 6000);
+                $stationId = $request->input('pc_station_id');
+                $station = $stationId ? PcStation::find($stationId) : null;
+                $hours = (int) $request->input('hours', 1);
+                $paymentMethod = (string) $request->input('payment_method', 'cash');
 
-            foreach ($orderItems as $oi) {
+                $sale = CafeSale::create([
+                    'invoice_number' => $inv,
+                    'branch_id' => $branchId,
+                    'employee_id' => $employee->id,
+                    'customer_name' => $request->input('customer_name') ?: ($station ? 'User '.$station->station_code : 'User Billing'),
+                    'pc_station_id' => $station?->id,
+                    'total_billing' => $billingAmount,
+                    'total_fnb' => 0,
+                    'gross_amount' => $billingAmount,
+                    'net_amount' => $billingAmount,
+                    'amount_paid' => $billingAmount,
+                    'change_amount' => 0,
+                    'payment_method' => $paymentMethod,
+                    'payment_status' => 'paid',
+                    'cashier_notes' => 'Pencatatan Billing Internet Shift',
+                ]);
+
+                CafePayment::create([
+                    'cafe_sale_id' => $sale->id,
+                    'payment_number' => 'PAY-'.date('Ymd').'-'.strtoupper(substr(uniqid(), -5)),
+                    'payment_method' => $paymentMethod,
+                    'amount_due' => $billingAmount,
+                    'amount_paid' => $billingAmount,
+                    'change_amount' => 0,
+                    'status' => 'completed',
+                    'paid_at' => now(),
+                    'cashier_employee_id' => $employee->id,
+                ]);
+
                 CafeSaleItem::create([
                     'cafe_sale_id' => $sale->id,
-                    'product_variant_id' => $oi['variant']->id,
-                    'item_type' => 'fnb',
-                    'item_name' => $oi['variant']->name,
-                    'qty' => $oi['qty'],
-                    'unit_price' => $oi['unit_price'],
-                    'subtotal' => $oi['subtotal'],
+                    'item_type' => 'billing',
+                    'item_name' => 'Sewa PC Internet ('.$hours.' Jam) - '.($station ? $station->station_code : 'Billing Kasir'),
+                    'qty' => $hours,
+                    'unit_price' => $billingAmount / max(1, $hours),
+                    'subtotal' => $billingAmount,
                 ]);
 
-                StockInventory::where('product_variant_id', $oi['variant']->id)
-                    ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
-                    ->decrement('qty_on_hand', $oi['qty']);
-            }
+                DB::commit();
 
-            if ($request->wantsJson()) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Penjualan F&B senilai Rp '.number_format($totalGross, 0, ',', '.').' berhasil dicatat!',
-                    'invoice_number' => $sale->invoice_number,
-                    'sale' => $sale->load(['items.variant', 'employee']),
-                    'total_fnb' => $totalGross,
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Pendapatan Internet berhasil dicatat!',
+                        'invoice_number' => $sale->invoice_number,
+                        'sale' => $sale->load(['items', 'employee']),
+                    ]);
+                }
+
+                return redirect()->route('presensi2.penjualan')
+                    ->with('success', 'Pendapatan internet Rp '.number_format($billingAmount, 0, ',', '.').' berhasil dicatat!');
+            } catch (\Throwable $e) {
+                DB::rollBack();
+                Log::error('POS Internet billing save error: '.$e->getMessage(), [
+                    'exception' => $e,
+                    'employee_id' => $employee->id,
                 ]);
+
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Gagal menyimpan transaksi billing internet: '.$e->getMessage(),
+                    ], 500);
+                }
+
+                return back()->with('error', 'Gagal menyimpan transaksi: '.$e->getMessage());
             }
-
-            return redirect()->route('presensi2.penjualan')
-                ->with('success', 'Penjualan F&B senilai Rp '.number_format($totalGross, 0, ',', '.').' ('.$sale->invoice_number.') berhasil dicatat!');
-        } else {
-            $billingAmount = (float) $request->input('billing_amount', 6000);
-            $stationId = $request->input('pc_station_id');
-            $station = $stationId ? PcStation::find($stationId) : null;
-            $hours = (int) $request->input('hours', 1);
-            $paymentMethod = (string) $request->input('payment_method', 'cash');
-
-            $sale = CafeSale::create([
-                'invoice_number' => $inv,
-                'branch_id' => $branchId,
-                'employee_id' => $employee->id,
-                'customer_name' => $request->input('customer_name') ?: ($station ? 'User '.$station->station_code : 'User Billing'),
-                'pc_station_id' => $station?->id,
-                'total_billing' => $billingAmount,
-                'total_fnb' => 0,
-                'gross_amount' => $billingAmount,
-                'net_amount' => $billingAmount,
-                'amount_paid' => $billingAmount,
-                'change_amount' => 0,
-                'payment_method' => $paymentMethod,
-                'payment_status' => 'paid',
-                'cashier_notes' => 'Pencatatan Billing Internet Shift',
-            ]);
-
-            CafePayment::create([
-                'cafe_sale_id' => $sale->id,
-                'payment_number' => 'PAY-'.date('Ymd').'-'.strtoupper(substr(uniqid(), -5)),
-                'payment_method' => $paymentMethod,
-                'amount_due' => $billingAmount,
-                'amount_paid' => $billingAmount,
-                'change_amount' => 0,
-                'status' => 'completed',
-                'paid_at' => now(),
-                'cashier_employee_id' => $employee->id,
-            ]);
-
-            CafeSaleItem::create([
-                'cafe_sale_id' => $sale->id,
-                'item_type' => 'billing',
-                'item_name' => 'Sewa PC Internet ('.$hours.' Jam) - '.($station ? $station->station_code : 'Billing Kasir'),
-                'qty' => $hours,
-                'unit_price' => $billingAmount / max(1, $hours),
-                'subtotal' => $billingAmount,
-            ]);
-
-            if ($request->wantsJson()) {
-                return response()->json(['success' => true, 'message' => 'Pendapatan Internet berhasil dicatat!']);
-            }
-
-            return redirect()->route('presensi2.penjualan')
-                ->with('success', 'Pendapatan internet Rp '.number_format($billingAmount, 0, ',', '.').' berhasil dicatat!');
         }
     }
 

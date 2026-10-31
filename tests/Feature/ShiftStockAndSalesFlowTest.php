@@ -324,7 +324,7 @@ class ShiftStockAndSalesFlowTest extends TestCase
         $this->assertEquals(350000, $savedChecklist->billing_details['actual_cash_received']);
         $this->assertEquals('Uang fisik di laci pas dan sesuai', $savedChecklist->billing_details['cash_notes']);
 
-        $savedChecklist = \App\Models\ShiftHandoverChecklist::where('employee_id', $this->employee->id)->latest('id')->first();
+        $savedChecklist = ShiftHandoverChecklist::where('employee_id', $this->employee->id)->latest('id')->first();
         $this->assertNotNull($savedChecklist);
         $this->assertEquals(350000, $savedChecklist->billing_shift_income);
         $this->assertIsArray($savedChecklist->billing_details);
@@ -397,6 +397,90 @@ class ShiftStockAndSalesFlowTest extends TestCase
             'employee_id' => $this->employee->id,
             'total_fnb' => 24000.00,
             'payment_method' => 'cash',
+        ]);
+    }
+
+    public function test_can_record_fnb_sale_via_json_cart_payload(): void
+    {
+        $this->clockInStaff();
+
+        $initialStock = (int) StockInventory::where('product_variant_id', $this->variantKopi->id)
+            ->where('warehouse_id', $this->warehouse->id)
+            ->value('qty_on_hand');
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.penjualan.transaksi'), [
+                'transaction_type' => 'fnb',
+                'cart_items' => [
+                    [
+                        'variant_id' => $this->variantKopi->id,
+                        'qty' => 2,
+                    ],
+                ],
+                'customer_name' => 'Pelanggan Meja 4',
+                'payment_method' => 'cash',
+                'amount_paid' => 24000,
+            ]);
+
+        $response->assertOk();
+        $response->assertJson([
+            'success' => true,
+        ]);
+        $response->assertJsonStructure([
+            'success',
+            'message',
+            'invoice_number',
+            'sale',
+            'total_fnb',
+        ]);
+
+        $this->assertDatabaseHas('cafe_sales', [
+            'employee_id' => $this->employee->id,
+            'customer_name' => 'Pelanggan Meja 4',
+            'total_fnb' => 24000.00,
+            'net_amount' => 24000.00,
+            'payment_status' => 'paid',
+        ]);
+
+        $this->assertDatabaseHas('cafe_payments', [
+            'amount_due' => 24000.00,
+            'amount_paid' => 24000.00,
+            'status' => 'completed',
+        ]);
+
+        $newStock = (int) StockInventory::where('product_variant_id', $this->variantKopi->id)
+            ->where('warehouse_id', $this->warehouse->id)
+            ->value('qty_on_hand');
+
+        $this->assertEquals($initialStock - 2, $newStock);
+    }
+
+    public function test_can_record_fnb_sale_with_exact_cash_when_amount_paid_omitted(): void
+    {
+        $this->clockInStaff();
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.penjualan.transaksi'), [
+                'transaction_type' => 'fnb',
+                'cart_items' => [
+                    [
+                        'variant_id' => $this->variantKopi->id,
+                        'qty' => 1,
+                    ],
+                ],
+                'payment_method' => 'cash',
+            ]);
+
+        $response->assertOk();
+        $response->assertJson([
+            'success' => true,
+        ]);
+
+        $this->assertDatabaseHas('cafe_sales', [
+            'employee_id' => $this->employee->id,
+            'net_amount' => 12000.00,
+            'amount_paid' => 12000.00,
+            'change_amount' => 0.00,
         ]);
     }
 

@@ -1236,7 +1236,7 @@
         const grossDisplay = document.getElementById('pos-gross-display');
         const discountText = document.getElementById('pos-discount-amount-text');
         const netDisplay = document.getElementById('pos-total-display');
-        const btnSubmitText = document.getElementById('pos-btn-submit-text');
+        const btnSubmitText = document.getElementById('btn-submit-pos-text') || document.getElementById('pos-btn-submit-text');
         const supervisorBox = document.getElementById('pos-supervisor-discount-box');
 
         if (grossDisplay) {
@@ -1620,23 +1620,32 @@
             }
         }
 
-        const customerName = document.getElementById('pos-customer-input').value.trim() || 'Pelanggan Umum';
+        const customerName = document.getElementById('pos-customer-input')?.value?.trim() || 'Pelanggan Umum';
+        const grandTotal = netTotal;
         let cashPaid = netTotal;
 
         if (currentPaymentMethod === 'cash') {
-            const inputVal = parseFloat(document.getElementById('pos-cash-amount').value);
-            if (isNaN(inputVal) || inputVal < netTotal) {
-                showPosToast('Uang tunai yang diterima kurang dari total tagihan (Rp ' + netTotal.toLocaleString('id-ID') + ')', false);
-                document.getElementById('pos-cash-amount').focus();
-                return;
+            const rawVal = document.getElementById('pos-cash-amount')?.value?.trim();
+            if (rawVal) {
+                const inputVal = parseFloat(rawVal);
+                if (isNaN(inputVal) || inputVal < netTotal) {
+                    showPosToast('Uang tunai yang diterima kurang dari total tagihan (Rp ' + netTotal.toLocaleString('id-ID') + ')', false);
+                    document.getElementById('pos-cash-amount')?.focus();
+                    return;
+                }
+                cashPaid = inputVal;
+            } else {
+                // Jika input kosong, otomatis default ke uang pas
+                cashPaid = netTotal;
             }
-            cashPaid = inputVal;
         }
 
         const btnSubmit = document.getElementById('btn-submit-pos');
-        btnSubmit.disabled = true;
-        btnSubmit.style.opacity = '0.6';
-        btnSubmit.innerHTML = '<span>⏳</span> Menyimpan Transaksi...';
+        if (btnSubmit) {
+            btnSubmit.disabled = true;
+            btnSubmit.style.opacity = '0.6';
+            btnSubmit.innerHTML = '<span>⏳</span> Menyimpan Transaksi...';
+        }
 
         try {
             const payload = {
@@ -1771,12 +1780,14 @@
                 showPosToast(data.message || 'Gagal memproses transaksi.', false);
             }
         } catch (err) {
-            console.error(err);
-            showPosToast('Terjadi kesalahan jaringan saat menyimpan transaksi.', false);
+            console.error('POS transaction save error:', err);
+            showPosToast('Terjadi kesalahan saat menyimpan transaksi: ' + (err.message || 'Koneksi terganggu'), false);
         } finally {
-            btnSubmit.disabled = false;
-            btnSubmit.style.opacity = '1';
-            btnSubmit.innerHTML = '<span>⚡</span> <span id="btn-submit-pos-text">Proses & Simpan Transaksi</span>';
+            if (btnSubmit) {
+                btnSubmit.disabled = false;
+                btnSubmit.style.opacity = '1';
+                btnSubmit.innerHTML = '<span id="btn-submit-pos-text">Simpan Order Penjualan</span>';
+            }
             renderCart();
         }
     }
