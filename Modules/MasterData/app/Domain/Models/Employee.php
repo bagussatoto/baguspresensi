@@ -123,4 +123,12 @@ class Employee extends Authenticatable
     {
         return in_array($this->role, [EmployeeRole::SUPERVISOR, EmployeeRole::OTORISATOR], true);
     }
+
+    /**
+     * Cek apakah karyawan berwenang menyetujui / menolak penyesuaian billing internet kasir.
+     */
+    public function canApproveBillingAdjustment(): bool
+    {
+        return in_array($this->role, [EmployeeRole::SUPERVISOR, EmployeeRole::OTORISATOR], true);
+    }
 }

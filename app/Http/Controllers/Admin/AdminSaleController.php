@@ -351,6 +351,304 @@ class AdminSaleController extends Controller
     }
 
     /**
+     * Antrean persetujuan Penyesuaian Billing Internet kasir (Mati Listrik / Force Majeure).
+     */
+    public function billingAdjustmentIndex(Request $request): View
+    {
+        $assignedBranchId = $this->assignedBranchId();
+
+        $baseQuery = ShiftSalesSummary::with(['employee', 'branch', 'shift'])
+            ->when($assignedBranchId, fn ($q) => $q->where('branch_id', $assignedBranchId));
+
+        $pendingAdjustments = (clone $baseQuery)
+            ->where('billing_adjustment_status', 'pending_approval')
+            ->orderByDesc('id')
+            ->get();
+
+        $processedAdjustments = (clone $baseQuery)
+            ->whereIn('billing_adjustment_status', ['approved', 'rejected'])
+            ->orderByDesc('updated_at')
+            ->limit(50)
+            ->get();
+
+        $profileData = AdminDashboardController::getProfileData($request);
+
+        return view('admin.penjualan.penyesuaian-billing', compact(
+            'pendingAdjustments',
+            'processedAdjustments',
+            'profileData'
+        ));
+    }
+
+    /**
+     * Setujui pengajuan penyesuaian billing: potongan resmi memotong omset kasir.
+     */
+    public function approveBillingAdjustment(Request $request, ShiftSalesSummary $summary): JsonResponse|RedirectResponse
+    {
+        if ($blocked = $this->guardBillingAdjustment($request, $summary)) {
+            return $blocked;
+        }
+
+        $adminName = auth()->user()?->name ?? 'Admin';
+        $rawAmount = (float) ($summary->raw_billing_amount ?? $summary->locked_billing_amount ?? 0);
+        $summary->approveBillingAdjustment($adminName);
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => ShiftSalesSummary::class,
+            'auditable_id' => $summary->id,
+            'action' => 'shift_billing_adjustment_approved_by_admin',
+            'old_values' => ['locked_billing_amount' => $rawAmount],
+            'new_values' => [
+                'status' => 'approved',
+                'approved_by' => $adminName,
+                'locked_billing_amount' => (float) $summary->locked_billing_amount,
+                'adjustment_amount' => (float) $summary->billing_adjustment_amount,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Admin ERP MGK',
+            'created_at' => now(),
+        ]));
+
+        $message = 'Penyesuaian billing kasir '.($summary->employee?->name ?? '-').' sebesar Rp '.number_format((float) $summary->billing_adjustment_amount, 0, ',', '.')." DISETUJUI oleh {$adminName}.";
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'message' => $message, 'summary' => $summary->fresh()]);
+        }
+
+        return redirect()->route('admin.penjualan.penyesuaian-billing')->with('success', $message);
+    }
+
+    /**
+     * Tolak pengajuan penyesuaian billing: kasir wajib menyetor omset penuh.
+     */
+    public function rejectBillingAdjustment(Request $request, ShiftSalesSummary $summary): JsonResponse|RedirectResponse
+    {
+        if ($blocked = $this->guardBillingAdjustment($request, $summary)) {
+            return $blocked;
+        }
+
+        $validated = $request->validate([
+            'rejection_reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        $adminName = auth()->user()?->name ?? 'Admin';
+        $summary->rejectBillingAdjustment($adminName, $validated['rejection_reason']);
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => ShiftSalesSummary::class,
+            'auditable_id' => $summary->id,
+            'action' => 'shift_billing_adjustment_rejected_by_admin',
+            'old_values' => ['billing_adjustment_amount' => (float) $summary->billing_adjustment_amount],
+            'new_values' => [
+                'status' => 'rejected',
+                'rejected_by' => $adminName,
+                'rejection_reason' => $validated['rejection_reason'],
+                'locked_billing_amount' => (float) $summary->locked_billing_amount,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Admin ERP MGK',
+            'created_at' => now(),
+        ]));
+
+        $message = 'Penyesuaian billing kasir '.($summary->employee?->name ?? '-')." DITOLAK oleh {$adminName}. Kasir wajib menyetor omset penuh.";
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'message' => $message, 'summary' => $summary->fresh()]);
+        }
+
+        return redirect()->route('admin.penjualan.penyesuaian-billing')->with('success', $message);
+    }
+
+    /**
+     * Cabang yang dibatasi untuk admin cabang (null = semua cabang).
+     */
+    private function assignedBranchId(): ?int
+    {
+        $adminUser = auth()->user();
+        $isBranchAdmin = $adminUser && method_exists($adminUser, 'isBranchAdmin') && $adminUser->isBranchAdmin();
+
+        return $isBranchAdmin ? (int) $adminUser->assigned_branch_id : null;
+    }
+
+    /**
+     * Pastikan pengajuan berstatus pending dan berada dalam cakupan cabang admin.
+     */
+    private function guardBillingAdjustment(Request $request, ShiftSalesSummary $summary): JsonResponse|RedirectResponse|null
+    {
+        $assignedBranchId = $this->assignedBranchId();
+        $message = null;
+        $status = 422;
+
+        if ($assignedBranchId && (int) $summary->branch_id !== $assignedBranchId) {
+            $message = 'Anda tidak berwenang memproses pengajuan cabang lain.';
+            $status = 403;
+        } elseif (! $summary->isBillingAdjustmentPending()) {
+            $message = 'Pengajuan ini sudah diproses atau tidak dalam status menunggu persetujuan.';
+        }
+
+        if ($message === null) {
+            return null;
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => false, 'message' => $message], $status);
+        }
+
+        return redirect()->route('admin.penjualan.penyesuaian-billing')->with('error', $message);
+    }
+
+    /**
+     * Antrean persetujuan Penyesuaian Billing Internet kasir (Mati Listrik / Force Majeure).
+     */
+    public function billingAdjustmentIndex(Request $request): View
+    {
+        $assignedBranchId = $this->assignedBranchId();
+
+        $baseQuery = ShiftSalesSummary::with(['employee', 'branch', 'shift'])
+            ->when($assignedBranchId, fn ($q) => $q->where('branch_id', $assignedBranchId));
+
+        $pendingAdjustments = (clone $baseQuery)
+            ->where('billing_adjustment_status', 'pending_approval')
+            ->orderByDesc('id')
+            ->get();
+
+        $processedAdjustments = (clone $baseQuery)
+            ->whereIn('billing_adjustment_status', ['approved', 'rejected'])
+            ->orderByDesc('updated_at')
+            ->limit(50)
+            ->get();
+
+        $profileData = AdminDashboardController::getProfileData($request);
+
+        return view('admin.penjualan.penyesuaian-billing', compact(
+            'pendingAdjustments',
+            'processedAdjustments',
+            'profileData'
+        ));
+    }
+
+    /**
+     * Setujui pengajuan penyesuaian billing: potongan resmi memotong omset kasir.
+     */
+    public function approveBillingAdjustment(Request $request, ShiftSalesSummary $summary): JsonResponse|RedirectResponse
+    {
+        if ($blocked = $this->guardBillingAdjustment($request, $summary)) {
+            return $blocked;
+        }
+
+        $adminName = auth()->user()?->name ?? 'Admin';
+        $rawAmount = (float) ($summary->raw_billing_amount ?? $summary->locked_billing_amount ?? 0);
+        $summary->approveBillingAdjustment($adminName);
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => ShiftSalesSummary::class,
+            'auditable_id' => $summary->id,
+            'action' => 'shift_billing_adjustment_approved_by_admin',
+            'old_values' => ['locked_billing_amount' => $rawAmount],
+            'new_values' => [
+                'status' => 'approved',
+                'approved_by' => $adminName,
+                'locked_billing_amount' => (float) $summary->locked_billing_amount,
+                'adjustment_amount' => (float) $summary->billing_adjustment_amount,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Admin ERP MGK',
+            'created_at' => now(),
+        ]));
+
+        $message = 'Penyesuaian billing kasir '.($summary->employee?->name ?? '-').' sebesar Rp '.number_format((float) $summary->billing_adjustment_amount, 0, ',', '.')." DISETUJUI oleh {$adminName}.";
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'message' => $message, 'summary' => $summary->fresh()]);
+        }
+
+        return redirect()->route('admin.penjualan.penyesuaian-billing')->with('success', $message);
+    }
+
+    /**
+     * Tolak pengajuan penyesuaian billing: kasir wajib menyetor omset penuh.
+     */
+    public function rejectBillingAdjustment(Request $request, ShiftSalesSummary $summary): JsonResponse|RedirectResponse
+    {
+        if ($blocked = $this->guardBillingAdjustment($request, $summary)) {
+            return $blocked;
+        }
+
+        $validated = $request->validate([
+            'rejection_reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        $adminName = auth()->user()?->name ?? 'Admin';
+        $summary->rejectBillingAdjustment($adminName, $validated['rejection_reason']);
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => ShiftSalesSummary::class,
+            'auditable_id' => $summary->id,
+            'action' => 'shift_billing_adjustment_rejected_by_admin',
+            'old_values' => ['billing_adjustment_amount' => (float) $summary->billing_adjustment_amount],
+            'new_values' => [
+                'status' => 'rejected',
+                'rejected_by' => $adminName,
+                'rejection_reason' => $validated['rejection_reason'],
+                'locked_billing_amount' => (float) $summary->locked_billing_amount,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Admin ERP MGK',
+            'created_at' => now(),
+        ]));
+
+        $message = 'Penyesuaian billing kasir '.($summary->employee?->name ?? '-')." DITOLAK oleh {$adminName}. Kasir wajib menyetor omset penuh.";
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'message' => $message, 'summary' => $summary->fresh()]);
+        }
+
+        return redirect()->route('admin.penjualan.penyesuaian-billing')->with('success', $message);
+    }
+
+    /**
+     * Cabang yang dibatasi untuk admin cabang (null = semua cabang).
+     */
+    private function assignedBranchId(): ?int
+    {
+        $adminUser = auth()->user();
+        $isBranchAdmin = $adminUser && method_exists($adminUser, 'isBranchAdmin') && $adminUser->isBranchAdmin();
+
+        return $isBranchAdmin ? (int) $adminUser->assigned_branch_id : null;
+    }
+
+    /**
+     * Pastikan pengajuan berstatus pending dan berada dalam cakupan cabang admin.
+     */
+    private function guardBillingAdjustment(Request $request, ShiftSalesSummary $summary): JsonResponse|RedirectResponse|null
+    {
+        $assignedBranchId = $this->assignedBranchId();
+        $message = null;
+        $status = 422;
+
+        if ($assignedBranchId && (int) $summary->branch_id !== $assignedBranchId) {
+            $message = 'Anda tidak berwenang memproses pengajuan cabang lain.';
+            $status = 403;
+        } elseif (! $summary->isBillingAdjustmentPending()) {
+            $message = 'Pengajuan ini sudah diproses atau tidak dalam status menunggu persetujuan.';
+        }
+
+        if ($message === null) {
+            return null;
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => false, 'message' => $message], $status);
+        }
+
+        return redirect()->route('admin.penjualan.penyesuaian-billing')->with('error', $message);
+    }
+
+    /**
      * Verifikasi / Terima Setoran Kas Shift dari Kasir (History Setor).
      */
     public function verifyShiftDeposit(Request $request, ShiftSalesSummary $summary): JsonResponse|RedirectResponse
@@ -405,5 +703,154 @@ class AdminSaleController extends Controller
         }
 
         return redirect()->route('admin.penjualan')->with('success', $message);
+    }
+
+    /**
+     * Antrean persetujuan Penyesuaian Billing Internet kasir (Mati Listrik / Force Majeure).
+     */
+    public function billingAdjustmentIndex(Request $request): View
+    {
+        $assignedBranchId = $this->assignedBranchId();
+
+        $baseQuery = ShiftSalesSummary::with(['employee', 'branch', 'shift'])
+            ->when($assignedBranchId, fn ($q) => $q->where('branch_id', $assignedBranchId));
+
+        $pendingAdjustments = (clone $baseQuery)
+            ->where('billing_adjustment_status', 'pending_approval')
+            ->orderByDesc('id')
+            ->get();
+
+        $processedAdjustments = (clone $baseQuery)
+            ->whereIn('billing_adjustment_status', ['approved', 'rejected'])
+            ->orderByDesc('updated_at')
+            ->limit(50)
+            ->get();
+
+        $profileData = AdminDashboardController::getProfileData($request);
+
+        return view('admin.penjualan.penyesuaian-billing', compact(
+            'pendingAdjustments',
+            'processedAdjustments',
+            'profileData'
+        ));
+    }
+
+    /**
+     * Setujui pengajuan penyesuaian billing: potongan resmi memotong omset kasir.
+     */
+    public function approveBillingAdjustment(Request $request, ShiftSalesSummary $summary): JsonResponse|RedirectResponse
+    {
+        if ($blocked = $this->guardBillingAdjustment($request, $summary)) {
+            return $blocked;
+        }
+
+        $adminName = auth()->user()?->name ?? 'Admin';
+        $rawAmount = (float) ($summary->raw_billing_amount ?? $summary->locked_billing_amount ?? 0);
+        $summary->approveBillingAdjustment($adminName);
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => ShiftSalesSummary::class,
+            'auditable_id' => $summary->id,
+            'action' => 'shift_billing_adjustment_approved_by_admin',
+            'old_values' => ['locked_billing_amount' => $rawAmount],
+            'new_values' => [
+                'status' => 'approved',
+                'approved_by' => $adminName,
+                'locked_billing_amount' => (float) $summary->locked_billing_amount,
+                'adjustment_amount' => (float) $summary->billing_adjustment_amount,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Admin ERP MGK',
+            'created_at' => now(),
+        ]));
+
+        $message = 'Penyesuaian billing kasir '.($summary->employee?->name ?? '-').' sebesar Rp '.number_format((float) $summary->billing_adjustment_amount, 0, ',', '.')." DISETUJUI oleh {$adminName}.";
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'message' => $message, 'summary' => $summary->fresh()]);
+        }
+
+        return redirect()->route('admin.penjualan.penyesuaian-billing')->with('success', $message);
+    }
+
+    /**
+     * Tolak pengajuan penyesuaian billing: kasir wajib menyetor omset penuh.
+     */
+    public function rejectBillingAdjustment(Request $request, ShiftSalesSummary $summary): JsonResponse|RedirectResponse
+    {
+        if ($blocked = $this->guardBillingAdjustment($request, $summary)) {
+            return $blocked;
+        }
+
+        $validated = $request->validate([
+            'rejection_reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        $adminName = auth()->user()?->name ?? 'Admin';
+        $summary->rejectBillingAdjustment($adminName, $validated['rejection_reason']);
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => ShiftSalesSummary::class,
+            'auditable_id' => $summary->id,
+            'action' => 'shift_billing_adjustment_rejected_by_admin',
+            'old_values' => ['billing_adjustment_amount' => (float) $summary->billing_adjustment_amount],
+            'new_values' => [
+                'status' => 'rejected',
+                'rejected_by' => $adminName,
+                'rejection_reason' => $validated['rejection_reason'],
+                'locked_billing_amount' => (float) $summary->locked_billing_amount,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Admin ERP MGK',
+            'created_at' => now(),
+        ]));
+
+        $message = 'Penyesuaian billing kasir '.($summary->employee?->name ?? '-')." DITOLAK oleh {$adminName}. Kasir wajib menyetor omset penuh.";
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'message' => $message, 'summary' => $summary->fresh()]);
+        }
+
+        return redirect()->route('admin.penjualan.penyesuaian-billing')->with('success', $message);
+    }
+
+    /**
+     * Cabang yang dibatasi untuk admin cabang (null = semua cabang).
+     */
+    private function assignedBranchId(): ?int
+    {
+        $adminUser = auth()->user();
+        $isBranchAdmin = $adminUser && method_exists($adminUser, 'isBranchAdmin') && $adminUser->isBranchAdmin();
+
+        return $isBranchAdmin ? (int) $adminUser->assigned_branch_id : null;
+    }
+
+    /**
+     * Pastikan pengajuan berstatus pending dan berada dalam cakupan cabang admin.
+     */
+    private function guardBillingAdjustment(Request $request, ShiftSalesSummary $summary): JsonResponse|RedirectResponse|null
+    {
+        $assignedBranchId = $this->assignedBranchId();
+        $message = null;
+        $status = 422;
+
+        if ($assignedBranchId && (int) $summary->branch_id !== $assignedBranchId) {
+            $message = 'Anda tidak berwenang memproses pengajuan cabang lain.';
+            $status = 403;
+        } elseif (! $summary->isBillingAdjustmentPending()) {
+            $message = 'Pengajuan ini sudah diproses atau tidak dalam status menunggu persetujuan.';
+        }
+
+        if ($message === null) {
+            return null;
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => false, 'message' => $message], $status);
+        }
+
+        return redirect()->route('admin.penjualan.penyesuaian-billing')->with('error', $message);
     }
 }

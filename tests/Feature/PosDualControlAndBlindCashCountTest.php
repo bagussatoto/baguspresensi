@@ -755,12 +755,456 @@ class PosDualControlAndBlindCashCountTest extends TestCase
         $indexPage->assertDontSee('Status & History Setor Kas', false);
         $indexPage->assertDontSee('Lanjutan Rekapitulasi Shift', false);
 
-        // 3. Halaman rekap menampilkan status Otomatis Disetor ke Shift Selanjutnya
+        // 3. Halaman rekap mengarahkan ke Serah Terima, dan Serah Terima menampilkan status handover kasir
         $rekapPage = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
             ->get(route('presensi2.rekap'));
 
         $rekapPage->assertOk();
-        $rekapPage->assertSee('Otomatis Disetor ke Shift Selanjutnya', false);
-        $rekapPage->assertSee('Shift 2 (Grace)');
+        $rekapPage->assertSee('Buka Halaman Serah Terima Shift');
+
+        $serahTerimaPage = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->get(route('presensi2.serah-terima'));
+
+        $serahTerimaPage->assertOk();
+        $serahTerimaPage->assertSee('Shift 2 (Grace)');
+    }
+
+    public function test_rekap_displays_two_separate_tables_for_handover_and_deposit_and_direct_handover_flow(): void
+    {
+        $summary = ShiftSalesSummary::create([
+            'employee_id' => $this->cashier->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift->id,
+            'work_date' => now()->toDateString(),
+            'total_fnb_sales' => 150000,
+            'total_internet_sales' => 100000,
+            'total_revenue' => 250000,
+            'cash_in_drawer' => 250000,
+            'system_expected_cash' => 250000,
+            'blind_cash_count' => 250000,
+            'cash_difference' => 0,
+            'status' => 'closed',
+            'closed_at' => now(),
+            'deposit_status' => 'unsubmitted',
+        ]);
+
+        // 1. Simpan Serah Terima Shift (langsung ke serah terima, jangan langsung ke setor)
+        $handoverResponse = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->post(route('presensi2.rekap.setor'), [
+                'summary_id' => $summary->id,
+                'action_type' => 'handover',
+                'deposited_amount' => 200000,
+                'retained_drawer_cash' => 50000,
+                'deposit_recipient' => 'Shift 2 (Grace)',
+                'deposit_notes' => 'Kas fisik diserahterimakan langsung ke shift 2, modal kembalian Rp 50.000 ditinggal',
+            ]);
+
+        $handoverResponse->assertRedirect(route('presensi2.rekap'));
+
+        $summary->refresh();
+        // Langsung ke serah terima:
+        $this->assertEquals('completed', $summary->handover_status);
+        $this->assertEquals(200000.0, (float) $summary->handover_amount);
+        $this->assertEquals(50000.0, (float) $summary->retained_drawer_cash);
+        $this->assertEquals('Shift 2 (Grace)', $summary->handover_recipient);
+        $this->assertNotNull($summary->handover_at);
+        // Jangan langsung ke setor:
+        $this->assertEquals('unsubmitted', $summary->deposit_status);
+        $this->assertNull($summary->deposited_amount);
+
+        // 2. Cek bahwa di halaman rekap ada tombol arahan ke Serah Terima,
+        // dan Tabel Serah Terima Shift serta Tabel History Setor berada di halaman serah-terima
+        $rekapResponse = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->get(route('presensi2.rekap'));
+
+        $rekapResponse->assertOk();
+        $rekapResponse->assertSee('Buka Halaman Serah Terima Shift');
+
+        $serahTerimaResponse = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->get(route('presensi2.serah-terima'));
+
+        $serahTerimaResponse->assertOk();
+        $serahTerimaResponse->assertSee('Serah Terima Shift');
+        $serahTerimaResponse->assertSee('Siap Setor');
+        $serahTerimaResponse->assertSee('History setor');
+        $serahTerimaResponse->assertSee('Total Nilai Rekap / Siap Setor');
+
+        // 3. Sekarang coba aksi Setor Kas eksplisit (misal setor ke bank)
+        $setorResponse = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->post(route('presensi2.rekap.setor'), [
+                'summary_id' => $summary->id,
+                'action_type' => 'setor',
+                'deposit_method' => 'bank_transfer',
+                'deposited_amount' => 200000,
+                'deposit_recipient' => 'BCA MayaNet 12345678',
+                'deposit_notes' => 'Transfer kas laci shift 1 ke rekening owner',
+            ]);
+
+        $setorResponse->assertRedirect(route('presensi2.rekap'));
+
+        $summary->refresh();
+        $this->assertEquals('verified', $summary->deposit_status);
+        $this->assertEquals(200000.0, (float) $summary->deposited_amount);
+        $this->assertEquals('bank_transfer', $summary->deposit_method);
+        $this->assertEquals('BCA MayaNet 12345678', $summary->deposit_recipient);
+        $this->assertNotNull($summary->deposited_at);
+    }
+
+    /**
+     * Test 14: Halaman Serah Terima Khusus Setelah Rekap (/presensi2/serah-terima).
+     * Memastikan alur serah terima shift mandiri, verifikasi stok fisik, dan opsi auto clock-out pulang.
+     */
+    public function test_dedicated_handover_page_and_store_workflow(): void
+    {
+        $summary = ShiftSalesSummary::create([
+            'employee_id' => $this->cashier->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift->id,
+            'work_date' => Carbon::today()->toDateString(),
+            'status' => 'closed',
+            'opening_cash' => 50000,
+            'total_cash_sales' => 150000,
+            'total_cash_expected' => 200000,
+            'actual_cash_drawer' => 200000,
+            'variance_amount' => 0,
+            'deposit_status' => 'unsubmitted',
+            'handover_status' => 'completed',
+            'handover_amount' => 150000,
+            'retained_drawer_cash' => 50000,
+            'handover_recipient' => 'Shift 2 (Maya Kasir)',
+            'handover_at' => Carbon::now(),
+        ]);
+
+        // 1. GET /presensi2/serah-terima
+        $getResponse = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->get(route('presensi2.serah-terima', ['summary_id' => $summary->id]));
+
+        $getResponse->assertOk();
+        $getResponse->assertSee('Serah Terima Shift');
+        $getResponse->assertSee('Siap Setor');
+        $getResponse->assertSee('History setor');
+        $getResponse->assertSee('Total Nilai Rekap');
+        $getResponse->assertSee('Print Hardware');
+
+        // 2. POST /presensi2/serah-terima (Simpan form serah terima dengan auto check-out pulang)
+        $postResponse = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->post(route('presensi2.serah-terima.store'), [
+                'summary_id' => $summary->id,
+                'handover_amount' => 160000,
+                'retained_drawer_cash' => 40000,
+                'handover_recipient' => 'Shift 2 - Budi Santoso',
+                'handover_notes' => 'Serah terima uang laci & audit stok minuman selesai aman',
+                'auto_clock_out' => '1',
+            ]);
+
+        $postResponse->assertRedirect(route('presensi2.index'));
+
+        $summary->refresh();
+        $this->assertEquals('completed', $summary->handover_status);
+        $this->assertEquals(160000.0, (float) $summary->handover_amount);
+        $this->assertEquals(40000.0, (float) $summary->retained_drawer_cash);
+        $this->assertEquals('Shift 2 - Budi Santoso', $summary->handover_recipient);
+        $this->assertEquals('unsubmitted', $summary->deposit_status); // Tetap belum setor kas ke bank
+
+        // Cek bahwa presensi kasir di-clock-out otomatis
+        $attendance = AttendanceRecord::where('employee_id', $this->cashier->id)
+            ->whereDate('work_date', Carbon::today()->toDateString())
+            ->first();
+
+        $this->assertNotNull($attendance);
+        $this->assertNotNull($attendance->clock_out_at);
+    }
+
+    /**
+     * Test 15: Penyesuaian Billing Internet Shift - Dual Control Anti-Fraud.
+     * Jika diajukan kasir tanpa PIN supervisor, status menjadi pending_approval dan saldo kas BELUM dipotong.
+     */
+    public function test_cashier_submitting_billing_adjustment_without_pin_is_pending_approval(): void
+    {
+        $response = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->postJson(route('presensi2.penjualan.penyesuaian-billing'), [
+                'raw_billing_amount' => 350000,
+                'billing_adjustment_amount' => 50000,
+                'billing_adjustment_reason' => 'blackout',
+                'billing_adjustment_notes' => 'Pemadaman listrik PLN mendadak pkl 14:15 - 14:45 WIB (30 menit). 12 PC pelanggan mati serentak.',
+                'billing_blackout_minutes' => 30,
+                'billing_blackout_pcs' => 12,
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'is_approved' => false,
+            'status' => 'pending_approval',
+            'net_billing_amount' => 350000, // Anti-maling: Saldo kasir belum dipotong sampai disetujui Admin!
+            'billing_adjustment_amount' => 50000,
+            'raw_billing_amount' => 350000,
+        ]);
+
+        $summary = ShiftSalesSummary::where('employee_id', $this->cashier->id)
+            ->whereDate('work_date', Carbon::today()->toDateString())
+            ->first();
+
+        $this->assertNotNull($summary);
+        $this->assertTrue($summary->is_billing_locked);
+        $this->assertEquals('pending_approval', $summary->billing_adjustment_status);
+        $this->assertNull($summary->billing_adjustment_approved_by);
+        $this->assertEquals(350000.0, (float) $summary->raw_billing_amount);
+        $this->assertEquals(50000.0, (float) $summary->billing_adjustment_amount);
+        // Billing terkunci pada raw amount (350.000) untuk mencegah kasir mengambil selisih uang
+        $this->assertEquals(350000.0, (float) $summary->locked_billing_amount);
+        $this->assertEquals(350000.0, (float) $summary->total_internet_sales);
+
+        // Pastikan Audit Log ISO 27001 tercatat
+        $this->assertDatabaseHas('audit_logs', [
+            'auditable_type' => ShiftSalesSummary::class,
+            'auditable_id' => $summary->id,
+            'action' => 'shift_billing_adjustment_requested',
+        ]);
+
+        // Verifikasi di Halaman POS menampilkan badge 'MENUNGGU PERSETUJUAN'
+        $posPage = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->get(route('presensi2.penjualan'));
+
+        $posPage->assertOk();
+        $posPage->assertSee('MENUNGGU PERSETUJUAN');
+        $posPage->assertSee('Pemadaman Listrik PLN');
+        $posPage->assertSee('30 mnt');
+
+        // Kasir TIDAK boleh melihat tombol persetujuan di Rekap (hanya status pengajuan)
+        $rekapPage = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->get(route('presensi2.rekap'));
+
+        $rekapPage->assertOk();
+        $rekapPage->assertDontSee('Setujui Pemotongan');
+
+        // Supervisor melihat banner persetujuan di Rekap
+        $supervisorRekap = $this->withSession(['presensi2_employee_id' => $this->supervisor->id])
+            ->get(route('presensi2.rekap', ['summary_id' => $summary->id]));
+
+        $supervisorRekap->assertOk();
+        $supervisorRekap->assertSee('PERSETUJUAN ADMIN');
+        $supervisorRekap->assertSee('Setujui Pemotongan');
+    }
+
+    /**
+     * Test 16: Admin / Supervisor Menyetujui (Approve) Pengajuan Penyesuaian Billing Mati Listrik.
+     */
+    public function test_admin_can_approve_billing_adjustment_and_deduct_sales(): void
+    {
+        $summary = ShiftSalesSummary::create([
+            'employee_id' => $this->cashier->id,
+            'branch_id' => $this->branch->id,
+            'work_date' => Carbon::today()->toDateString(),
+            'total_fnb_sales' => 100000,
+            'total_internet_sales' => 350000,
+            'raw_billing_amount' => 350000,
+            'billing_adjustment_amount' => 50000,
+            'billing_adjustment_reason' => 'blackout',
+            'billing_adjustment_notes' => 'Listrik padam 30 menit',
+            'billing_blackout_minutes' => 30,
+            'billing_blackout_pcs' => 10,
+            'billing_adjustment_status' => 'pending_approval',
+            'is_billing_locked' => true,
+            'locked_billing_amount' => 350000,
+            'status' => 'open',
+        ]);
+
+        // Supervisor menyetujui pengajuan
+        $response = $this->withSession(['presensi2_employee_id' => $this->supervisor->id])
+            ->postJson(route('presensi2.penjualan.penyesuaian-billing.approve', ['summary' => $summary->id]));
+
+        $response->assertStatus(200);
+        $response->assertJson(['success' => true]);
+
+        $summary->refresh();
+        $this->assertEquals('approved', $summary->billing_adjustment_status);
+        $this->assertEquals($this->supervisor->name, $summary->billing_adjustment_approved_by);
+        $this->assertNotNull($summary->billing_adjustment_approved_at);
+        // Setelah disetujui: omset resmi terpotong menjadi 300.000
+        $this->assertEquals(300000.0, (float) $summary->locked_billing_amount);
+        $this->assertEquals(300000.0, (float) $summary->total_internet_sales);
+        $this->assertEquals(400000.0, (float) $summary->total_revenue); // 100k F&B + 300k Billing
+
+        // Audit Log WORM tercatat
+        $this->assertDatabaseHas('audit_logs', [
+            'auditable_type' => ShiftSalesSummary::class,
+            'auditable_id' => $summary->id,
+            'action' => 'shift_billing_adjustment_approved_by_admin',
+        ]);
+    }
+
+    /**
+     * Test 17: Admin Menolak (Reject) Penyesuaian Billing Jika Diduga Manipulasi Kas.
+     */
+    public function test_admin_can_reject_billing_adjustment_demanding_full_sales(): void
+    {
+        $summary = ShiftSalesSummary::create([
+            'employee_id' => $this->cashier->id,
+            'branch_id' => $this->branch->id,
+            'work_date' => Carbon::today()->toDateString(),
+            'total_fnb_sales' => 100000,
+            'total_internet_sales' => 350000,
+            'raw_billing_amount' => 350000,
+            'billing_adjustment_amount' => 100000,
+            'billing_adjustment_reason' => 'blackout',
+            'billing_adjustment_notes' => 'Klaim mati listrik tapi genset menyala',
+            'billing_adjustment_status' => 'pending_approval',
+            'is_billing_locked' => true,
+            'locked_billing_amount' => 350000,
+            'status' => 'open',
+        ]);
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->supervisor->id])
+            ->postJson(route('presensi2.penjualan.penyesuaian-billing.reject', ['summary' => $summary->id]), [
+                'rejection_reason' => 'Genset otomatis aktif saat padam listrik, tidak ada PC yang mati.',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson(['success' => true]);
+
+        $summary->refresh();
+        $this->assertEquals('rejected', $summary->billing_adjustment_status);
+        $this->assertEquals($this->supervisor->name, $summary->billing_adjustment_rejected_by);
+        $this->assertEquals('Genset otomatis aktif saat padam listrik, tidak ada PC yang mati.', $summary->billing_adjustment_rejection_reason);
+        // Omset tetap penuh 350.000 (kasir wajib setor penuh tanpa potongan)
+        $this->assertEquals(350000.0, (float) $summary->locked_billing_amount);
+        $this->assertEquals(350000.0, (float) $summary->total_internet_sales);
+    }
+
+    /**
+     * Test 18: Kasir Mengajukan Penyesuaian dengan PIN Supervisor Valid Langsung Disetujui (Instan).
+     */
+    public function test_cashier_with_valid_supervisor_pin_is_instantly_approved(): void
+    {
+        $response = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->postJson(route('presensi2.penjualan.penyesuaian-billing'), [
+                'raw_billing_amount' => 350000,
+                'billing_adjustment_amount' => 50000,
+                'billing_adjustment_reason' => 'blackout',
+                'billing_adjustment_notes' => 'Disetujui langsung oleh Supervisor di outlet.',
+                'billing_blackout_minutes' => 30,
+                'billing_blackout_pcs' => 12,
+                'supervisor_pin' => '998877', // PIN Supervisor valid
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'is_approved' => true,
+            'status' => 'approved',
+            'net_billing_amount' => 300000,
+        ]);
+
+        $summary = ShiftSalesSummary::where('employee_id', $this->cashier->id)
+            ->whereDate('work_date', Carbon::today()->toDateString())
+            ->first();
+
+        $this->assertNotNull($summary);
+        $this->assertEquals('approved', $summary->billing_adjustment_status);
+        $this->assertEquals($this->supervisor->name, $summary->billing_adjustment_approved_by);
+        $this->assertEquals(300000.0, (float) $summary->locked_billing_amount);
+    }
+
+    /**
+     * Test 19: Kasir biasa tidak boleh menyetujui pengajuan penyesuaian billing miliknya sendiri.
+     */
+    public function test_cashier_cannot_approve_own_billing_adjustment(): void
+    {
+        $summary = $this->makePendingBillingAdjustment();
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->postJson(route('presensi2.penjualan.penyesuaian-billing.approve', ['summary' => $summary->id]));
+
+        $response->assertStatus(403);
+        $this->assertEquals('pending_approval', $summary->fresh()->billing_adjustment_status);
+        $this->assertEquals(350000.0, (float) $summary->fresh()->locked_billing_amount);
+    }
+
+    /**
+     * Test 20: Halaman admin menampilkan antrean pengajuan penyesuaian billing.
+     */
+    public function test_admin_page_lists_pending_billing_adjustments(): void
+    {
+        $this->makePendingBillingAdjustment();
+
+        $response = $this->get(route('admin.penjualan.penyesuaian-billing'));
+
+        $response->assertOk();
+        $response->assertSee('Persetujuan Penyesuaian Billing Kasir');
+        $response->assertSee($this->cashier->name);
+        $response->assertSee('Klaim mati listrik');
+        $response->assertSee('-Rp 50.000');
+    }
+
+    /**
+     * Test 21: Admin menyetujui pengajuan dari halaman admin.
+     */
+    public function test_admin_page_can_approve_billing_adjustment(): void
+    {
+        $summary = $this->makePendingBillingAdjustment();
+
+        $response = $this->post(route('admin.penjualan.penyesuaian-billing.approve', ['summary' => $summary->id]));
+
+        $response->assertRedirect(route('admin.penjualan.penyesuaian-billing'));
+
+        $summary->refresh();
+        $this->assertEquals('approved', $summary->billing_adjustment_status);
+        $this->assertEquals(300000.0, (float) $summary->locked_billing_amount);
+        $this->assertEquals(300000.0, (float) $summary->total_internet_sales);
+        $this->assertDatabaseHas('audit_logs', [
+            'auditable_id' => $summary->id,
+            'action' => 'shift_billing_adjustment_approved_by_admin',
+        ]);
+
+        // Pengajuan yang sudah diproses tidak bisa diproses ulang
+        $again = $this->postJson(route('admin.penjualan.penyesuaian-billing.reject', ['summary' => $summary->id]), [
+            'rejection_reason' => 'Terlambat',
+        ]);
+        $again->assertStatus(422);
+        $this->assertEquals('approved', $summary->fresh()->billing_adjustment_status);
+    }
+
+    /**
+     * Test 22: Admin menolak pengajuan wajib dengan alasan, omset kembali penuh.
+     */
+    public function test_admin_page_can_reject_billing_adjustment_with_reason(): void
+    {
+        $summary = $this->makePendingBillingAdjustment();
+
+        $this->post(route('admin.penjualan.penyesuaian-billing.reject', ['summary' => $summary->id]), [])
+            ->assertSessionHasErrors('rejection_reason');
+        $this->assertEquals('pending_approval', $summary->fresh()->billing_adjustment_status);
+
+        $this->post(route('admin.penjualan.penyesuaian-billing.reject', ['summary' => $summary->id]), [
+            'rejection_reason' => 'Genset menyala, PC tidak mati.',
+        ])->assertRedirect(route('admin.penjualan.penyesuaian-billing'));
+
+        $summary->refresh();
+        $this->assertEquals('rejected', $summary->billing_adjustment_status);
+        $this->assertEquals('Genset menyala, PC tidak mati.', $summary->billing_adjustment_rejection_reason);
+        $this->assertEquals(350000.0, (float) $summary->locked_billing_amount);
+        $this->assertEquals(350000.0, (float) $summary->total_internet_sales);
+    }
+
+    private function makePendingBillingAdjustment(): ShiftSalesSummary
+    {
+        return ShiftSalesSummary::create([
+            'employee_id' => $this->cashier->id,
+            'branch_id' => $this->branch->id,
+            'work_date' => Carbon::today()->toDateString(),
+            'total_fnb_sales' => 100000,
+            'total_internet_sales' => 350000,
+            'raw_billing_amount' => 350000,
+            'billing_adjustment_amount' => 50000,
+            'billing_adjustment_reason' => 'blackout',
+            'billing_adjustment_notes' => 'Klaim mati listrik 30 menit',
+            'billing_blackout_minutes' => 30,
+            'billing_blackout_pcs' => 10,
+            'billing_adjustment_status' => 'pending_approval',
+            'is_billing_locked' => true,
+            'locked_billing_amount' => 350000,
+            'status' => 'open',
+        ]);
     }
 }

@@ -34,9 +34,27 @@ class ShiftSalesSummary extends Model
         'cash_denominations',
         'non_cash_amount',
         'handover_notes',
+        'handover_amount',
+        'handover_recipient',
+        'handover_status',
+        'handover_at',
+        'handover_by',
         'stock_audit',
         'is_billing_locked',
         'locked_billing_amount',
+        'raw_billing_amount',
+        'billing_adjustment_amount',
+        'billing_adjustment_reason',
+        'billing_adjustment_notes',
+        'billing_blackout_minutes',
+        'billing_blackout_pcs',
+        'billing_adjusted_by',
+        'billing_adjustment_status',
+        'billing_adjustment_approved_by',
+        'billing_adjustment_approved_at',
+        'billing_adjustment_rejected_by',
+        'billing_adjustment_rejected_at',
+        'billing_adjustment_rejection_reason',
         'locked_billing_at',
         'is_print_locked',
         'locked_print_amount',
@@ -67,8 +85,16 @@ class ShiftSalesSummary extends Model
         'cash_denominations' => 'array',
         'non_cash_amount' => 'decimal:2',
         'stock_audit' => 'array',
+        'handover_amount' => 'decimal:2',
+        'handover_at' => 'datetime',
         'is_billing_locked' => 'boolean',
         'locked_billing_amount' => 'decimal:2',
+        'raw_billing_amount' => 'decimal:2',
+        'billing_adjustment_amount' => 'decimal:2',
+        'billing_blackout_minutes' => 'integer',
+        'billing_blackout_pcs' => 'integer',
+        'billing_adjustment_approved_at' => 'datetime',
+        'billing_adjustment_rejected_at' => 'datetime',
         'locked_billing_at' => 'datetime',
         'is_print_locked' => 'boolean',
         'locked_print_amount' => 'decimal:2',
@@ -92,6 +118,110 @@ class ShiftSalesSummary extends Model
         };
     }
 
+    public function handoverAmount(): float
+    {
+        if ($this->handover_amount !== null && (float) $this->handover_amount > 0) {
+            return (float) $this->handover_amount;
+        }
+
+        if ($this->deposit_method === 'next_shift_handover' && $this->deposited_amount !== null && (float) $this->deposited_amount > 0) {
+            return (float) $this->deposited_amount;
+        }
+
+        return (float) ($this->blind_cash_count ?? $this->cash_in_drawer ?? $this->total_revenue ?? 0);
+    }
+
+    public function handoverRecipientName(): string
+    {
+        return $this->handover_recipient
+            ?: ($this->deposit_method === 'next_shift_handover' && $this->deposit_recipient ? $this->deposit_recipient : 'Kasir Shift Berikutnya');
+    }
+
+    public function hasBeenDeposited(): bool
+    {
+        return in_array($this->deposit_status, ['verified', 'pending_verification'], true) && $this->deposit_method !== 'next_shift_handover';
+    }
+
+    public function hasBillingAdjustment(): bool
+    {
+        return (float) ($this->billing_adjustment_amount ?? 0) > 0;
+    }
+
+    public function isBillingAdjustmentApproved(): bool
+    {
+        return $this->hasBillingAdjustment() && $this->billing_adjustment_status === 'approved';
+    }
+
+    public function isBillingAdjustmentPending(): bool
+    {
+        return $this->hasBillingAdjustment() && $this->billing_adjustment_status === 'pending_approval';
+    }
+
+    public function isBillingAdjustmentRejected(): bool
+    {
+        return $this->billing_adjustment_status === 'rejected';
+    }
+
+    /**
+     * Setujui penyesuaian billing: potongan resmi memotong omset internet shift.
+     */
+    public function approveBillingAdjustment(string $approverName): void
+    {
+        $rawAmount = (float) ($this->raw_billing_amount ?? $this->locked_billing_amount ?? 0);
+        $netAmount = max(0, $rawAmount - (float) ($this->billing_adjustment_amount ?? 0));
+        $now = now();
+
+        $this->billing_adjustment_status = 'approved';
+        $this->billing_adjustment_approved_by = $approverName;
+        $this->billing_adjustment_approved_at = $now;
+        $this->is_billing_locked = true;
+        $this->locked_billing_amount = $netAmount;
+        $this->locked_billing_at = $now;
+        $this->total_internet_sales = $netAmount;
+        $this->total_revenue = (float) $this->total_fnb_sales + $netAmount;
+        $this->save();
+    }
+
+    /**
+     * Tolak penyesuaian billing: omset internet kembali penuh tanpa potongan.
+     */
+    public function rejectBillingAdjustment(string $rejectorName, string $reason): void
+    {
+        $rawAmount = (float) ($this->raw_billing_amount ?? $this->locked_billing_amount ?? 0);
+
+        $this->billing_adjustment_status = 'rejected';
+        $this->billing_adjustment_rejected_by = $rejectorName;
+        $this->billing_adjustment_rejected_at = now();
+        $this->billing_adjustment_rejection_reason = $reason;
+        $this->is_billing_locked = true;
+        $this->locked_billing_amount = $rawAmount;
+        $this->total_internet_sales = $rawAmount;
+        $this->total_revenue = (float) $this->total_fnb_sales + $rawAmount;
+        $this->save();
+    }
+
+    public function billingAdjustmentStatusLabel(): string
+    {
+        return match ($this->billing_adjustment_status) {
+            'approved' => 'Disetujui Admin/Supervisor',
+            'pending_approval' => 'Menunggu Persetujuan Admin',
+            'rejected' => 'Ditolak Admin',
+            default => 'Tidak Ada',
+        };
+    }
+
+    public function billingAdjustmentReasonLabel(): string
+    {
+        return match ($this->billing_adjustment_reason) {
+            'blackout' => '⚡ Pemadaman Listrik PLN',
+            'isp_down' => '🌐 Gangguan ISP / Jaringan Down',
+            'hardware_crash' => '💻 PC Freeze / Crash Massal',
+            'customer_refund' => '🔄 Refund / Kompensasi Waktu Pelanggan',
+            'manual_correction' => '✏️ Koreksi Selisih Kasir Manual',
+            default => $this->billing_adjustment_reason ?: 'Penyesuaian Operasional',
+        };
+    }
+
     public function shiftNumber(): int
     {
         $code = (string) ($this->shift?->code ?? '');
@@ -105,6 +235,24 @@ class ShiftSalesSummary extends Model
         }
 
         return max(1, min(4, (int) ($this->shift_id ?? 1)));
+    }
+
+    public function invoiceNumber(): string
+    {
+        $datePart = $this->work_date ? $this->work_date->format('Ymd') : now()->format('Ymd');
+        $branchPart = (int) ($this->branch_id ?? 1);
+        $shiftPart = $this->shiftNumber();
+        $idPart = (int) ($this->id ?? 1);
+
+        return "{$datePart}-{$branchPart}r-{$idPart}-{$shiftPart}";
+    }
+
+    public function depositReceiptNumber(): string
+    {
+        $idPart = (int) ($this->id ?? 1);
+        $branchPart = (int) ($this->branch_id ?? 1);
+
+        return sprintf('%03d-%02d-%04d', ($branchPart * 220) + 8, 49, 2900 + $idPart);
     }
 
     public function rekapNumber(): string

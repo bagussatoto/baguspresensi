@@ -2683,7 +2683,7 @@ class AttendanceWebV2Controller extends Controller
             ->get();
 
         // Rekapitulasi penjualan shift saat ini di cabang ini jika sudah tersimpan
-        $salesSummary = ShiftSalesSummary::where('work_date', $workDate->toDateString())
+        $salesSummary = ShiftSalesSummary::whereDate('work_date', $workDate->toDateString())
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
             ->latest('id')
             ->first();
@@ -3428,6 +3428,304 @@ class AttendanceWebV2Controller extends Controller
     }
 
     /**
+     * Penyesuaian Billing Internet Shift (Mati Listrik / Gangguan Jaringan / Force Majeure).
+     */
+    public function penjualanPenyesuaianBilling(Request $request): RedirectResponse|JsonResponse
+    {
+        $employee = $this->getAuthenticatedEmployee();
+        if (! $employee) {
+            return redirect()->route('presensi2.login');
+        }
+
+        $validated = $request->validate([
+            'raw_billing_amount' => 'required|numeric|min:0',
+            'billing_adjustment_amount' => 'required|numeric|min:0',
+            'billing_adjustment_reason' => 'required|string|in:blackout,isp_down,hardware_crash,customer_refund,manual_correction',
+            'billing_adjustment_notes' => 'required|string|max:1000',
+            'billing_blackout_minutes' => 'nullable|integer|min:0',
+            'billing_blackout_pcs' => 'nullable|integer|min:0',
+            'supervisor_pin' => 'nullable|string|max:50',
+        ]);
+
+        $now = Carbon::now();
+        $activeShift = $this->shiftResolverService->resolveShift(null, $now);
+        $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
+
+        $attendanceToday = AttendanceRecord::where('employee_id', $employee->id)
+            ->where('work_date', $workDate->toDateString())
+            ->latest('id')
+            ->first();
+
+        $summary = ShiftSalesSummary::firstOrNew([
+            'employee_id' => $employee->id,
+            'work_date' => $workDate->toDateString(),
+            'shift_id' => $activeShift?->id,
+        ]);
+
+        if (! $summary->exists) {
+            $summary->branch_id = $employee->branch_id ?? 3;
+            $summary->attendance_record_id = $attendanceToday?->id;
+            $summary->total_fnb_sales = 0;
+            $summary->total_internet_sales = 0;
+            $summary->total_revenue = 0;
+            $summary->cash_in_drawer = 0;
+            $summary->status = 'open';
+        }
+
+        $rawAmount = (float) $validated['raw_billing_amount'];
+        $adjAmount = (float) $validated['billing_adjustment_amount'];
+        $netAmount = max(0, $rawAmount - $adjAmount);
+
+        // Validasi Otorisasi Dual Control (Anti-Fraud Kasir)
+        $isPrivileged = $employee->canApproveBillingAdjustment();
+        $supervisor = null;
+        $supervisorPin = trim((string) ($validated['supervisor_pin'] ?? ''));
+
+        if (! empty($supervisorPin)) {
+            $supervisor = $this->resolveSupervisorByPin($supervisorPin, $employee->branch_id);
+            if (! $supervisor) {
+                $errMsg = 'PIN Supervisor/Admin tidak valid! Penyesuaian billing internet ditolak untuk keamanan kas.';
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json(['success' => false, 'message' => $errMsg, 'require_supervisor' => true], 422);
+                }
+
+                return back()->with('error', $errMsg);
+            }
+        }
+
+        $isApproved = $isPrivileged || $supervisor !== null;
+        $adjustmentStatus = $isApproved ? 'approved' : 'pending_approval';
+        $approvedBy = $isApproved ? ($supervisor?->name ?? $employee->name) : null;
+        $approvedAt = $isApproved ? $now : null;
+
+        $summary->raw_billing_amount = $rawAmount;
+        $summary->billing_adjustment_amount = $adjAmount;
+        $summary->billing_adjustment_reason = $validated['billing_adjustment_reason'];
+        $summary->billing_adjustment_notes = $validated['billing_adjustment_notes'];
+        $summary->billing_blackout_minutes = $validated['billing_blackout_minutes'] ?? null;
+        $summary->billing_blackout_pcs = $validated['billing_blackout_pcs'] ?? null;
+        $summary->billing_adjusted_by = $employee->name;
+        $summary->billing_adjustment_status = $adjustmentStatus;
+        $summary->billing_adjustment_approved_by = $approvedBy;
+        $summary->billing_adjustment_approved_at = $approvedAt;
+
+        if ($isApproved) {
+            // Disetujui: potong langsung omset internet pada nilai riil
+            $summary->is_billing_locked = true;
+            $summary->locked_billing_amount = $netAmount;
+            $summary->locked_billing_at = $now;
+            $summary->total_internet_sales = $netAmount;
+            $summary->total_revenue = (float) $summary->total_fnb_sales + $netAmount;
+        } else {
+            // PENDING APPROVAL (ANTI-MALING): Billing kasir TIDAK langsung dipotong dari kewajiban setor!
+            // Nilai kasir dikunci pada nilai penuh/raw terlebih dahulu hingga disetujui Admin.
+            $summary->is_billing_locked = true;
+            $summary->locked_billing_amount = $rawAmount;
+            $summary->locked_billing_at = $now;
+            $summary->total_internet_sales = $rawAmount;
+            $summary->total_revenue = (float) $summary->total_fnb_sales + $rawAmount;
+        }
+        $summary->save();
+
+        // Audit Log WORM ISO 27001
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => ShiftSalesSummary::class,
+            'auditable_id' => $summary->id,
+            'action' => $isApproved ? 'shift_billing_adjustment_approved' : 'shift_billing_adjustment_requested',
+            'old_values' => [
+                'raw_billing_amount' => $rawAmount,
+            ],
+            'new_values' => [
+                'raw_billing_amount' => $rawAmount,
+                'billing_adjustment_amount' => $adjAmount,
+                'net_billing_amount' => $netAmount,
+                'status' => $adjustmentStatus,
+                'reason' => $summary->billingAdjustmentReasonLabel(),
+                'notes' => $validated['billing_adjustment_notes'],
+                'blackout_minutes' => $summary->billing_blackout_minutes,
+                'blackout_pcs' => $summary->billing_blackout_pcs,
+                'adjusted_by' => $employee->name,
+                'approved_by' => $approvedBy,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Portal Presensi v2',
+            'created_at' => $now,
+        ]));
+
+        $reasonLabel = $summary->billingAdjustmentReasonLabel();
+        if ($isApproved) {
+            $message = "Penyesuaian billing ({$reasonLabel}) DISETUJUI oleh {$approvedBy}! Potongan Rp ".number_format($adjAmount, 0, ',', '.').', Billing riil shift dikunci Rp '.number_format($netAmount, 0, ',', '.').'.';
+        } else {
+            $message = "Pengajuan penyesuaian billing ({$reasonLabel}) sebesar Rp ".number_format($adjAmount, 0, ',', '.').' BERHASIL DIAJUKAN! Status: Menunggu Persetujuan Admin. Demi keamanan kas, billing belum dipotong sampai Admin menyetujui.';
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'summary' => $summary->fresh(),
+                'is_approved' => $isApproved,
+                'status' => $adjustmentStatus,
+                'net_billing_amount' => $isApproved ? $netAmount : $rawAmount,
+                'billing_adjustment_amount' => $adjAmount,
+                'raw_billing_amount' => $rawAmount,
+            ]);
+        }
+
+        return redirect()->route('presensi2.penjualan')->with('success', $message);
+    }
+
+    /**
+     * Setujui Penyesuaian Billing Internet Shift oleh Admin/Supervisor.
+     */
+    public function approveBillingAdjustment(Request $request, ShiftSalesSummary $summary): RedirectResponse|JsonResponse
+    {
+        $employee = $this->getAuthenticatedEmployee();
+        if (! $employee) {
+            return redirect()->route('presensi2.login');
+        }
+
+        $isPrivileged = $employee->canApproveBillingAdjustment();
+        $supervisor = null;
+        $supervisorPin = trim((string) $request->input('supervisor_pin', ''));
+
+        if (! empty($supervisorPin)) {
+            $supervisor = $this->resolveSupervisorByPin($supervisorPin, $summary->branch_id);
+        }
+
+        if (! $isPrivileged && ! $supervisor) {
+            $errMsg = 'Akses ditolak! Anda harus login sebagai Admin/Supervisor atau memasukkan PIN Supervisor yang valid.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => $errMsg], 403);
+            }
+
+            return back()->with('error', $errMsg);
+        }
+
+        $approverName = $supervisor?->name ?? $employee->name;
+        $now = Carbon::now();
+
+        if (! $summary->isBillingAdjustmentPending()) {
+            $errMsg = 'Pengajuan ini sudah diproses atau tidak dalam status menunggu persetujuan.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => $errMsg], 422);
+            }
+
+            return back()->with('error', $errMsg);
+        }
+
+        $rawAmount = (float) ($summary->raw_billing_amount ?? $summary->locked_billing_amount ?? 0);
+        $adjAmount = (float) ($summary->billing_adjustment_amount ?? 0);
+        $netAmount = max(0, $rawAmount - $adjAmount);
+
+        $summary->approveBillingAdjustment($approverName);
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => ShiftSalesSummary::class,
+            'auditable_id' => $summary->id,
+            'action' => 'shift_billing_adjustment_approved_by_admin',
+            'old_values' => ['locked_billing_amount' => $rawAmount],
+            'new_values' => [
+                'status' => 'approved',
+                'approved_by' => $approverName,
+                'locked_billing_amount' => $netAmount,
+                'adjustment_amount' => $adjAmount,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Portal Presensi v2',
+            'created_at' => $now,
+        ]));
+
+        $message = "Pengajuan penyesuaian billing kasir {$summary->employee?->name} sebesar Rp ".number_format($adjAmount, 0, ',', '.')." berhasil DISETUJUI oleh {$approverName}. Omset billing disesuaikan menjadi Rp ".number_format($netAmount, 0, ',', '.').'.';
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'summary' => $summary->fresh(),
+            ]);
+        }
+
+        return back()->with('success', $message);
+    }
+
+    /**
+     * Tolak Penyesuaian Billing Internet Shift oleh Admin/Supervisor.
+     */
+    public function rejectBillingAdjustment(Request $request, ShiftSalesSummary $summary): RedirectResponse|JsonResponse
+    {
+        $employee = $this->getAuthenticatedEmployee();
+        if (! $employee) {
+            return redirect()->route('presensi2.login');
+        }
+
+        $isPrivileged = $employee->canApproveBillingAdjustment();
+        $supervisor = null;
+        $supervisorPin = trim((string) $request->input('supervisor_pin', ''));
+
+        if (! empty($supervisorPin)) {
+            $supervisor = $this->resolveSupervisorByPin($supervisorPin, $summary->branch_id);
+        }
+
+        if (! $isPrivileged && ! $supervisor) {
+            $errMsg = 'Akses ditolak! Anda harus login sebagai Admin/Supervisor atau memasukkan PIN Supervisor yang valid.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => $errMsg], 403);
+            }
+
+            return back()->with('error', $errMsg);
+        }
+
+        $rejectorName = $supervisor?->name ?? $employee->name;
+        $reason = trim((string) $request->input('rejection_reason', 'Ditolak oleh Admin/Supervisor: Indikasi ketidaksesuaian durasi/data mati listrik.'));
+        $now = Carbon::now();
+
+        if (! $summary->isBillingAdjustmentPending()) {
+            $errMsg = 'Pengajuan ini sudah diproses atau tidak dalam status menunggu persetujuan.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => $errMsg], 422);
+            }
+
+            return back()->with('error', $errMsg);
+        }
+
+        $rawAmount = (float) ($summary->raw_billing_amount ?? $summary->locked_billing_amount ?? 0);
+
+        $summary->rejectBillingAdjustment($rejectorName, $reason);
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => ShiftSalesSummary::class,
+            'auditable_id' => $summary->id,
+            'action' => 'shift_billing_adjustment_rejected_by_admin',
+            'old_values' => ['billing_adjustment_amount' => $summary->billing_adjustment_amount],
+            'new_values' => [
+                'status' => 'rejected',
+                'rejected_by' => $rejectorName,
+                'rejection_reason' => $reason,
+                'locked_billing_amount' => $rawAmount,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Portal Presensi v2',
+            'created_at' => $now,
+        ]));
+
+        $message = "Pengajuan penyesuaian billing kasir {$summary->employee?->name} DITOLAK oleh {$rejectorName}. Kasir wajib mempertanggungjawabkan omset penuh Rp ".number_format($rawAmount, 0, ',', '.').'.';
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'summary' => $summary->fresh(),
+            ]);
+        }
+
+        return back()->with('success', $message);
+    }
+
+    /**
      * Kunci / Buka Kunci Data Print Kertas Shift (Ganti Data Print).
      */
     public function penjualanKunciPrint(Request $request): RedirectResponse|JsonResponse
@@ -3934,15 +4232,21 @@ BAT;
                 'locked_print_pages' => ($existingSummary?->locked_print_pages ?? $spoolerPages),
                 'locked_print_at' => ($existingSummary?->locked_print_at ?? Carbon::now()),
                 'status' => 'closed',
-                'deposit_status' => 'verified',
-                'deposited_amount' => $blindCashCount,
-                'retained_drawer_cash' => 0,
-                'deposit_method' => 'next_shift_handover',
-                'deposit_recipient' => $nextShiftRecipient,
-                'deposit_notes' => $notes ?: 'Setor otomatis ke shift selanjutnya saat tutup shift',
-                'deposited_at' => Carbon::now(),
-                'deposit_verified_at' => Carbon::now(),
-                'deposit_verified_by' => $nextShiftRecipient,
+                'handover_status' => 'completed',
+                'handover_amount' => $blindCashCount,
+                'handover_recipient' => $nextShiftRecipient,
+                'handover_by' => $employee->name,
+                'handover_at' => Carbon::now(),
+                'handover_notes' => $notes ?: 'Serah terima langsung ke shift selanjutnya saat tutup shift',
+                'retained_drawer_cash' => (float) ($existingSummary?->retained_drawer_cash ?? 0),
+                'deposit_status' => $existingSummary?->deposit_status ?: 'unsubmitted',
+                'deposited_amount' => $existingSummary?->deposited_amount,
+                'deposit_method' => $existingSummary?->deposit_method,
+                'deposit_recipient' => $existingSummary?->deposit_recipient,
+                'deposit_notes' => $existingSummary?->deposit_notes,
+                'deposited_at' => $existingSummary?->deposited_at,
+                'deposit_verified_at' => $existingSummary?->deposit_verified_at,
+                'deposit_verified_by' => $existingSummary?->deposit_verified_by,
                 'closed_at' => Carbon::now(),
             ]
         );
@@ -4244,17 +4548,16 @@ BAT;
 
         $nextShiftLabel = $this->resolveNextShiftRecipient($activeShift);
 
-        // Otomatis setor ke shift selanjutnya untuk rekap shift yang sudah ada namun belum berstatus verified
-        if ($salesSummary && in_array($salesSummary->deposit_status ?? 'unsubmitted', ['unsubmitted', 'pending_verification'], true)) {
+        // Otomatis serah terima ke shift selanjutnya (langsung ke serah terima, jangan langsung ke setor)
+        if ($salesSummary && empty($salesSummary->handover_at)) {
             $salesSummary->update([
-                'deposit_status' => 'verified',
-                'deposited_amount' => $salesSummary->deposited_amount !== null ? (float) $salesSummary->deposited_amount : $cashInDrawer,
+                'handover_status' => 'completed',
+                'handover_amount' => $salesSummary->handover_amount !== null ? (float) $salesSummary->handover_amount : $cashInDrawer,
+                'handover_recipient' => $salesSummary->handover_recipient ?: $nextShiftLabel,
+                'handover_by' => $salesSummary->handover_by ?: $employee->name,
+                'handover_at' => $salesSummary->handover_at ?? $now,
+                'handover_notes' => $salesSummary->handover_notes ?: 'Serah terima langsung ke shift selanjutnya',
                 'retained_drawer_cash' => (float) ($salesSummary->retained_drawer_cash ?? 0),
-                'deposit_method' => $salesSummary->deposit_method ?: 'next_shift_handover',
-                'deposit_recipient' => $salesSummary->deposit_recipient ?: $nextShiftLabel,
-                'deposited_at' => $salesSummary->deposited_at ?? $now,
-                'deposit_verified_at' => $salesSummary->deposit_verified_at ?? $now,
-                'deposit_verified_by' => $salesSummary->deposit_recipient ?: $nextShiftLabel,
             ]);
             $salesSummary->refresh();
         }
@@ -4340,6 +4643,8 @@ BAT;
             'cashDenominations' => $salesSummary?->cash_denominations,
             'stockComparisons' => $stockComparisons,
             'recentSummaries' => $recentSummaries,
+            'recentHandovers' => $recentSummaries,
+            'recentDeposits' => $recentSummaries,
             'shiftSummariesByDate' => $shiftSummariesByDate,
             'dateParam' => $dateParam,
         ]);
@@ -4414,51 +4719,87 @@ BAT;
             ]);
         }
 
-        // Langsung berstatus verified (Selesai Disetor ke Shift Selanjutnya tanpa tunggu Admin)
+        $actionType = $request->input('action_type');
+        $isExplicitHandover = ($actionType === 'handover');
+
+        // Selalu catat serah terima shift
         $summary->update([
-            'deposit_status' => 'verified',
-            'deposited_amount' => $depositedAmount,
+            'handover_status' => 'completed',
+            'handover_amount' => $depositedAmount,
             'retained_drawer_cash' => $retainedCash,
-            'deposit_method' => $method,
-            'deposit_recipient' => $recipient,
-            'deposit_notes' => $validated['deposit_notes'] ?? 'Setor langsung ke shift selanjutnya',
-            'deposited_at' => $now,
-            'deposit_verified_at' => $now,
-            'deposit_verified_by' => $recipient,
+            'handover_recipient' => $recipient,
+            'handover_by' => $employee->name,
+            'handover_at' => $now,
+            'handover_notes' => $validated['deposit_notes'] ?? 'Serah terima langsung ke shift selanjutnya',
         ]);
 
-        rescue(fn () => AuditLog::create([
-            'user_id' => auth()->id(),
-            'auditable_type' => ShiftSalesSummary::class,
-            'auditable_id' => $summary->id,
-            'action' => 'shift_cash_deposited',
-            'new_values' => [
-                'employee_id' => $employee->id,
-                'employee_name' => $employee->name,
+        if ($isExplicitHandover) {
+            // Langsung ke serah terima, jangan langsung ke setor
+            $message = "Serah terima kas shift ke {$recipient} sebesar Rp ".number_format($depositedAmount, 0, ',', '.').' berhasil disimpan langsung ke Serah Terima!';
+
+            rescue(fn () => AuditLog::create([
+                'user_id' => auth()->id(),
+                'auditable_type' => ShiftSalesSummary::class,
+                'auditable_id' => $summary->id,
+                'action' => 'shift_handover_saved',
+                'new_values' => [
+                    'employee_id' => $employee->id,
+                    'employee_name' => $employee->name,
+                    'handover_amount' => $depositedAmount,
+                    'retained_drawer_cash' => $retainedCash,
+                    'handover_recipient' => $recipient,
+                    'handover_status' => 'completed',
+                ],
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => $request->userAgent() ?? 'Portal Presensi v2',
+                'created_at' => $now,
+            ]));
+        } else {
+            // Setor Kas (Disetor ke Bank, Kolektor, atau Brankas)
+            $summary->update([
+                'deposit_status' => 'verified',
                 'deposited_amount' => $depositedAmount,
-                'retained_drawer_cash' => $retainedCash,
                 'deposit_method' => $method,
                 'deposit_recipient' => $recipient,
-                'deposit_status' => 'verified',
-            ],
-            'ip_address' => $request->ip() ?? '127.0.0.1',
-            'user_agent' => $request->userAgent() ?? 'Portal Presensi v2',
-            'created_at' => $now,
-        ]));
+                'deposit_notes' => $validated['deposit_notes'] ?? 'Setor kas shift',
+                'deposited_at' => $now,
+                'deposit_verified_at' => $now,
+                'deposit_verified_by' => $recipient,
+            ]);
 
-        rescue(fn () => app(EarlyWarningNotificationService::class)->sendShiftDepositAlert($summary));
+            rescue(fn () => AuditLog::create([
+                'user_id' => auth()->id(),
+                'auditable_type' => ShiftSalesSummary::class,
+                'auditable_id' => $summary->id,
+                'action' => 'shift_cash_deposited',
+                'new_values' => [
+                    'employee_id' => $employee->id,
+                    'employee_name' => $employee->name,
+                    'deposited_amount' => $depositedAmount,
+                    'retained_drawer_cash' => $retainedCash,
+                    'deposit_method' => $method,
+                    'deposit_recipient' => $recipient,
+                    'deposit_status' => 'verified',
+                ],
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => $request->userAgent() ?? 'Portal Presensi v2',
+                'created_at' => $now,
+            ]));
 
-        $msg = 'Setoran kas shift sebesar Rp '.number_format($depositedAmount, 0, ',', '.').' otomatis diserahterimakan ke '.$recipient.'!';
+            rescue(fn () => app(EarlyWarningNotificationService::class)->sendShiftDepositAlert($summary));
+
+            $message = 'Setoran kas shift sebesar Rp '.number_format($depositedAmount, 0, ',', '.')." berhasil disimpan ke {$recipient}!";
+        }
 
         if ($request->wantsJson()) {
             return response()->json([
                 'success' => true,
-                'message' => $msg,
+                'message' => $message,
                 'summary' => $summary->fresh(),
             ]);
         }
 
-        return redirect()->route('presensi2.rekap')->with('success', $msg);
+        return redirect()->route('presensi2.rekap')->with('success', $message);
     }
 
     /**
@@ -4484,6 +4825,382 @@ BAT;
         $nextShift = $shifts->get($nextIndex);
 
         return 'Kasir '.($nextShift->name ?? 'Shift Selanjutnya');
+    }
+
+    /**
+     * Halaman Serah Terima Shift (Handover Kas Laci, Sisa Stok Fisik & Penyerahan ke Kasir Berikutnya).
+     */
+    public function serahTerimaIndex(Request $request): View|RedirectResponse
+    {
+        $employee = $this->getAuthenticatedEmployee();
+        if (! $employee) {
+            return redirect()->route('presensi2.login');
+        }
+
+        $now = Carbon::now();
+        $dateParam = $request->input('date');
+        $shiftParam = $request->input('shift');
+        $summaryIdParam = $request->input('summary_id');
+        $activeShift = $this->shiftResolverService->resolveShift(null, $now);
+
+        if ($shiftParam) {
+            $requestedShift = Shift::where('code', 'SHIFT-'.(int) $shiftParam)
+                ->orWhere('name', 'like', '%'.(int) $shiftParam.'%')
+                ->orWhere('id', (int) $shiftParam)
+                ->first();
+            if ($requestedShift) {
+                $activeShift = $requestedShift;
+            }
+        }
+
+        $workDate = $dateParam ? Carbon::parse($dateParam) : $this->shiftResolverService->determineWorkDate($activeShift, $now);
+        $branchId = $employee->branch_id;
+
+        // Ambil data attendance aktif
+        $attendanceToday = AttendanceRecord::with('shift')
+            ->where('employee_id', $employee->id)
+            ->whereNull('clock_out_at')
+            ->latest('id')
+            ->first()
+            ?: AttendanceRecord::with('shift')
+                ->where('employee_id', $employee->id)
+                ->where('work_date', $workDate->toDateString())
+                ->latest('id')
+                ->first();
+
+        // Cari ShiftSalesSummary
+        $salesSummary = null;
+        if ($summaryIdParam) {
+            $salesSummary = ShiftSalesSummary::with(['shift', 'branch', 'employee'])
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+                ->find((int) $summaryIdParam);
+            if ($salesSummary) {
+                $workDate = $salesSummary->work_date ? $salesSummary->work_date->copy() : $workDate;
+                if ($salesSummary->shift) {
+                    $activeShift = $salesSummary->shift;
+                }
+            }
+        }
+
+        if (! $salesSummary) {
+            $salesSummary = ShiftSalesSummary::with(['shift', 'branch', 'employee'])
+                ->whereDate('work_date', $workDate->toDateString())
+                ->when($shiftParam && $activeShift, fn ($q) => $q->where('shift_id', $activeShift->id))
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+                ->latest('id')
+                ->first();
+        }
+
+        if (! $salesSummary && ! $dateParam && ! $shiftParam) {
+            $salesSummary = ShiftSalesSummary::with(['shift', 'branch', 'employee'])
+                ->whereDate('work_date', $now->toDateString())
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+                ->latest('id')
+                ->first();
+        }
+
+        $nextShiftLabel = $this->resolveNextShiftRecipient($activeShift);
+        $cashInDrawer = $salesSummary ? (float) ($salesSummary->blind_cash_count ?? $salesSummary->cash_in_drawer ?? $salesSummary->total_revenue) : 0.0;
+
+        // Pastikan serah terima shift tercatat default jika ada sales summary
+        if ($salesSummary && empty($salesSummary->handover_at)) {
+            $salesSummary->update([
+                'handover_status' => 'completed',
+                'handover_amount' => $salesSummary->handover_amount !== null ? (float) $salesSummary->handover_amount : $cashInDrawer,
+                'handover_recipient' => $salesSummary->handover_recipient ?: $nextShiftLabel,
+                'handover_by' => $salesSummary->handover_by ?: $employee->name,
+                'handover_at' => $salesSummary->handover_at ?? $now,
+                'handover_notes' => $salesSummary->handover_notes ?: 'Serah terima langsung ke shift selanjutnya',
+                'retained_drawer_cash' => (float) ($salesSummary->retained_drawer_cash ?? 0),
+            ]);
+            $salesSummary->refresh();
+        }
+
+        // Monitoring audit stok sisa akhir shift untuk verifikasi fisik
+        $stockComparisons = $this->buildStockComparison($workDate, $employee);
+        $handoverChecklist = ShiftHandoverChecklist::with(['employee', 'shift', 'branch'])
+            ->whereDate('check_date', $workDate->toDateString())
+            ->when($activeShift, fn ($q) => $q->where('shift_id', $activeShift->id))
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+            ->latest('id')
+            ->first();
+
+        // 1. Shift yang sedang aktif atau pending serah terima hari ini (Section 1: Serah Terima)
+        $todayHandovers = ShiftSalesSummary::with(['employee', 'shift', 'branch'])
+            ->whereDate('work_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->where('status', 'open')
+            ->orderBy('id')
+            ->get();
+
+        // 2. Shift yang sudah serah terima dan SIAP SETOR (Section 2: Siap Setor)
+        $readyToDepositSummaries = ShiftSalesSummary::with(['employee', 'shift', 'branch'])
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->where(function ($q) {
+                $q->where('deposit_status', 'unsubmitted')
+                    ->orWhereNull('deposit_status')
+                    ->orWhere('deposit_method', 'next_shift_handover');
+            })
+            ->where('handover_status', 'completed')
+            ->orderByDesc('work_date')
+            ->orderByDesc('id')
+            ->take(12)
+            ->get();
+
+        if ($readyToDepositSummaries->isEmpty()) {
+            $readyToDepositSummaries = ShiftSalesSummary::with(['employee', 'shift', 'branch'])
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+                ->where('deposit_status', '!=', 'verified')
+                ->orderByDesc('work_date')
+                ->orderByDesc('id')
+                ->take(12)
+                ->get();
+        }
+
+        $totalSiapSetor = (float) $readyToDepositSummaries->sum(fn ($s) => $s->handoverAmount());
+
+        // 3. Riwayat / Histori Setoran yang SUDAH DISETOR ke Bank / Kolektor (Section 3: History Setor)
+        $historyDepositSummaries = ShiftSalesSummary::with(['employee', 'shift', 'branch'])
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->where('deposit_status', 'verified')
+            ->orderByDesc('deposited_at')
+            ->orderByDesc('id')
+            ->take(15)
+            ->get();
+
+        if ($historyDepositSummaries->isEmpty()) {
+            $historyDepositSummaries = ShiftSalesSummary::with(['employee', 'shift', 'branch'])
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+                ->orderByDesc('work_date')
+                ->orderByDesc('id')
+                ->take(10)
+                ->get();
+        }
+
+        // 10-15 Rekap Terakhir untuk pemetaan shift per tanggal
+        $recentSummaries = ShiftSalesSummary::with(['employee', 'shift', 'branch'])
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->orderByDesc('work_date')
+            ->orderByDesc('id')
+            ->take(15)
+            ->get();
+
+        $shiftSummariesByDate = [];
+        foreach ($recentSummaries as $recItem) {
+            $dKey = $recItem->work_date?->toDateString();
+            if ($dKey) {
+                $shiftSummariesByDate[$dKey][$recItem->shiftNumber()] = $recItem->id;
+            }
+        }
+
+        return view('presensi2.serah_terima', [
+            'currentEmployee' => $employee,
+            'activeShift' => $activeShift,
+            'nextShiftLabel' => $nextShiftLabel,
+            'workDate' => $workDate,
+            'attendanceToday' => $attendanceToday,
+            'salesSummary' => $salesSummary,
+            'stockComparisons' => $stockComparisons,
+            'handoverChecklist' => $handoverChecklist,
+            'todayHandovers' => $todayHandovers,
+            'readyToDepositSummaries' => $readyToDepositSummaries,
+            'totalSiapSetor' => $totalSiapSetor,
+            'historyDepositSummaries' => $historyDepositSummaries,
+            'recentSummaries' => $recentSummaries,
+            'recentHandovers' => $readyToDepositSummaries,
+            'recentDeposits' => $historyDepositSummaries,
+            'shiftSummariesByDate' => $shiftSummariesByDate,
+            'cashInDrawer' => $cashInDrawer,
+            'dateParam' => $dateParam,
+        ]);
+    }
+
+    /**
+     * Simpan Formulir Serah Terima Shift (dan opsional langsung Presensi Pulang).
+     */
+    public function serahTerimaStore(Request $request): RedirectResponse|JsonResponse
+    {
+        $employee = $this->getAuthenticatedEmployee();
+        if (! $employee) {
+            return redirect()->route('presensi2.login');
+        }
+
+        $validated = $request->validate([
+            'summary_id' => 'nullable|integer',
+            'deposited_amount' => 'nullable|numeric|min:0',
+            'handover_amount' => 'nullable|numeric|min:0',
+            'retained_drawer_cash' => 'nullable|numeric|min:0',
+            'deposit_method' => 'nullable|in:cash_collector,safe_dropbox,bank_transfer,next_shift_handover',
+            'deposit_recipient' => 'nullable|string|max:120',
+            'handover_recipient' => 'nullable|string|max:120',
+            'deposit_notes' => 'nullable|string|max:500',
+            'handover_notes' => 'nullable|string|max:500',
+            'action_type' => 'nullable|string',
+            'auto_clock_out' => 'nullable|boolean',
+        ]);
+
+        $now = Carbon::now();
+        $activeShift = $this->shiftResolverService->resolveShift(null, $now);
+        $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
+        $branchId = $employee->branch_id;
+
+        $nextShiftLabel = $this->resolveNextShiftRecipient($activeShift);
+        $method = $validated['deposit_method'] ?? 'next_shift_handover';
+        $recipient = ! empty($validated['handover_recipient'])
+            ? $validated['handover_recipient']
+            : (! empty($validated['deposit_recipient']) ? $validated['deposit_recipient'] : $nextShiftLabel);
+
+        $summary = null;
+        if (! empty($validated['summary_id'])) {
+            $summary = ShiftSalesSummary::where('id', (int) $validated['summary_id'])
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+                ->first();
+        }
+
+        if (! $summary) {
+            $summary = ShiftSalesSummary::whereDate('work_date', $workDate->toDateString())
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+                ->latest('id')
+                ->first();
+        }
+
+        $depositedAmount = (float) ($validated['handover_amount'] ?? $validated['deposited_amount'] ?? 0);
+        $retainedCash = (float) ($validated['retained_drawer_cash'] ?? 0);
+
+        if (! $summary) {
+            $attendanceToday = AttendanceRecord::where('employee_id', $employee->id)
+                ->whereDate('work_date', $workDate->toDateString())
+                ->latest('id')
+                ->first();
+
+            $summary = ShiftSalesSummary::create([
+                'employee_id' => $employee->id,
+                'branch_id' => $branchId ?? 3,
+                'shift_id' => $activeShift?->id,
+                'attendance_record_id' => $attendanceToday?->id,
+                'work_date' => $workDate->toDateString(),
+                'total_fnb_sales' => 0,
+                'total_internet_sales' => 0,
+                'total_revenue' => $depositedAmount + $retainedCash,
+                'cash_in_drawer' => $depositedAmount + $retainedCash,
+                'system_expected_cash' => $depositedAmount + $retainedCash,
+                'blind_cash_count' => $depositedAmount + $retainedCash,
+                'cash_difference' => 0,
+                'status' => 'closed',
+                'closed_at' => $now,
+            ]);
+        }
+
+        $actionType = $request->input('action_type', 'handover');
+        $isSetorAction = ($actionType === 'setor');
+
+        // Selalu perbarui informasi Serah Terima Shift
+        $summary->update([
+            'handover_status' => 'completed',
+            'handover_amount' => $depositedAmount,
+            'retained_drawer_cash' => $retainedCash,
+            'handover_recipient' => $recipient,
+            'handover_by' => $employee->name,
+            'handover_at' => $now,
+            'handover_notes' => $validated['handover_notes'] ?? $validated['deposit_notes'] ?? 'Serah terima langsung ke shift selanjutnya',
+        ]);
+
+        if ($isSetorAction) {
+            // Setor Kas ke Bank, Kolektor, atau Brankas
+            $summary->update([
+                'deposit_status' => 'verified',
+                'deposited_amount' => $depositedAmount,
+                'deposit_method' => $method ?: 'bank_transfer',
+                'deposit_recipient' => $recipient,
+                'deposit_notes' => $validated['deposit_notes'] ?? 'Setor kas shift',
+                'deposited_at' => $now,
+                'deposit_verified_at' => $now,
+                'deposit_verified_by' => $recipient,
+            ]);
+
+            rescue(fn () => AuditLog::create([
+                'user_id' => auth()->id(),
+                'auditable_type' => ShiftSalesSummary::class,
+                'auditable_id' => $summary->id,
+                'action' => 'shift_cash_deposited',
+                'new_values' => [
+                    'employee_id' => $employee->id,
+                    'employee_name' => $employee->name,
+                    'deposited_amount' => $depositedAmount,
+                    'retained_drawer_cash' => $retainedCash,
+                    'deposit_method' => $method,
+                    'deposit_recipient' => $recipient,
+                    'deposit_status' => 'verified',
+                ],
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => $request->userAgent() ?? 'Portal Presensi v2',
+                'created_at' => $now,
+            ]));
+
+            rescue(fn () => app(EarlyWarningNotificationService::class)->sendShiftDepositAlert($summary));
+
+            $message = 'Setoran kas shift sebesar Rp '.number_format($depositedAmount, 0, ',', '.')." berhasil disimpan ke {$recipient}!";
+        } else {
+            // Serah terima ke shift selanjutnya (langsung ke serah terima, jangan langsung ke setor)
+            rescue(fn () => AuditLog::create([
+                'user_id' => auth()->id(),
+                'auditable_type' => ShiftSalesSummary::class,
+                'auditable_id' => $summary->id,
+                'action' => 'shift_handover_saved',
+                'new_values' => [
+                    'employee_id' => $employee->id,
+                    'employee_name' => $employee->name,
+                    'handover_amount' => $depositedAmount,
+                    'retained_drawer_cash' => $retainedCash,
+                    'handover_recipient' => $recipient,
+                    'handover_status' => 'completed',
+                ],
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => $request->userAgent() ?? 'Portal Presensi v2',
+                'created_at' => $now,
+            ]));
+
+            $message = "Serah terima kas shift ke {$recipient} sebesar Rp ".number_format($depositedAmount, 0, ',', '.').' berhasil disimpan langsung ke Serah Terima!';
+        }
+
+        // Jika kasir memilih auto check out pulang
+        if ($request->boolean('auto_clock_out')) {
+            $attendance = AttendanceRecord::where('employee_id', $employee->id)
+                ->whereNull('clock_out_at')
+                ->latest('id')
+                ->first();
+
+            if ($attendance) {
+                $attendance->update([
+                    'clock_out_at' => $now,
+                    'clock_out_device' => 'web_v2_serah_terima',
+                    'notes' => trim(($attendance->notes ? $attendance->notes.' | ' : '').'Check out via Serah Terima Shift'),
+                ]);
+                $message .= ' Presensi Pulang telah otomatis tercatat. Terima kasih!';
+            }
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $message,
+                    'summary' => $summary->fresh(),
+                    'redirect' => route('presensi2.index'),
+                ]);
+            }
+
+            return redirect()->route('presensi2.index')->with('success', $message);
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'summary' => $summary->fresh(),
+            ]);
+        }
+
+        return redirect()->route('presensi2.serah-terima', ['summary_id' => $summary->id])
+            ->with('success', $message);
     }
 
     /**

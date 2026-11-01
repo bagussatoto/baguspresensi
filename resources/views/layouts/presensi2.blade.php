@@ -512,7 +512,7 @@
         </a>
 
         <a href="{{ $rekapMenu?->url ?? route('presensi2.rekap') }}" 
-           class="nav-item {{ request()->routeIs('presensi2.rekap*') ? 'active' : '' }}" 
+           class="nav-item {{ (request()->routeIs('presensi2.rekap*') || request()->routeIs('presensi2.serah-terima*')) ? 'active' : '' }}" 
            title="{{ $rekapMenu?->description ?? 'Rekap Penjualan & Shift' }}">
             <span class="nav-icon">{{ $rekapMenu?->icon ?? '📊' }}</span>
             <span class="nav-label">{{ $rekapMenu ? explode(' &', $rekapMenu->name)[0] : 'Rekap' }}</span>

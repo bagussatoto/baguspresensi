@@ -281,6 +281,9 @@
                 <a href="{{ route('presensi2.penjualan') }}" class="btn btn-emerald" style="padding: 8px 14px; font-size: 12.5px; width: auto; text-decoration: none;">
                     <span>🛒</span> Kasir Penjualan
                 </a>
+                <a href="{{ route('presensi2.serah-terima', ['summary_id' => $salesSummary?->id]) }}" class="btn" style="padding: 8px 14px; font-size: 12.5px; width: auto; background: linear-gradient(135deg, #0284c7, #0ea5e9); color: #fff; border: 1px solid rgba(14, 165, 233, 0.5); font-weight: 700; text-decoration: none;">
+                    <span>🤝</span> Serah Terima Shift
+                </a>
             </div>
         </div>
 
@@ -927,6 +930,50 @@
         </div>
     </div>
 
+    {{-- BANNER DUAL-CONTROL: PERMINTAAN PERSETUJUAN PENYESUAIAN BILLING MATI LISTRIK --}}
+    @if($salesSummary && $salesSummary->isBillingAdjustmentPending() && $currentEmployee->canApproveBillingAdjustment())
+        <div class="screen-only-rekap" style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.45); border-radius: 8px; padding: 14px 18px; margin-bottom: 16px; color: #fde047; box-shadow: 0 4px 16px rgba(0,0,0,0.25);">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                <div style="flex: 1; min-width: 280px;">
+                    <div style="font-weight: 800; font-size: 14px; display: flex; align-items: center; gap: 8px; color: #fbbf24;">
+                        <span style="font-size: 18px;">⚠️</span>
+                        <span>PERSETUJUAN ADMIN: Pengajuan Potongan Mati Listrik Kasir</span>
+                        <span style="font-size: 10px; background: #b45309; color: #ffffff; padding: 2px 8px; border-radius: 9999px; font-weight: 700;">Anti-Fraud Dual Control</span>
+                    </div>
+                    <div style="font-size: 12px; color: #cbd5e1; margin-top: 6px; line-height: 1.5;">
+                        Kasir <strong>{{ $salesSummary->employee?->name ?? 'Kasir Shift' }}</strong> mengajukan kompensasi:
+                        <strong style="color: #f87171;">-Rp {{ number_format((float) $salesSummary->billing_adjustment_amount, 0, ',', '.') }}</strong>
+                        ({{ $salesSummary->billingAdjustmentReasonLabel() }})
+                        @if($salesSummary->billing_blackout_minutes) &bull; Durasi: <strong>{{ $salesSummary->billing_blackout_minutes }} mnt</strong> @endif
+                        @if($salesSummary->billing_blackout_pcs) &bull; <strong>{{ $salesSummary->billing_blackout_pcs }} PC</strong> @endif
+                    </div>
+                    @if($salesSummary->billing_adjustment_notes)
+                        <div style="font-size: 11px; color: #94a3b8; margin-top: 4px; font-style: italic;">
+                            "{{ $salesSummary->billing_adjustment_notes }}"
+                        </div>
+                    @endif
+                    <div style="font-size: 11px; color: #f59e0b; margin-top: 4px;">
+                        <em>*Demi keamanan saldo kas, potongan billing BELUM memotong uang kasir sampai Anda menyetujuinya di bawah ini.</em>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <form action="{{ route('presensi2.penjualan.penyesuaian-billing.approve', $salesSummary->id) }}" method="POST" onsubmit="return confirm('Setujui pemotongan billing internet Rp {{ number_format((float) $salesSummary->billing_adjustment_amount, 0, ',', '.') }} untuk kasir {{ $salesSummary->employee?->name }}?')">
+                        @csrf
+                        <button type="submit" style="padding: 9px 16px; background: #16a34a; color: #fff; border: none; border-radius: 6px; font-size: 12.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(22, 163, 74, 0.4);">
+                            <span>✓</span> Setujui Pemotongan
+                        </button>
+                    </form>
+                    <form action="{{ route('presensi2.penjualan.penyesuaian-billing.reject', $salesSummary->id) }}" method="POST" onsubmit="return confirm('Tolak pengajuan penyesuaian billing ini? Kasir wajib menyetor omset penuh tanpa potongan.')">
+                        @csrf
+                        <button type="submit" style="padding: 9px 16px; background: #dc2626; color: #fff; border: none; border-radius: 6px; font-size: 12.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                            <span>✕</span> Tolak
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    @endif
+
     {{-- RINGKASAN KEUANGAN SHIFT (METRIC CARDS) --}}
     <div class="screen-only-rekap" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 16px;">
         {{-- Total Omset Kotor --}}
@@ -969,6 +1016,34 @@
                 <span>{{ $isBillingLocked ? '🔒 Nilai Terkunci' : '🔄 Server Otomatis' }}</span>
                 <span>{{ $occupiedPcCount }}/{{ $totalPcCount }} PC Aktif</span>
             </div>
+            @if($salesSummary && ($salesSummary->hasBillingAdjustment() || $salesSummary->billing_adjustment_status === 'rejected'))
+                @php
+                    $adjStatus = $salesSummary->billing_adjustment_status ?? 'approved';
+                    $isApproved = $adjStatus === 'approved';
+                    $isPending = $adjStatus === 'pending_approval';
+                    $isRejected = $adjStatus === 'rejected';
+                @endphp
+                <div style="margin-top: 6px; padding: 6px 8px; background: {{ $isApproved ? 'rgba(34, 197, 94, 0.15)' : ($isPending ? 'rgba(245, 158, 11, 0.2)' : 'rgba(239, 68, 68, 0.15)') }}; border: 1px solid {{ $isApproved ? 'rgba(34, 197, 94, 0.3)' : ($isPending ? 'rgba(245, 158, 11, 0.4)' : 'rgba(239, 68, 68, 0.3)') }}; border-radius: 6px; font-size: 11px;">
+                    <div style="display: flex; justify-content: space-between; font-weight: 700; color: {{ $isApproved ? '#86efac' : ($isPending ? '#fde047' : '#fca5a5') }};">
+                        <span>⚡ {{ $salesSummary->billingAdjustmentReasonLabel() }}</span>
+                        <span style="{{ $isRejected ? 'text-decoration: line-through; opacity: 0.6;' : '' }}">-Rp {{ number_format((float) $salesSummary->billing_adjustment_amount, 0, ',', '.') }}</span>
+                    </div>
+                    <div style="font-size: 10px; margin-top: 3px; color: {{ $isApproved ? '#bbf7d0' : ($isPending ? '#fef08a' : '#fecaca') }}; font-weight: 600;">
+                        @if($isApproved)
+                            ✓ Disetujui Admin: {{ $salesSummary->billing_adjustment_approved_by }}
+                        @elseif($isPending)
+                            ⏳ Menunggu Persetujuan Admin (Potongan Belum Aktif)
+                        @elseif($isRejected)
+                            ✕ Ditolak Admin: {{ $salesSummary->billing_adjustment_rejection_reason }}
+                        @endif
+                    </div>
+                    @if($salesSummary->billing_adjustment_notes)
+                        <div style="font-size: 10px; color: #94a3b8; margin-top: 2px; font-style: italic;">
+                            "{{ $salesSummary->billing_adjustment_notes }}"
+                        </div>
+                    @endif
+                </div>
+            @endif
         </div>
 
         {{-- Omset Print Kertas --}}
@@ -1076,212 +1151,30 @@
         @endif
     </div>
 
-    {{-- LANJUTAN REKAP: FORM SETOR KAS & SERAH TERIMA OTOMATIS SHIFT SELANJUTNYA --}}
-    @php
-        $currentDepositStatus = $salesSummary->deposit_status ?? 'unsubmitted';
-        $defaultDepositMethod = $salesSummary?->deposit_method ?: 'next_shift_handover';
-        $defaultDepositRecipient = $salesSummary?->deposit_recipient ?: ($nextShiftLabel ?? 'Kasir Shift Selanjutnya');
-    @endphp
-    <div id="panel-setor-kas" class="rekap-card screen-only-rekap no-print" style="border-color: rgba(16, 185, 129, 0.35); background: linear-gradient(135deg, rgba(16, 185, 129, 0.06), rgba(14, 165, 233, 0.06)); padding: 18px 20px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-            <div>
-                <span style="font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: #34d399; font-weight: 700;">
-                    Lanjutan Rekapitulasi Shift • Setor Per Shift Otomatis
-                </span>
-                <h3 style="font-size: 15px; font-weight: 700; color: #fff; margin: 2px 0 0 0; display: flex; align-items: center; gap: 8px;">
-                    <span>🤝</span> Setor Kas Shift & Serah Terima ke Shift Selanjutnya
-                </h3>
-            </div>
-            <div>
-                @if($currentDepositStatus === 'verified' || $currentDepositStatus === 'pending_verification')
-                    <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); font-size: 11px;">
-                        ✅ Otomatis Disetor ke Shift Selanjutnya ({{ $defaultDepositRecipient }})
+    {{-- TAHAP BERIKUTNYA: ARAHAN KE HALAMAN SERAH TERIMA SHIFT (TABEL SERAH TERIMA & HISTORI SETOR DIPUSATKAN DI SERAH TERIMA) --}}
+    <div class="rekap-card screen-only-rekap no-print" style="border-color: rgba(14, 165, 233, 0.4); background: linear-gradient(135deg, rgba(14, 165, 233, 0.08), rgba(16, 185, 129, 0.06)); padding: 22px 24px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+            <div style="display: flex; align-items: center; gap: 14px;">
+                <div style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #0284c7, #0ea5e9); display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; box-shadow: 0 4px 14px rgba(14, 165, 233, 0.35); flex-shrink: 0;">
+                    🤝
+                </div>
+                <div>
+                    <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #38bdf8; font-weight: 700;">
+                        Langkah Berikutnya • Penutupan Shift Kasir
                     </span>
-                @elseif($currentDepositStatus === 'rejected')
-                    <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); font-size: 11px;">
-                        ❌ Perlu Revisi Serah Terima Shift
-                    </span>
-                @else
-                    <span class="badge" style="background: rgba(14, 165, 233, 0.2); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.4); font-size: 11px;">
-                        🤝 Siap Setor Otomatis ke {{ $defaultDepositRecipient }}
-                    </span>
-                @endif
-            </div>
-        </div>
-
-        @if($currentDepositStatus !== 'unsubmitted' && $salesSummary)
-            <div style="background: rgba(0, 0, 0, 0.28); border: 1px solid var(--border-glass); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; font-size: 12px;">
-                <div>
-                    <span style="color: var(--text-muted); display: block; font-size: 10.5px;">Nominal Disetor Shift:</span>
-                    <strong style="color: #34d399; font-size: 15px; font-family: monospace;">Rp {{ number_format((float) $salesSummary->deposited_amount, 0, ',', '.') }}</strong>
-                </div>
-                <div>
-                    <span style="color: var(--text-muted); display: block; font-size: 10.5px;">Modal Laci Ditinggal:</span>
-                    <strong style="color: #38bdf8; font-size: 14px; font-family: monospace;">Rp {{ number_format((float) $salesSummary->retained_drawer_cash, 0, ',', '.') }}</strong>
-                </div>
-                <div>
-                    <span style="color: var(--text-muted); display: block; font-size: 10.5px;">Metode Serah Terima:</span>
-                    <strong style="color: #e2e8f0;">{{ $salesSummary->depositMethodLabel() }}</strong>
-                </div>
-                <div>
-                    <span style="color: var(--text-muted); display: block; font-size: 10.5px;">Diserahkan ke Shift / Penerima:</span>
-                    <strong style="color: #c4b5fd;">{{ $salesSummary->deposit_recipient ?: $defaultDepositRecipient }}</strong>
+                    <h3 style="font-size: 17px; font-weight: 700; color: #fff; margin: 3px 0 0 0;">
+                        Serah Terima Kas & Protokol Handover Shift
+                    </h3>
+                    <p style="margin: 4px 0 0 0; font-size: 12.5px; color: var(--text-muted);">
+                        Tabel Serah Terima Shift, Rekap Siap Setor, dan Histori Setoran Kas kini dipusatkan di Halaman Serah Terima.
+                    </p>
                 </div>
             </div>
-        @endif
-
-        <form action="{{ route('presensi2.rekap.setor') }}" method="POST" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; align-items: end;">
-            @csrf
-            <input type="hidden" name="summary_id" value="{{ $salesSummary?->id }}">
-            <div>
-                <label style="display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; font-weight: 600;">Nominal Uang Disetor (Rp) *</label>
-                <input type="number" name="deposited_amount" required min="0" step="100"
-                       value="{{ (int) ($salesSummary?->deposited_amount ?? $cashInDrawer) }}"
-                       style="width: 100%; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 8px; padding: 9px 11px; color: #34d399; font-weight: 700; font-size: 13px; font-family: monospace; outline: none;">
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <a href="{{ route('presensi2.serah-terima', ['summary_id' => $salesSummary?->id]) }}" class="btn" style="padding: 12px 20px; font-size: 13.5px; font-weight: 700; background: linear-gradient(135deg, #0284c7, #0ea5e9); color: #fff; box-shadow: 0 4px 16px rgba(14, 165, 233, 0.4); border: 1px solid rgba(14, 165, 233, 0.6); text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+                    <span>🤝</span> Buka Halaman Serah Terima Shift ➔
+                </a>
             </div>
-            <div>
-                <label style="display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; font-weight: 600;">Modal Laci Ditinggal (Rp)</label>
-                <input type="number" name="retained_drawer_cash" min="0" step="100"
-                       value="{{ (int) ($salesSummary?->retained_drawer_cash ?? 0) }}"
-                       style="width: 100%; background: rgba(15, 23, 42, 0.85); border: 1px solid var(--border-glass); border-radius: 8px; padding: 9px 11px; color: #fff; font-size: 13px; font-family: monospace; outline: none;">
-            </div>
-            <div>
-                <label style="display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; font-weight: 600;">Shift Penerima / Kasir Berikutnya *</label>
-                <input type="text" name="deposit_recipient" required placeholder="Contoh: Shift 2 / Nama Kasir Penerima"
-                       value="{{ $defaultDepositRecipient }}"
-                       style="width: 100%; background: rgba(15, 23, 42, 0.85); border: 1px solid var(--border-glass); border-radius: 8px; padding: 9px 11px; color: #fff; font-size: 12.5px; outline: none;">
-            </div>
-            <div>
-                <label style="display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; font-weight: 600;">Catatan Serah Terima (Opsional)</label>
-                <input type="text" name="deposit_notes" placeholder="Keterangan serah terima shift..."
-                       value="{{ $salesSummary?->deposit_notes ?? '' }}"
-                       style="width: 100%; background: rgba(15, 23, 42, 0.85); border: 1px solid var(--border-glass); border-radius: 8px; padding: 9px 11px; color: #fff; font-size: 12.5px; outline: none;">
-            </div>
-            <div>
-                <button type="submit" class="btn btn-emerald" style="padding: 10px 14px; font-size: 12.5px; font-weight: 700; width: 100%;">
-                    <span>🤝</span> Simpan / Setor ke Shift Selanjutnya
-                </button>
-            </div>
-        </form>
-
-        {{-- TABEL HISTORY SETOR KAS SHIFT (SESUAI CONTOH GAMBAR 1) --}}
-        <div style="margin-top: 20px; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25); border: 1px solid rgba(245, 158, 11, 0.4);">
-            <div style="background: linear-gradient(135deg, #f59e0b, #d97706); padding: 11px 18px; display: flex; align-items: center; justify-content: space-between;">
-                <span style="font-size: 15px; font-weight: 700; color: #ffffff; letter-spacing: 0.02em;">
-                    History setor
-                </span>
-                <span style="font-size: 11px; color: #fef3c7; font-weight: 600;">
-                    Total {{ $recentSummaries->count() }} Riwayat Terakhir
-                </span>
-            </div>
-
-            @if($recentSummaries->isNotEmpty())
-                <div style="overflow-x: auto; background: #ffffff;">
-                    <table style="width: 100%; border-collapse: collapse; font-family: inherit; font-size: 12.5px; margin: 0;">
-                        <thead style="background: #e0f2fe; border-bottom: 2px solid #bae6fd;">
-                            <tr style="color: #0369a1; font-weight: 700; font-size: 12px;">
-                                <th style="padding: 11px 8px; text-align: center; width: 48px;">No</th>
-                                <th style="padding: 11px 12px; text-align: center;">Tanggal</th>
-                                <th style="padding: 11px 12px; text-align: center;">Nomer</th>
-                                <th style="padding: 11px 12px; text-align: center;">Outlet</th>
-                                <th style="padding: 11px 12px; text-align: center;">Shif</th>
-                                <th style="padding: 11px 12px; text-align: center;">Penyetor</th>
-                                <th style="padding: 11px 14px; text-align: right;">Nilai</th>
-                                <th style="padding: 11px 12px; text-align: center; width: 105px;">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($recentSummaries as $idx => $rec)
-                                @php
-                                    $recDateStr = $rec->work_date?->toDateString() ?? now()->toDateString();
-                                    $recTimeStr = ($rec->deposited_at ?? $rec->closed_at ?? $rec->updated_at)?->format('H:i:s') ?? '00:00:00';
-                                    $recShiftNum = $rec->shiftNumber();
-                                    $recNilai = (float) ($rec->deposited_amount ?? $rec->blind_cash_count ?? $rec->cash_in_drawer ?? $rec->total_revenue);
-                                    $isCurrentSelected = $salesSummary && $salesSummary->id === $rec->id;
-                                    $dateShiftMap = $shiftSummariesByDate[$recDateStr] ?? [];
-                                @endphp
-                                <tr style="border-bottom: 1px solid #f1f5f9; color: #1e293b; {{ $isCurrentSelected ? 'background: #f0fdf4;' : '' }}">
-                                    <td style="text-align: center; font-weight: 700; color: #64748b; font-size: 12px; padding: 10px 8px;">
-                                        {{ $idx + 1 }}
-                                    </td>
-                                    <td style="font-family: monospace; font-size: 12px; color: #334155; white-space: nowrap; text-align: center; padding: 10px 12px;">
-                                        {{ $recDateStr }} {{ $recTimeStr }}
-                                    </td>
-                                    <td style="white-space: nowrap; text-align: center; padding: 10px 12px;">
-                                        <a href="{{ route('presensi2.rekap', ['summary_id' => $rec->id]) }}"
-                                           style="color: #0284c7; font-weight: 700; font-family: monospace; font-size: 12px; text-decoration: none;">
-                                            {{ $rec->rekapNumber() }}
-                                        </a>
-                                    </td>
-                                    <td style="font-weight: 600; color: #1e293b; font-size: 12px; white-space: nowrap; text-align: center; padding: 10px 12px;">
-                                        {{ strtoupper($rec->branch->name ?? $currentEmployee->branch->name ?? 'MAYA 1') }}
-                                    </td>
-                                    <td style="text-align: center; white-space: nowrap; padding: 10px 12px;">
-                                        <div style="display: inline-flex; gap: 4px; align-items: center; justify-content: center;">
-                                            @for($sNum = 1; $sNum <= 4; $sNum++)
-                                                @php
-                                                    $targetSummaryId = $dateShiftMap[$sNum] ?? null;
-                                                    $isRowShift = ($recShiftNum === $sNum);
-                                                    $shiftPrintHref = $targetSummaryId
-                                                        ? route('presensi2.rekap', ['summary_id' => $targetSummaryId, 'auto_print' => 1, 'print_type' => 'rekap'])
-                                                        : route('presensi2.rekap', ['date' => $recDateStr, 'shift' => $sNum, 'auto_print' => 1, 'print_type' => 'rekap']);
-                                                @endphp
-                                                @if($isRowShift && $isCurrentSelected)
-                                                    <button type="button" onclick="triggerRekapPrint('rekap')"
-                                                            title="Print Slip Shift {{ $sNum }} (Aktif)"
-                                                            style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 4px; font-size: 12px; font-weight: 800; cursor: pointer; background: #f59e0b; color: #ffffff; border: 1px solid #d97706; box-shadow: 0 1px 4px rgba(245, 158, 11, 0.4);">
-                                                        {{ $sNum }}
-                                                    </button>
-                                                @else
-                                                    <a href="{{ $shiftPrintHref }}"
-                                                       title="Print Slip Shift {{ $sNum }}"
-                                                       style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 4px; font-size: 12px; font-weight: 800; text-decoration: none; background: #f59e0b; color: #ffffff; border: 1px solid #d97706; transition: opacity 0.15s;"
-                                                       onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
-                                                        {{ $sNum }}
-                                                    </a>
-                                                @endif
-                                            @endfor
-                                        </div>
-                                    </td>
-                                    <td style="text-align: center; font-weight: 600; color: #1e293b; font-size: 12.5px; padding: 10px 12px;">
-                                        {{ strtoupper($rec->employee->name ?? '-') }}
-                                    </td>
-                                    <td style="text-align: right; font-family: monospace; font-weight: 800; font-size: 13px; color: #0f172a; white-space: nowrap; padding: 10px 14px;">
-                                        {{ number_format($recNilai, 0, ',', '.') }}
-                                    </td>
-                                    <td style="text-align: center; white-space: nowrap; padding: 10px 12px;">
-                                        <div style="display: inline-flex; gap: 6px; align-items: center; justify-content: center;">
-                                            @if($isCurrentSelected)
-                                                <button type="button" onclick="triggerRekapPrint('rekap')" title="Print Laporan Summary / Rekap Shift Ini"
-                                                        style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 28px; border-radius: 5px; border: 1px solid #d97706; background: #f59e0b; color: #ffffff; cursor: pointer; font-size: 13px; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">
-                                                    🖨️
-                                                </button>
-                                                <button type="button" onclick="triggerRekapPrint('hardware')" title="Print Checklist Hardware Shift Ini"
-                                                        style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 28px; border-radius: 5px; border: 1px solid #059669; background: #10b981; color: #ffffff; cursor: pointer; font-size: 13px; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">
-                                                    🖥️
-                                                </button>
-                                            @else
-                                                <a href="{{ route('presensi2.rekap', ['summary_id' => $rec->id, 'auto_print' => 1, 'print_type' => 'rekap']) }}" title="Print Laporan Summary / Rekap Shift Ini"
-                                                   style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 28px; border-radius: 5px; border: 1px solid #d97706; background: #f59e0b; color: #ffffff; text-decoration: none; font-size: 13px; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">
-                                                    🖨️
-                                                </a>
-                                                <a href="{{ route('presensi2.rekap', ['summary_id' => $rec->id, 'auto_print' => 1, 'print_type' => 'hardware']) }}" title="Print Checklist Hardware Shift Ini"
-                                                   style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 28px; border-radius: 5px; border: 1px solid #059669; background: #10b981; color: #ffffff; text-decoration: none; font-size: 13px; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">
-                                                    🖥️
-                                                </a>
-                                            @endif
-                                        </div>
-                                    </td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            @else
-                <div style="text-align: center; padding: 18px; font-size: 12px; color: var(--text-muted); background: rgba(0, 0, 0, 0.2); border-radius: 0 0 10px 10px;">
-                    Belum ada riwayat setoran shift yang tercatat.
-                </div>
-            @endif
         </div>
     </div>
 
@@ -1548,13 +1441,13 @@
                                     @endif
                                 </td>
                                 <td style="text-align: center;">
-                                    @if($rDepStatus === 'verified' || $rDepStatus === 'pending_verification')
+                                    @if($rec->hasBeenDeposited())
                                         <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 10px;">
-                                            ✅ Disetor ke Shift Selanjutnya
+                                            ✅ Sudah Disetor
                                         </span>
                                     @elseif($rec->status === 'closed')
                                         <span class="badge" style="background: rgba(14, 165, 233, 0.15); color: #38bdf8; font-size: 10px;">
-                                            Closed (Belum Setor)
+                                            🤝 Serah Terima (Belum Setor)
                                         </span>
                                     @else
                                         <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; font-size: 10px;">
@@ -1577,8 +1470,11 @@
 
     {{-- NAVIGASI AKSI BAWAH & CHECK-OUT PRESENSI 1-KLIK (NO PRINT) --}}
     <div class="no-print" style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
-        <a href="{{ route('presensi2.penjualan') }}" class="btn btn-emerald" style="padding: 14px; font-size: 14px; font-weight: 700; flex: 1; min-width: 200px; text-decoration: none;">
+        <a href="{{ route('presensi2.penjualan') }}" class="btn btn-emerald" style="padding: 14px; font-size: 14px; font-weight: 700; flex: 1; min-width: 180px; text-decoration: none;">
             <span>🛒</span> Buka Kasir Penjualan Shift
+        </a>
+        <a href="{{ route('presensi2.serah-terima', ['summary_id' => $salesSummary?->id]) }}" class="btn" style="padding: 14px; font-size: 14px; font-weight: 700; flex: 1.2; min-width: 220px; text-decoration: none; background: linear-gradient(135deg, #0284c7, #0ea5e9); color: #fff; box-shadow: 0 4px 16px rgba(14, 165, 233, 0.4); border: 1px solid rgba(14, 165, 233, 0.6); display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+            <span>🤝</span> Lanjut ke Serah Terima Shift ➔
         </a>
         @if($attendanceToday && !$attendanceToday->clock_out_at)
         <button type="button" onclick="submitRekapCheckOut()" id="btn-clock-out-rekap" class="btn btn-rose" style="padding: 14px; font-size: 14px; font-weight: 700; flex: 1; min-width: 200px; box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);">
@@ -1737,6 +1633,25 @@
                 btn.innerHTML = '<span>🏁</span> Check Out Presensi Pulang (1-Klik)';
             }
         }
+    }
+
+    function openModalSetorKas(summaryId, defaultAmount) {
+        var modal = document.getElementById('modal-setor-kas');
+        if (!modal) return;
+        if (summaryId) {
+            var sumIdInput = document.getElementById('modal-setor-summary-id');
+            if (sumIdInput) sumIdInput.value = summaryId;
+        }
+        if (defaultAmount !== undefined && defaultAmount !== null && defaultAmount > 0) {
+            var amountInput = document.getElementById('modal-setor-amount');
+            if (amountInput) amountInput.value = defaultAmount;
+        }
+        modal.style.display = 'flex';
+    }
+
+    function closeModalSetorKas() {
+        var modal = document.getElementById('modal-setor-kas');
+        if (modal) modal.style.display = 'none';
     }
 </script>
 @endsection

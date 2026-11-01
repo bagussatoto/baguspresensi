@@ -25,9 +25,24 @@
 
 {{-- 4. PENJUALAN --}}
 <a href="{{ route('admin.penjualan') }}" 
-   class="subnav-item {{ request()->routeIs('admin.penjualan*') || request()->is('*admin/penjualan*') ? 'active' : '' }}" 
+   class="subnav-item {{ (request()->routeIs('admin.penjualan*') || request()->is('*admin/penjualan*')) && ! request()->routeIs('admin.penjualan.penyesuaian-billing*') ? 'active' : '' }}" 
    title="Penjualan & Kasir ERP">
     🛒 penjualan
+</a>
+
+{{-- 4b. PENYESUAIAN BILLING (PERSETUJUAN ADMIN) --}}
+@php
+    $subnavBillingAdjPendingCount = \App\Models\ShiftSalesSummary::where('billing_adjustment_status', 'pending_approval')->count();
+@endphp
+<a href="{{ route('admin.penjualan.penyesuaian-billing') }}" 
+   class="subnav-item {{ request()->routeIs('admin.penjualan.penyesuaian-billing*') ? 'active' : '' }}" 
+   title="Persetujuan Penyesuaian Billing Kasir (Mati Listrik / Force Majeure)">
+    ⚡ penyesuaian billing
+    @if($subnavBillingAdjPendingCount > 0)
+        <span style="background: #ef4444; color: #fff; font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 999px; margin-left: 3px;">
+            {{ $subnavBillingAdjPendingCount }}
+        </span>
+    @endif
 </a>
 
 {{-- 5. PRODUK --}}

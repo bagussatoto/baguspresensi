@@ -747,23 +747,97 @@
                         </span>
                     </div>
 
+                    @if($salesSummary && ($salesSummary->hasBillingAdjustment() || $salesSummary->billing_adjustment_status === 'rejected'))
+                        {{-- INFO PENYESUAIAN MATI LISTRIK / FORCE MAJEURE DENGAN DUAL CONTROL STATUS --}}
+                        @php
+                            $adjStatus = $salesSummary->billing_adjustment_status ?? 'approved';
+                            $isApproved = $adjStatus === 'approved';
+                            $isPending = $adjStatus === 'pending_approval';
+                            $isRejected = $adjStatus === 'rejected';
+                        @endphp
+                        <div style="background: {{ $isApproved ? 'rgba(34, 197, 94, 0.08)' : ($isPending ? 'rgba(245, 158, 11, 0.1)' : 'rgba(239, 68, 68, 0.08)') }}; border: 1px solid {{ $isApproved ? 'rgba(34, 197, 94, 0.3)' : ($isPending ? 'rgba(245, 158, 11, 0.4)' : 'rgba(239, 68, 68, 0.3)') }}; border-radius: 6px; padding: 10px; margin-bottom: 10px; font-size: 11.5px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                                <strong style="color: {{ $isApproved ? '#15803d' : ($isPending ? '#b45309' : '#dc2626') }};">
+                                    ⚡ {{ $salesSummary->billingAdjustmentReasonLabel() }}
+                                </strong>
+                                @if($isApproved)
+                                    <span style="font-size: 10px; font-weight: 800; background: #22c55e; color: #fff; padding: 2px 7px; border-radius: 10px;">
+                                        ✓ DISETUJUI ADMIN
+                                    </span>
+                                @elseif($isPending)
+                                    <span style="font-size: 10px; font-weight: 800; background: #f59e0b; color: #fff; padding: 2px 7px; border-radius: 10px; animation: pulse 2s infinite;">
+                                        ⏳ MENUNGGU PERSETUJUAN
+                                    </span>
+                                @elseif($isRejected)
+                                    <span style="font-size: 10px; font-weight: 800; background: #ef4444; color: #fff; padding: 2px 7px; border-radius: 10px;">
+                                        ✕ DITOLAK
+                                    </span>
+                                @endif
+                            </div>
+
+                            <div style="display: flex; justify-content: space-between; font-weight: 700; margin: 4px 0; color: #1e293b;">
+                                <span>Potongan Diajukan:</span>
+                                <span style="font-family: monospace; color: {{ $isRejected ? '#94a3b8; text-decoration: line-through;' : '#dc2626' }};">
+                                    -Rp {{ number_format((float) $salesSummary->billing_adjustment_amount, 0, ',', '.') }}
+                                </span>
+                            </div>
+
+                            <div style="font-size: 11px; color: #475569; margin-top: 3px; line-height: 1.4;">
+                                Bruto Sistem: <strong>Rp {{ number_format((float) ($salesSummary->raw_billing_amount ?? $totalInternetIncome + $salesSummary->billing_adjustment_amount), 0, ',', '.') }}</strong>
+                                &bull; Riil Kasir: <strong>Rp {{ number_format((float) $totalInternetIncome, 0, ',', '.') }}</strong>
+                                @if($salesSummary->billing_blackout_minutes)
+                                    &bull; Durasi: <strong>{{ $salesSummary->billing_blackout_minutes }} mnt</strong>
+                                @endif
+                                @if($salesSummary->billing_blackout_pcs)
+                                    &bull; <strong>{{ $salesSummary->billing_blackout_pcs }} PC</strong>
+                                @endif
+                            </div>
+
+                            @if($isApproved && $salesSummary->billing_adjustment_approved_by)
+                                <div style="margin-top: 4px; font-size: 10.5px; color: #166534; font-weight: 600;">
+                                    🛡️ Disetujui oleh: {{ $salesSummary->billing_adjustment_approved_by }}
+                                    @if($salesSummary->billing_adjustment_approved_at)
+                                        ({{ \Carbon\Carbon::parse($salesSummary->billing_adjustment_approved_at)->format('H:i - d/m') }})
+                                    @endif
+                                </div>
+                            @elseif($isPending)
+                                <div style="margin-top: 4px; font-size: 10.5px; color: #92400e; background: rgba(254, 243, 199, 0.7); padding: 4px 6px; border-radius: 4px;">
+                                    ⚠️ <strong>Keamanan Kas:</strong> Potongan belum memotong saldo kasir sampai Admin menyetujui, untuk mencegah kecurangan/manipulasi kas.
+                                </div>
+                            @elseif($isRejected)
+                                <div style="margin-top: 4px; font-size: 10.5px; color: #991b1b; background: rgba(254, 226, 226, 0.7); padding: 4px 6px; border-radius: 4px;">
+                                    ⚠️ <strong>Alasan Penolakan:</strong> {{ $salesSummary->billing_adjustment_rejection_reason ?: 'Bukti gangguan tidak sesuai.' }}
+                                </div>
+                            @endif
+
+                            @if($salesSummary->billing_adjustment_notes)
+                                <div style="font-size: 10.5px; color: #64748b; margin-top: 4px; font-style: italic;">
+                                    "{{ $salesSummary->billing_adjustment_notes }}"
+                                </div>
+                            @endif
+                        </div>
+                    @endif
+
                     @if($isBillingLocked)
                         <div style="background: #ffffff; padding: 8px 12px; border-radius: 4px; border: 1px solid #fde68a; font-size: 12px; color: #1e293b; margin-bottom: 10px;">
                             <div>Total Billing Dikunci: <strong style="color: #b45309; font-size: 14px;">Rp {{ number_format($totalInternetIncome, 0, ',', '.') }}</strong></div>
                             <div style="font-size: 10.5px; color: #6b7280; margin-top: 2px;">Waktu Kunci: {{ $salesSummary?->locked_billing_at ? \Carbon\Carbon::parse($salesSummary->locked_billing_at)->format('H:i - d/m/Y') : '-' }}</div>
                         </div>
-                        <button type="button" onclick="submitToggleLockBilling('unlock')" 
-                                style="width: 100%; background: #ffffff; color: #dc2626; border: 1px solid #dc2626; padding: 7px 12px; font-size: 11.5px; font-weight: 700; border-radius: 4px; cursor: pointer;">
-                            🔓 Buka Kunci Billing (Izinkan Perubahan)
-                        </button>
-                    @else
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <input type="number" id="input-lock-billing-amount" value="{{ (int) $totalInternetIncome }}" min="0" style="flex: 1; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px; font-weight: 700; color: #0f172a;">
-                            <button type="button" onclick="submitToggleLockBilling('lock')" 
-                                    style="background: #f39c12; color: #ffffff; border: none; padding: 8px 14px; font-size: 11.5px; font-weight: 700; border-radius: 4px; cursor: pointer; white-space: nowrap;">
-                                🔒 Kunci Billing Shift
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <button type="button" onclick="openModalPenyesuaianBilling()" 
+                                    style="background: #f59e0b; color: #ffffff; border: none; padding: 8px 10px; font-size: 11.5px; font-weight: 700; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                                <span>⚡</span> Penyesuaian Mati Listrik
+                            </button>
+                            <button type="button" onclick="submitToggleLockBilling('unlock')" 
+                                    style="width: 100%; background: #ffffff; color: #dc2626; border: 1px solid #dc2626; padding: 7px 12px; font-size: 11.5px; font-weight: 700; border-radius: 4px; cursor: pointer;">
+                                🔓 Buka Kunci
                             </button>
                         </div>
+                    @else
+                        <button type="button" onclick="openModalPenyesuaianBilling()" 
+                                style="width: 100%; background: linear-gradient(135deg, #d97706, #f59e0b); color: #ffffff; border: none; padding: 10px 14px; font-size: 12px; font-weight: 700; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 2px 6px rgba(217, 119, 6, 0.3);">
+                            <span>⚡</span> Penyesuaian Billing (Mati Listrik / Force Majeure)
+                        </button>
                     @endif
                 </div>
 
@@ -889,6 +963,153 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    {{-- MODAL PENYESUAIAN BILLING INTERNET (MATI LISTRIK / FORCE MAJEURE) --}}
+    <div id="modal-penyesuaian-billing" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.82); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 100000; align-items: center; justify-content: center; padding: 16px;">
+        <div style="background: #ffffff; border-radius: 12px; width: 100%; max-width: 580px; box-shadow: 0 25px 60px rgba(0,0,0,0.6); overflow: hidden; display: flex; flex-direction: column; color: #1e293b;">
+            <div style="background: linear-gradient(135deg, #d97706, #f59e0b); color: #ffffff; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 15px;">
+                    <span>⚡</span> Penyesuaian Billing (Mati Listrik / Force Majeure)
+                </div>
+                <button type="button" onclick="closeModalPenyesuaianBilling()" style="background: none; border: none; color: #ffffff; font-size: 20px; font-weight: bold; cursor: pointer;">✕</button>
+            </div>
+            
+            <form id="form-penyesuaian-billing" onsubmit="submitPenyesuaianBilling(event)" style="padding: 18px 20px; max-height: 80vh; overflow-y: auto;">
+                <div style="background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 11.5px; color: #92400e; line-height: 1.4;">
+                    <strong>💡 Perlindungan Kasir Shift:</strong>
+                    Gunakan fitur ini jika terjadi pemadaman listrik PLN atau kendala server/jaringan yang menyebabkan timer billing tetap berjalan. Uang billing yang dipotong <strong>tidak akan dibebankan ke kasir</strong> saat rekap dan serah terima.
+                </div>
+
+                {{-- 1. BILLING SISTEM BRUTO --}}
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 11.5px; font-weight: 700; color: #475569; margin-bottom: 4px;">
+                        1. Omset Billing Terbaca Sistem (Rp) *
+                    </label>
+                    <input type="number" id="adj-raw-billing" required min="0" step="100"
+                           value="{{ (int) ($salesSummary?->raw_billing_amount ?? ($salesSummary && $salesSummary->hasBillingAdjustment() ? $totalInternetIncome + $salesSummary->billing_adjustment_amount : $totalInternetIncome)) }}"
+                           oninput="recalculateNetBilling()"
+                           style="width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13.5px; font-weight: 700; font-family: monospace; color: #0f172a; outline: none;">
+                    <span style="font-size: 10.5px; color: #64748b;">Nominal kotor sebelum penyesuaian gangguan</span>
+                </div>
+
+                {{-- 2. ALASAN PENYESUAIAN --}}
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 11.5px; font-weight: 700; color: #475569; margin-bottom: 4px;">
+                        2. Alasan Gangguan / Force Majeure *
+                    </label>
+                    <select id="adj-reason" required style="width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12.5px; font-weight: 600; color: #0f172a; outline: none; background: #fff;">
+                        <option value="blackout" {{ ($salesSummary?->billing_adjustment_reason === 'blackout' || ! $salesSummary?->billing_adjustment_reason) ? 'selected' : '' }}>⚡ Pemadaman Listrik (Mati Lampu PLN)</option>
+                        <option value="isp_down" {{ $salesSummary?->billing_adjustment_reason === 'isp_down' ? 'selected' : '' }}>🌐 Gangguan ISP / Jaringan Internet Putus</option>
+                        <option value="hardware_crash" {{ $salesSummary?->billing_adjustment_reason === 'hardware_crash' ? 'selected' : '' }}>💻 PC Crash / Error Server Massal</option>
+                        <option value="customer_refund" {{ $salesSummary?->billing_adjustment_reason === 'customer_refund' ? 'selected' : '' }}>🔄 Refund / Kompensasi Waktu Pelanggan</option>
+                        <option value="manual_correction" {{ $salesSummary?->billing_adjustment_reason === 'manual_correction' ? 'selected' : '' }}>✏️ Koreksi Selisih Kasir Manual</option>
+                    </select>
+                </div>
+
+                {{-- 3. KALKULATOR ESTIMASI MATI LISTRIK --}}
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="font-size: 11.5px; font-weight: 700; color: #0284c7; display: flex; align-items: center; gap: 5px;">
+                            <span>⏱️</span> Kalkulator Estimasi Mati Listrik (Opsional)
+                        </span>
+                        <button type="button" onclick="autoCalculateBlackoutDeduction()" style="padding: 3px 8px; font-size: 10.5px; font-weight: 700; background: #0284c7; color: #fff; border: none; border-radius: 4px; cursor: pointer;">
+                            ⚡ Hitung Otomatis
+                        </button>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                        <div>
+                            <label style="font-size: 10.5px; color: #64748b; display: block; margin-bottom: 2px;">Durasi Padam (Mnt)</label>
+                            <input type="number" id="adj-blackout-minutes" min="0" placeholder="Contoh: 30"
+                                   value="{{ $salesSummary?->billing_blackout_minutes ?? '' }}"
+                                   oninput="autoCalculateBlackoutDeduction()"
+                                   style="width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 10.5px; color: #64748b; display: block; margin-bottom: 2px;">Jumlah PC Terdampak</label>
+                            <input type="number" id="adj-blackout-pcs" min="0" placeholder="Contoh: 12"
+                                   value="{{ $salesSummary?->billing_blackout_pcs ?? ($occupiedPcCount > 0 ? $occupiedPcCount : 10) }}"
+                                   oninput="autoCalculateBlackoutDeduction()"
+                                   style="width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 10.5px; color: #64748b; display: block; margin-bottom: 2px;">Tarif/Jam (Rp)</label>
+                            <input type="number" id="adj-hourly-rate" min="1000" step="500" value="6000"
+                                   oninput="autoCalculateBlackoutDeduction()"
+                                   style="width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px;">
+                        </div>
+                    </div>
+                </div>
+
+                {{-- 4. NOMINAL POTONGAN & BILLING RIIL --}}
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 700; color: #dc2626; margin-bottom: 4px;">
+                            3. Nilai Potongan (Rp) *
+                        </label>
+                        <input type="number" id="adj-deduction-amount" required min="0" step="100"
+                               value="{{ (int) ($salesSummary?->billing_adjustment_amount ?? 0) }}"
+                               oninput="recalculateNetBilling()"
+                               style="width: 100%; padding: 9px 12px; border: 1px solid #f87171; border-radius: 6px; font-size: 13.5px; font-weight: 800; font-family: monospace; color: #dc2626; outline: none; background: #fff1f2;">
+                        <span style="font-size: 10px; color: #b91c1c;">Nominal yang tidak tertagih</span>
+                    </div>
+
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 700; color: #15803d; margin-bottom: 4px;">
+                            4. Billing Riil Kasir (Rp)
+                        </label>
+                        <input type="number" id="adj-net-billing" readonly
+                               value="{{ (int) $totalInternetIncome }}"
+                               style="width: 100%; padding: 9px 12px; border: 1px solid #86efac; border-radius: 6px; font-size: 13.5px; font-weight: 800; font-family: monospace; color: #15803d; outline: none; background: #f0fdf4;">
+                        <span style="font-size: 10px; color: #166534;">Wajib disetor kasir</span>
+                    </div>
+                </div>
+
+                {{-- 5. KETERANGAN / BERITA ACARA --}}
+                <div style="margin-bottom: 14px;">
+                    <label style="display: block; font-size: 11.5px; font-weight: 700; color: #475569; margin-bottom: 4px;">
+                        5. Berita Acara / Keterangan Kejadian *
+                    </label>
+                    <textarea id="adj-notes" required rows="2" placeholder="Contoh: Terjadi pemadaman listrik PLN mendadak pkl 14:15 - 14:45 WIB (30 menit). 12 PC pelanggan mati serentak, pelanggan tidak ditagih sisa waktu billing..."
+                              style="width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; color: #0f172a; outline: none; font-family: inherit;">{{ $salesSummary?->billing_adjustment_notes ?? '' }}</textarea>
+                    <span style="font-size: 10.5px; color: #64748b;">Keterangan ini dicatat di Audit Log dan terbaca di Laporan Rekapitulasi Shift</span>
+                </div>
+
+                {{-- 6. OTORISASI KEAMANAN & ANTI-MALING (DUAL CONTROL) --}}
+                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                        <span style="font-size: 11.5px; font-weight: 800; color: #1e40af; display: flex; align-items: center; gap: 5px;">
+                            <span>🛡️</span> Persetujuan Admin / Supervisor (Anti-Kecurangan Kasir)
+                        </span>
+                        <span style="font-size: 10px; background: #dbeafe; color: #1e40af; padding: 2px 7px; border-radius: 4px; font-weight: 700;">Segregation of Duties</span>
+                    </div>
+                    <div style="font-size: 11px; color: #1e3a8a; line-height: 1.4; margin-bottom: 8px;">
+                        Untuk mencegah karyawan memotong uang setoran kas sembarangan, pemotongan billing <strong>wajib disetujui Admin/Supervisor</strong>.
+                        <ul style="margin: 4px 0 0 16px; padding: 0;">
+                            <li>Jika Supervisor ada di outlet, masukkan PIN Supervisor di bawah untuk <strong>persetujuan instan</strong>.</li>
+                            <li>Jika PIN kosong, pengajuan akan dikirim ke portal Admin untuk diverifikasi (<strong>saldo kas kasir belum terpotong</strong> hingga disetujui Admin).</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <label style="font-size: 11px; font-weight: 700; color: #1e3a8a; display: block; margin-bottom: 3px;">
+                            PIN Supervisor / Admin Outlet (Opsional / Langsung Disetujui)
+                        </label>
+                        <input type="password" id="adj-supervisor-pin" placeholder="Masukkan 6-digit PIN Supervisor jika ada di lokasi" maxlength="30"
+                               style="width: 100%; padding: 8px 12px; border: 1px solid #93c5fd; border-radius: 6px; font-size: 13px; font-family: monospace; letter-spacing: 2px; outline: none; background: #ffffff;">
+                    </div>
+                </div>
+
+                {{-- TOMBOL SUBMIT --}}
+                <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                    <button type="button" onclick="closeModalPenyesuaianBilling()" style="padding: 9px 16px; border-radius: 6px; border: 1px solid #cbd5e1; background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; cursor: pointer;">
+                        Batal
+                    </button>
+                    <button type="submit" id="btn-submit-adj-billing" style="padding: 10px 18px; border-radius: 6px; border: none; background: linear-gradient(135deg, #d97706, #f59e0b); color: #fff; font-size: 12.5px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(217, 119, 6, 0.4);">
+                        ⚡ Simpan / Ajukan Penyesuaian Billing
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -1555,6 +1776,132 @@
 
     function openModalCekBilling() {
         openModalBilling();
+    }
+
+    function openModalPenyesuaianBilling() {
+        const modal = document.getElementById('modal-penyesuaian-billing');
+        if (modal) modal.style.display = 'flex';
+        recalculateNetBilling();
+    }
+
+    function closeModalPenyesuaianBilling() {
+        const modal = document.getElementById('modal-penyesuaian-billing');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function recalculateNetBilling() {
+        const rawEl = document.getElementById('adj-raw-billing');
+        const dedEl = document.getElementById('adj-deduction-amount');
+        const netEl = document.getElementById('adj-net-billing');
+        if (!rawEl || !dedEl || !netEl) return;
+
+        const raw = Math.max(0, parseFloat(rawEl.value) || 0);
+        const ded = Math.max(0, parseFloat(dedEl.value) || 0);
+        const net = Math.max(0, raw - ded);
+        netEl.value = Math.round(net);
+    }
+
+    function autoCalculateBlackoutDeduction() {
+        const minEl = document.getElementById('adj-blackout-minutes');
+        const pcsEl = document.getElementById('adj-blackout-pcs');
+        const rateEl = document.getElementById('adj-hourly-rate');
+        const dedEl = document.getElementById('adj-deduction-amount');
+        if (!minEl || !pcsEl || !rateEl || !dedEl) return;
+
+        const minutes = parseFloat(minEl.value) || 0;
+        const pcs = parseFloat(pcsEl.value) || 0;
+        const rate = parseFloat(rateEl.value) || 6000;
+
+        if (minutes > 0 && pcs > 0) {
+            const estimatedDeduction = Math.round((minutes / 60) * pcs * rate);
+            dedEl.value = estimatedDeduction;
+            recalculateNetBilling();
+        }
+    }
+
+    async function submitPenyesuaianBilling(event) {
+        event.preventDefault();
+
+        const rawAmount = parseFloat(document.getElementById('adj-raw-billing').value) || 0;
+        const adjAmount = parseFloat(document.getElementById('adj-deduction-amount').value) || 0;
+        const reason = document.getElementById('adj-reason').value;
+        const notes = document.getElementById('adj-notes').value.trim();
+        const blackoutMinutes = parseInt(document.getElementById('adj-blackout-minutes').value) || null;
+        const blackoutPcs = parseInt(document.getElementById('adj-blackout-pcs').value) || null;
+        const supervisorPin = document.getElementById('adj-supervisor-pin') ? document.getElementById('adj-supervisor-pin').value.trim() : '';
+        const netAmount = Math.max(0, rawAmount - adjAmount);
+
+        if (adjAmount <= 0) {
+            if (!confirm('Nilai potongan Rp 0. Apakah Anda yakin ingin mengunci billing tanpa pengurangan?')) {
+                return;
+            }
+        }
+
+        if (!notes) {
+            alert('Wajib mengisi keterangan / berita acara kejadian (contoh: Mati listrik PLN 30 menit).');
+            document.getElementById('adj-notes').focus();
+            return;
+        }
+
+        const authMode = supervisorPin ? 'Otorisasi PIN Supervisor Langsung' : 'Kirim Pengajuan ke Admin (Menunggu Persetujuan)';
+        const confirmMsg = `Konfirmasi Penyesuaian Billing Shift:\n\n` +
+            `• Omset Sistem (Bruto): Rp ${rawAmount.toLocaleString('id-ID')}\n` +
+            `• Potongan Gangguan: -Rp ${adjAmount.toLocaleString('id-ID')}\n` +
+            `• Billing Riil Kasir: Rp ${netAmount.toLocaleString('id-ID')}\n` +
+            `• Mode Otorisasi: ${authMode}\n\n` +
+            (supervisorPin ? 'Billing akan langsung disetujui & dipotong.' : 'Saldo kasir BELUM terpotong hingga disetujui Admin demi keamanan kas.') +
+            '\n\nLanjutkan?';
+
+        if (!confirm(confirmMsg)) {
+            return;
+        }
+
+        const submitBtn = document.getElementById('btn-submit-adj-billing');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerText = 'Memproses...';
+        }
+
+        try {
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const token = csrfMeta ? csrfMeta.content : '{{ csrf_token() }}';
+            const response = await fetch('{{ route("presensi2.penjualan.penyesuaian-billing") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': token,
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({
+                    raw_billing_amount: rawAmount,
+                    billing_adjustment_amount: adjAmount,
+                    billing_adjustment_reason: reason,
+                    billing_adjustment_notes: notes,
+                    billing_blackout_minutes: blackoutMinutes,
+                    billing_blackout_pcs: blackoutPcs,
+                    supervisor_pin: supervisorPin,
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                showPosToast(data.message);
+                setTimeout(() => window.location.reload(), 600);
+            } else {
+                alert(data.message || 'Gagal memproses penyesuaian billing.');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerText = '⚡ Simpan / Ajukan Penyesuaian Billing';
+                }
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Terjadi kesalahan jaringan.');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerText = '⚡ Simpan & Kunci Billing Riil Kasir';
+            }
+        }
     }
 
     function openModalPrintKertas() {

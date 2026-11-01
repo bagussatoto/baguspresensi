@@ -112,6 +112,9 @@ Route::prefix('presensi2')->name('presensi2.')->group(function () {
     Route::match(['get', 'post'], '/penjualan/{sale}/batal', [AttendanceWebV2Controller::class, 'penjualanCancelTransaction'])->name('penjualan.batal');
     Route::post('/penjualan/permintaan-stok', [AttendanceWebV2Controller::class, 'penjualanStoreStockRequest'])->name('penjualan.permintaan-stok');
     Route::post('/penjualan/kunci-billing', [AttendanceWebV2Controller::class, 'penjualanKunciBilling'])->name('penjualan.kunci-billing');
+    Route::post('/penjualan/penyesuaian-billing', [AttendanceWebV2Controller::class, 'penjualanPenyesuaianBilling'])->name('penjualan.penyesuaian-billing');
+    Route::post('/penjualan/penyesuaian-billing/{summary}/approve', [AttendanceWebV2Controller::class, 'approveBillingAdjustment'])->name('penjualan.penyesuaian-billing.approve');
+    Route::post('/penjualan/penyesuaian-billing/{summary}/reject', [AttendanceWebV2Controller::class, 'rejectBillingAdjustment'])->name('penjualan.penyesuaian-billing.reject');
     Route::post('/penjualan/kunci-print', [AttendanceWebV2Controller::class, 'penjualanKunciPrint'])->name('penjualan.kunci-print');
     Route::get('/penjualan/printer/status', [AttendanceWebV2Controller::class, 'getPrinterStatus'])->name('penjualan.printer.status');
     Route::get('/penjualan/printer/agent-script', [AttendanceWebV2Controller::class, 'downloadPrinterAgentScript'])->name('penjualan.printer.agent-script');
@@ -121,6 +124,10 @@ Route::prefix('presensi2')->name('presensi2.')->group(function () {
     // Halaman Rekap (Rekapitulasi Penjualan, Pendapatan Billing, Audit Stok & Kasir Selesai Shift)
     Route::get('/rekap', [AttendanceWebV2Controller::class, 'rekapIndex'])->name('rekap');
     Route::post('/rekap/setor', [AttendanceWebV2Controller::class, 'rekapStoreSetor'])->name('rekap.setor');
+
+    // Halaman Serah Terima Shift (Handover Kas Laci, Sisa Stok Fisik & Penyerahan ke Kasir Berikutnya)
+    Route::get('/serah-terima', [AttendanceWebV2Controller::class, 'serahTerimaIndex'])->name('serah-terima');
+    Route::post('/serah-terima', [AttendanceWebV2Controller::class, 'serahTerimaStore'])->name('serah-terima.store');
 
     // Portal Login Khusus Layanan & Presensi Tambahan (GC, Meeting, BO/Training, Ambil Stok)
     Route::get('/layanan/login', [AttendanceWebV2Controller::class, 'showLayananLogin'])->name('layanan.login');
@@ -161,6 +168,7 @@ Route::prefix('presensi2')->name('presensi2.')->group(function () {
 Route::match(['get', 'post'], '/bagus/presensi2/penjualan/{sale}/batal', [AttendanceWebV2Controller::class, 'penjualanCancelTransaction']);
 Route::match(['get', 'post'], '/admin/penjualan/{sale}/batal', [AttendanceWebV2Controller::class, 'penjualanCancelTransaction'])->name('admin.penjualan.batal');
 Route::get('/bagus/presensi2/rekap', [AttendanceWebV2Controller::class, 'rekapIndex']);
+Route::get('/bagus/presensi2/serah-terima', [AttendanceWebV2Controller::class, 'serahTerimaIndex']);
 
 // Alias URL alternatif presensi/login2 dan register sesuai kebutuhan user
 Route::get('/presensi/login2', [AttendanceWebV2Controller::class, 'showLogin']);
@@ -284,6 +292,9 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::post('/penjualan', [AdminSaleController::class, 'store'])->name('admin.penjualan.store');
     Route::post('/penjualan/permintaan-stok/{stockRequest}/status', [AdminSaleController::class, 'updateStockRequestStatus'])->name('admin.penjualan.stock-request.status');
     Route::post('/penjualan/rekap-shift/{summary}/verify-setor', [AdminSaleController::class, 'verifyShiftDeposit'])->name('admin.penjualan.verify-setor');
+    Route::get('/penjualan/penyesuaian-billing', [AdminSaleController::class, 'billingAdjustmentIndex'])->name('admin.penjualan.penyesuaian-billing');
+    Route::post('/penjualan/penyesuaian-billing/{summary}/approve', [AdminSaleController::class, 'approveBillingAdjustment'])->name('admin.penjualan.penyesuaian-billing.approve');
+    Route::post('/penjualan/penyesuaian-billing/{summary}/reject', [AdminSaleController::class, 'rejectBillingAdjustment'])->name('admin.penjualan.penyesuaian-billing.reject');
     Route::get('/penjualan/{sale}', [AdminSaleController::class, 'show'])->name('admin.penjualan.show');
     Route::put('/penjualan/{sale}', [AdminSaleController::class, 'update'])->name('admin.penjualan.update');
     Route::post('/penjualan/{sale}/status', [AdminSaleController::class, 'updateStatus'])->name('admin.penjualan.status');
