@@ -58,7 +58,7 @@ class AttendanceMasterSeeder extends Seeder
                 'end_time' => '17:30:00',
                 'is_overnight' => false,
                 'grace_period_minutes' => 15,
-                'is_active' => true,
+                'is_active' => false,
             ],
         ];
 
