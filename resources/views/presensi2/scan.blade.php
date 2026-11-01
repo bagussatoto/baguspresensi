@@ -46,6 +46,37 @@
         <div style="font-size: 12px; color: var(--text-sub); margin-top: 4px;">{{ now()->translatedFormat('l, d F Y') }} (WIB)</div>
     </div>
 
+    @if(config('app.debug') || app()->environment('local', 'testing'))
+    {{-- DEV / QA TIME TRAVEL SIMULATOR --}}
+    <div class="glass-card" style="padding: 14px 16px; margin-bottom: 16px; border: 1px dashed rgba(245, 158, 11, 0.45); background: rgba(245, 158, 11, 0.05);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #fbbf24;">
+                <span>⏱️ Simulasi Waktu (Mock Jam)</span>
+                @if(session('presensi2_mock_time'))
+                    <span class="badge" style="background: rgba(245, 158, 11, 0.3); color: #fef3c7; font-size: 10px; padding: 2px 6px;">AKTIF</span>
+                @endif
+            </div>
+            @if(session('presensi2_mock_time'))
+                <a href="{{ request()->fullUrlWithQuery(['mock_time' => 'reset']) }}" style="font-size: 11px; color: #f87171; text-decoration: none; font-weight: 600;">
+                    🔄 Reset Normal
+                </a>
+            @endif
+        </div>
+
+        <div style="font-size: 11px; color: #d1d5db; margin-bottom: 8px;">
+            Klik tombol di bawah untuk menyimulasikan waktu presensi ke shift yang diinginkan:
+        </div>
+
+       
+        <form method="GET" action="{{ url()->current() }}" style="display: flex; gap: 8px; align-items: center;">
+            <input type="text" name="mock_time" placeholder="Jam kustom (contoh: 01:10 atau 06:55)" value="{{ session('presensi2_mock_time') ? \Carbon\Carbon::parse(session('presensi2_mock_time'))->format('H:i') : '' }}" style="flex: 1; padding: 7px 10px; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; color: #fff; font-size: 12px; outline: none;">
+            <button type="submit" style="padding: 7px 12px; font-size: 12px; background: #d97706; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                Set Jam
+            </button>
+        </form>
+    </div>
+    @endif
+
     {{-- FORM VERIFIKASI & SUBMIT --}}
     <div class="glass-card" style="padding: 22px 18px;">
         @if(!$attendanceToday)
@@ -60,7 +91,7 @@
                 </div>
             </div>
 
-            <!-- {{-- PILIHAN SHIFT KERJA --}}
+             {{-- PILIHAN SHIFT KERJA --}}
             <div style="margin-bottom: 20px; text-align: left;">
                 <label for="shift_id" style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; color: #d1d5db; margin-bottom: 8px;">
                     <span>⏱️ Pilih Shift Kerja:</span>
@@ -79,7 +110,7 @@
                 <div style="margin-top: 6px; font-size: 11px; color: var(--text-muted);">
                     Sistem mendeteksi shift berdasarkan jam saat ini. Anda dapat mengganti shift jika diperlukan.
                 </div>
-            </div> -->
+            </div> 
 
             {{-- LIVENESS DETECTION BIOMETRIC CHALLENGE CARD --}}
             <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 12px; padding: 12px 14px; margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between;">
@@ -151,12 +182,14 @@
 
 @push('scripts')
 <script>
-    // Live Clock
+    // Live Clock synchronized with Server / Mock Time
+    let serverTimeMs = {{ now()->getTimestamp() * 1000 }};
     setInterval(() => {
-        const now = new Date();
-        const h = String(now.getHours()).padStart(2, '0');
-        const m = String(now.getMinutes()).padStart(2, '0');
-        const s = String(now.getSeconds()).padStart(2, '0');
+        serverTimeMs += 1000;
+        const d = new Date(serverTimeMs);
+        const h = String(d.getHours()).padStart(2, '0');
+        const m = String(d.getMinutes()).padStart(2, '0');
+        const s = String(d.getSeconds()).padStart(2, '0');
         const el = document.getElementById('live-clock');
         if (el) el.textContent = `${h}:${m}:${s}`;
     }, 1000);
@@ -348,15 +381,28 @@
         }
 
         try {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'X-CSRF-TOKEN': csrfToken,
                     'Accept': 'application/json',
                 },
                 body: JSON.stringify(payload),
             });
+
+            if (response.status === 419) {
+                showResult(false, 'Sesi browser kedaluwarsa (419). Memuat ulang halaman...');
+                setTimeout(() => location.reload(), 1500);
+                return;
+            }
+
+            if (response.status === 401) {
+                showResult(false, 'Sesi login telah berakhir. Mengalihkan ke login...');
+                setTimeout(() => window.location.href = '{{ route("presensi2.login") }}', 1500);
+                return;
+            }
 
             const data = await response.json();
 

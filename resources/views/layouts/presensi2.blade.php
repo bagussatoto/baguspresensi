@@ -427,6 +427,18 @@
             </div>
         @endif
 
+        @if(session('presensi2_mock_time'))
+            <div style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.15)); border: 1px solid rgba(245, 158, 11, 0.4); padding: 8px 14px; margin-bottom: 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #fde68a;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span>⏱️</span>
+                    <span><strong>Mode Simulasi Waktu:</strong> {{ now()->format('d M Y - H:i:s') }} WIB</span>
+                </div>
+                <a href="{{ request()->fullUrlWithQuery(['mock_time' => 'reset']) }}" style="color: #f87171; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); padding: 3px 10px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 11px;">
+                    🔄 Reset Waktu Real
+                </a>
+            </div>
+        @endif
+
         @yield('content')
     </main>
 

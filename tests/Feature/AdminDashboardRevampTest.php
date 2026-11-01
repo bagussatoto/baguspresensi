@@ -6,11 +6,14 @@ namespace Tests\Feature;
 
 use App\Domains\Attendance\Models\ActivityAttendance;
 use App\Domains\Employee\Models\Shift;
+use App\Models\PrinterPrintJob;
+use App\Models\ShiftStockRequest;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\CafeSale;
+use Modules\MasterData\Domain\Models\CafeSaleItem;
 use Modules\MasterData\Domain\Models\Category;
 use Modules\MasterData\Domain\Models\Employee;
 use Modules\MasterData\Domain\Models\Product;
@@ -372,6 +375,203 @@ class AdminDashboardRevampTest extends TestCase
 
         $this->assertDatabaseMissing('activity_attendances', [
             'id' => $activity->id,
+        ]);
+    }
+
+    public function test_admin_laporan_page_renders_profit_analytics_and_printer_metrics(): void
+    {
+        $category = Category::create([
+            'name' => 'Food Category',
+            'code' => 'CAT-FOOD',
+            'slug' => 'cat-food',
+            'is_active' => true,
+        ]);
+
+        $uom = UnitOfMeasurement::create([
+            'name' => 'Pieces',
+            'code' => 'PCS',
+            'symbol' => 'pcs',
+            'is_active' => true,
+        ]);
+
+        $product = Product::create([
+            'category_id' => $category->id,
+            'uom_id' => $uom->id,
+            'name' => 'Nasi Goreng Spesial',
+            'code' => 'PRD-NASGOR',
+            'is_active' => true,
+        ]);
+
+        $variant = ProductVariant::create([
+            'product_id' => $product->id,
+            'name' => 'Nasi Goreng Spesial Pedas',
+            'sku' => 'SKU-NASGOR-01',
+            'base_price' => 15000,
+            'cost_price' => 9000,
+            'is_active' => true,
+        ]);
+
+        $sale = CafeSale::create([
+            'invoice_number' => 'INV-TEST-LPR-01',
+            'branch_id' => $this->branch->id,
+            'employee_id' => $this->employee->id,
+            'customer_name' => 'Pelanggan Laporan',
+            'total_fnb' => 30000,
+            'total_billing' => 12000,
+            'gross_amount' => 42000,
+            'net_amount' => 42000,
+            'payment_status' => 'paid',
+            'payment_method' => 'cash',
+        ]);
+
+        CafeSaleItem::create([
+            'cafe_sale_id' => $sale->id,
+            'product_variant_id' => $variant->id,
+            'item_type' => 'fnb',
+            'item_name' => $variant->name,
+            'qty' => 2,
+            'unit_price' => 15000,
+            'subtotal' => 30000,
+        ]);
+
+        PrinterPrintJob::create([
+            'branch_id' => $this->branch->id,
+            'employee_id' => $this->employee->id,
+            'printer_name' => 'Canon G3010 Series USB',
+            'document_name' => 'Laporan Skripsi Bab 1-3.pdf',
+            'client_computer' => 'PC-04',
+            'pages' => 15,
+            'color_mode' => 'color',
+            'unit_price' => 1000,
+            'total_amount' => 15000,
+            'work_date' => now()->toDateString(),
+            'printed_at' => now(),
+        ]);
+
+        $response = $this->actingAs($this->adminUser)
+            ->withSession(['admin_role' => 'Manager', 'admin_logged_in' => true])
+            ->get(route('admin.laporan'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Laporan Rekapitulasi', false);
+        $response->assertSee('Total Laba Kotor', false);
+        $response->assertSee('Laba Kotor F&B Kasir', false);
+        $response->assertSee('Laba Jasa Print', false);
+        $response->assertSee('Utilisasi Printer Canon USB', false);
+        $response->assertSee('Top 5 Kontributor Laba', false);
+        $response->assertSee('Nasi Goreng Spesial Pedas');
+        $response->assertSee('Canon G3010 Series USB');
+        $response->assertSee('Laporan Skripsi Bab 1-3.pdf');
+    }
+
+    public function test_admin_laporan_page_filters_by_period_and_branch(): void
+    {
+        $response = $this->actingAs($this->adminUser)
+            ->withSession(['admin_role' => 'Manager', 'admin_logged_in' => true])
+            ->get(route('admin.laporan', ['period' => '7days', 'branch_id' => $this->branch->id]));
+
+        $response->assertStatus(200);
+        $response->assertSee('Semua Cabang / Outlet');
+        $response->assertSee($this->branch->name);
+    }
+
+    public function test_admin_can_submit_supply_stock_and_automatically_increments_inventory(): void
+    {
+        $warehouse1 = Warehouse::create([
+            'branch_id' => $this->branch->id,
+            'code' => 'GDG-PST',
+            'name' => 'Gudang Pusat',
+            'type' => 'storage',
+            'is_active' => true,
+        ]);
+
+        $warehouse2 = Warehouse::create([
+            'branch_id' => $this->branch->id,
+            'code' => 'GDG-KSR',
+            'name' => 'Loker Kasir',
+            'type' => 'storage',
+            'is_active' => true,
+        ]);
+
+        $uom = UnitOfMeasurement::create(['name' => 'Rim', 'code' => 'RIM', 'symbol' => 'rim', 'is_active' => true]);
+        $cat = Category::create(['name' => 'Kertas', 'code' => 'CAT-KTS', 'slug' => 'kertas', 'is_active' => true]);
+        $prod = Product::create(['category_id' => $cat->id, 'uom_id' => $uom->id, 'name' => 'Kertas HVS A4', 'code' => 'PRD-A4', 'is_active' => true]);
+        $variant = ProductVariant::create(['product_id' => $prod->id, 'name' => 'HVS A4 75gr', 'sku' => 'SKU-A4-75', 'base_price' => 55000, 'is_active' => true]);
+
+        // Kirim Supply Stok Langsung Diterima (received)
+        $response = $this->actingAs($this->adminUser)
+            ->withSession(['admin_role' => 'Manager', 'admin_logged_in' => true])
+            ->post(route('admin.distribusi.kirim'), [
+                'product_variant_id' => $variant->id,
+                'from_warehouse_id' => $warehouse1->id,
+                'to_warehouse_id' => $warehouse2->id,
+                'qty' => 500,
+                'status' => 'received',
+                'operator_notes' => 'Supply 1 Rim Kertas HVS A4 Toko Surya',
+            ]);
+
+        $response->assertRedirect(route('admin.distribusi'));
+        $response->assertSessionHas('success');
+
+        $this->assertDatabaseHas('stock_transfer_dispatches', [
+            'product_variant_id' => $variant->id,
+            'from_warehouse_id' => $warehouse1->id,
+            'to_warehouse_id' => $warehouse2->id,
+            'qty' => 500,
+            'status' => 'received',
+        ]);
+
+        $this->assertDatabaseHas('stock_inventories', [
+            'warehouse_id' => $warehouse2->id,
+            'product_variant_id' => $variant->id,
+            'qty_on_hand' => 500,
+        ]);
+    }
+
+    public function test_admin_can_fulfill_cashier_shift_stock_request(): void
+    {
+        $warehouse = Warehouse::create([
+            'branch_id' => $this->branch->id,
+            'code' => 'GDG-KSR',
+            'name' => 'Loker Kasir Utama',
+            'type' => 'storage',
+            'is_active' => true,
+        ]);
+
+        $uom = UnitOfMeasurement::create(['name' => 'Botol', 'code' => 'BTL', 'symbol' => 'btl', 'is_active' => true]);
+        $cat = Category::create(['name' => 'Minuman', 'code' => 'CAT-DRK2', 'slug' => 'minuman2', 'is_active' => true]);
+        $prod = Product::create(['category_id' => $cat->id, 'uom_id' => $uom->id, 'name' => 'Teh Pucuk Harum', 'code' => 'PRD-PUCUK', 'is_active' => true]);
+        $variant = ProductVariant::create(['product_id' => $prod->id, 'name' => 'Teh Pucuk Harum 350ml', 'sku' => 'SKU-PUCUK', 'base_price' => 4000, 'is_active' => true]);
+
+        $stockReq = ShiftStockRequest::create([
+            'request_number' => 'REQ-TEST-PUCUK-01',
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift->id,
+            'item_category' => 'minuman',
+            'item_name' => 'Teh Pucuk Harum 350ml',
+            'qty_requested' => 12,
+            'unit' => 'pcs',
+            'urgency' => 'urgent',
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($this->adminUser)
+            ->withSession(['admin_role' => 'Manager', 'admin_logged_in' => true])
+            ->post(route('admin.distribusi.penuhi', $stockReq->id));
+
+        $response->assertRedirect(route('admin.distribusi'));
+        $response->assertSessionHas('success');
+
+        $this->assertDatabaseHas('shift_stock_requests', [
+            'id' => $stockReq->id,
+            'status' => 'fulfilled',
+        ]);
+
+        $this->assertDatabaseHas('stock_inventories', [
+            'warehouse_id' => $warehouse->id,
+            'product_variant_id' => $variant->id,
+            'qty_on_hand' => 12,
         ]);
     }
 }

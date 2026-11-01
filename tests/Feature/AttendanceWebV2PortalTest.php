@@ -828,4 +828,55 @@ class AttendanceWebV2PortalTest extends TestCase
         $response->assertSee('Rekonsiliasi Kas Laci');
         $response->assertSee('Buka Kasir Penjualan Shift');
     }
+
+    public function test_mock_time_can_simulate_shift_1_presensi(): void
+    {
+        // Pastikan master shift-1 (01:00 - 07:00) ada
+        $shift1 = Shift::firstOrCreate(
+            ['code' => 'SHIFT-1'],
+            [
+                'name' => 'Shift 1 (Dini Hari)',
+                'start_time' => '01:00:00',
+                'end_time' => '07:00:00',
+                'is_overnight' => false,
+                'grace_period_minutes' => 15,
+                'is_active' => true,
+            ]
+        );
+
+        // 1. Kunjungi /presensi2/scan dengan ?mock_time=shift1
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.scan', ['mock_time' => 'shift1']));
+
+        $response->assertOk();
+        $this->assertEquals(today()->toDateString().' 01:05:00', session('presensi2_mock_time'));
+
+        // 2. Lakukan Clock In via API (otomatis terikat ke Shift 1 & waktu mock)
+        $clockInResponse = $this->withSession([
+            'presensi2_employee_id' => $this->employee->id,
+            'presensi2_mock_time' => session('presensi2_mock_time'),
+        ])->postJson(route('presensi2.clock-in'), []);
+
+        $clockInResponse->assertOk();
+        $clockInResponse->assertJson([
+            'success' => true,
+            'status' => 'present',
+        ]);
+
+        $this->assertDatabaseHas('attendance_records', [
+            'employee_id' => $this->employee->id,
+            'shift_id' => $shift1->id,
+            'status' => 'present',
+            'late_minutes' => 0,
+        ]);
+
+        // 3. Reset mock time
+        $resetResponse = $this->withSession([
+            'presensi2_employee_id' => $this->employee->id,
+            'presensi2_mock_time' => session('presensi2_mock_time'),
+        ])->get(route('presensi2.scan', ['mock_time' => 'reset']));
+
+        $resetResponse->assertOk();
+        $this->assertNull(session('presensi2_mock_time'));
+    }
 }

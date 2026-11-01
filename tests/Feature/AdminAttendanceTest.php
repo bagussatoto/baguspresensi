@@ -76,7 +76,7 @@ class AdminAttendanceTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertSee('Maya Graha Kencana');
-        $response->assertSee('Monitoring Presensi Karyawan');
+        $response->assertSee('Presensi Harian (SoT)');
         $response->assertSee('Operator Test');
         $response->assertSee('Maya Graha Pusat');
     }

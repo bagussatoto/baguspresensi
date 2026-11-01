@@ -177,18 +177,18 @@
                     <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(99, 102, 241, 0.15); color: #818cf8; display: flex; align-items: center; justify-content: center; font-size: 22px;">
                         📊
                     </div>
-                    <span class="badge-status badge-emerald">Audit Kasir</span>
+                    <span class="badge-status badge-emerald">Laba Kotor: {{ $profitAnalytics['overall']['margin'] ?? 0 }}%</span>
                 </div>
                 <h3 style="font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 6px;">
-                    4. Laporan Rekapitulasi
+                    4. Laporan Rekapitulasi & Laba Kotor
                 </h3>
                 <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 16px;">
-                    Rekapitulasi pendapatan harian, penjualan makanan & minuman kasir, billing warnet per shift, dan audit uang tunai fisik laci kasir.
+                    Analisis laba kotor F&B, pemakaian counter printer Canon USB, billing warnet per shift, dan audit uang tunai fisik laci kasir.
                 </p>
                 <div style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px;">
-                    <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; color: #cbd5e1;">💰 Omset Hari Ini</span>
-                    <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; color: #cbd5e1;">🖨️ Cetak / PDF</span>
-                    <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; color: #cbd5e1;">💵 Kas Laci</span>
+                    <span style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 700; padding: 3px 8px; border-radius: 6px;">📈 Laba Rp {{ number_format($profitAnalytics['overall']['gross_profit'] ?? 0, 0, ',', '.') }}</span>
+                    <span style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-weight: 700; padding: 3px 8px; border-radius: 6px;">🖨️ {{ $profitAnalytics['print']['total_pages'] ?? 0 }} Lbr Print</span>
+                    <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; color: #cbd5e1;">💵 Audit Kasir</span>
                 </div>
             </div>
             <div style="padding: 14px 22px; background: rgba(15, 23, 42, 0.4); border-top: 1px solid var(--border-glass);">

@@ -16,6 +16,7 @@ class CafeSale extends Model
         'invoice_number',
         'branch_id',
         'employee_id',
+        'customer_id',
         'customer_name',
         'pc_station_id',
         'total_billing',
@@ -58,6 +59,11 @@ class CafeSale extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class, 'employee_id');
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'customer_id');
     }
 
     public function voidBy(): BelongsTo

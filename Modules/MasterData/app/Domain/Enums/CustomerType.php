@@ -10,6 +10,7 @@ enum CustomerType: string
     case GROSIR = 'grosir';
     case RESELLER = 'reseller';
     case PROYEK = 'proyek';
+    case MEMBER = 'member';
 
     public function label(): string
     {
@@ -18,6 +19,7 @@ enum CustomerType: string
             self::GROSIR => 'Grosir / Distributor',
             self::RESELLER => 'Reseller',
             self::PROYEK => 'Proyek / B2B Tender',
+            self::MEMBER => 'Member / Langganan Tetap',
         };
     }
 }

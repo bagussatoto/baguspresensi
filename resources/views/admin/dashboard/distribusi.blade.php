@@ -13,7 +13,10 @@
                 <span class="section-subtitle">Daftar Pengiriman Stok dari Gudang Pusat & Permintaan Restock dari Kasir</span>
             </div>
         </div>
-        <div style="display: flex; gap: 10px; align-items: center;">
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="btn-action-sm" onclick="openSupplyModal()" style="background: linear-gradient(135deg, #0284c7, #38bdf8); color: #fff; font-weight: 700; padding: 8px 16px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4); border: none; cursor: pointer;">
+                <span style="font-size: 15px;">➕</span> Input Supply Stok Baru
+            </button>
             <span class="badge-status {{ $stockTransfersCount > 0 ? 'badge-amber' : 'badge-emerald' }}">
                 {{ $stockTransfersCount }} Batch Menunggu Penerimaan
             </span>
@@ -142,6 +145,7 @@
                             <th>Staff Pemohon</th>
                             <th>Urgensi</th>
                             <th>Status Permintaan</th>
+                            <th style="text-align: right;">Aksi Pemenuhan</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -149,7 +153,12 @@
                         <tr>
                             <td style="font-family: monospace; color: #38bdf8;">{{ $req->request_number }}</td>
                             <td><span class="badge-status badge-sky">{{ strtoupper($req->item_category) }}</span></td>
-                            <td style="font-weight: 600; color: #fff;">{{ $req->item_name }}</td>
+                            <td style="font-weight: 600; color: #fff;">
+                                {{ $req->item_name }}
+                                @if(!empty($req->notes))
+                                    <div style="font-size: 10.5px; color: var(--text-muted); margin-top: 2px;">💬 {{ $req->notes }}</div>
+                                @endif
+                            </td>
                             <td style="font-weight: 700; color: #fbbf24; font-family: 'Outfit';">{{ $req->qty_requested }} {{ $req->unit }}</td>
                             <td>{{ $req->employee->name ?? 'Kasir' }}</td>
                             <td>
@@ -162,10 +171,22 @@
                                     {{ ucfirst($req->status) }}
                                 </span>
                             </td>
+                            <td style="text-align: right; white-space: nowrap;">
+                                @if($req->status !== 'fulfilled')
+                                    <form action="{{ route('admin.distribusi.penuhi', $req->id) }}" method="POST" style="display: inline;">
+                                        @csrf
+                                        <button type="submit" class="btn-action-sm btn-action-emerald" onclick="return confirm('Penuhi permintaan restock kasir untuk {{ $req->item_name }} (+{{ $req->qty_requested }} {{ $req->unit }}) dan tambahkan ke stok kasir?')" title="Penuhi Permintaan & Tambahkan ke Stok Kasir">
+                                            <span>⚡</span> Penuhi & Kirim
+                                        </button>
+                                    </form>
+                                @else
+                                    <span style="font-size: 11px; color: #34d399; font-weight: 600;">✓ Telah Dipenuhi</span>
+                                @endif
+                            </td>
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">
+                            <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 24px;">
                                 Tidak ada permohonan permintaan stok yang tertunda.
                             </td>
                         </tr>
@@ -176,4 +197,126 @@
         </div>
     </div>
 </div>
+
+<!-- MODAL INPUT SUPPLY STOK BARU -->
+<div id="modalSupplyStok" class="erp-modal-overlay">
+    <div class="erp-modal-card" style="max-width: 540px;">
+        <div class="erp-modal-header" style="border-top-color: #38bdf8;">
+            <div class="erp-modal-title" style="color: #38bdf8;">
+                <span>🚚</span> Form Input Supply Stok Baru
+            </div>
+            <button type="button" class="erp-modal-close-btn" onclick="closeSupplyModal()">&times;</button>
+        </div>
+        <form action="{{ route('admin.distribusi.kirim') }}" method="POST">
+            @csrf
+            <div class="erp-modal-body" style="display: flex; flex-direction: column; gap: 14px;">
+                <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; padding: 12px; font-size: 12px; color: #94a3b8; line-height: 1.5;">
+                    Catat pengiriman supply barang (kertas HVS, minuman, snack, dll) dari Supplier / Gudang Pusat ke Loker Kasir atau antar lokasi.
+                </div>
+
+                {{-- PILIH PRODUK / VARIAN --}}
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 700; color: #fff; margin-bottom: 6px;">
+                        Pilih Item / Varian Produk <span style="color: #f43f5e;">*</span>
+                    </label>
+                    <select name="product_variant_id" class="form-control" style="width: 100%; background: #0f172a; border: 1px solid var(--border-glass); color: #fff; border-radius: 6px; padding: 9px 12px; font-size: 13px;" required>
+                        <option value="">-- Pilih Produk / Varian --</option>
+                        @foreach($productVariants as $pv)
+                            <option value="{{ $pv->id }}">
+                                {{ $pv->product->name ?? 'Produk' }} — {{ $pv->name }} (SKU: {{ $pv->sku ?? '-' }})
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
+                {{-- GRID DARI GUDANG & TUJUAN GUDANG --}}
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 700; color: #fff; margin-bottom: 6px;">
+                            Dari (Asal Barang) <span style="color: #f43f5e;">*</span>
+                        </label>
+                        <select name="from_warehouse_id" class="form-control" style="width: 100%; background: #0f172a; border: 1px solid var(--border-glass); color: #fff; border-radius: 6px; padding: 9px 12px; font-size: 12.5px;" required>
+                            @foreach($warehouses as $wh)
+                                <option value="{{ $wh->id }}" {{ str_contains(strtolower($wh->name), 'pusat') ? 'selected' : '' }}>
+                                    {{ $wh->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div>
+                        <label style="display: block; font-size: 12px; font-weight: 700; color: #fff; margin-bottom: 6px;">
+                            Ke (Tujuan Supply) <span style="color: #f43f5e;">*</span>
+                        </label>
+                        <select name="to_warehouse_id" class="form-control" style="width: 100%; background: #0f172a; border: 1px solid var(--border-glass); color: #fff; border-radius: 6px; padding: 9px 12px; font-size: 12.5px;" required>
+                            @foreach($warehouses as $wh)
+                                <option value="{{ $wh->id }}" {{ str_contains(strtolower($wh->name), 'kasir') ? 'selected' : '' }}>
+                                    {{ $wh->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+
+                {{-- JUMLAH (QTY) & SHORTCUT --}}
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 700; color: #fff; margin-bottom: 6px;">
+                        Jumlah Kuantitas (Qty Unit / Pcs / Lembar) <span style="color: #f43f5e;">*</span>
+                    </label>
+                    <input type="number" id="supplyQtyInput" name="qty" class="form-control" style="width: 100%; background: #0f172a; border: 1px solid var(--border-glass); color: #fff; border-radius: 6px; padding: 9px 12px; font-size: 15px; font-weight: 700; font-family: 'Outfit';" min="1" value="10" required>
+                    
+                    {{-- TOMBOL CEPAT --}}
+                    <div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;">
+                        <button type="button" onclick="setSupplyQty(1)" class="btn-action-sm" style="background: rgba(255,255,255,0.06); color: #94a3b8; font-size: 11px;">1 Unit</button>
+                        <button type="button" onclick="setSupplyQty(10)" class="btn-action-sm" style="background: rgba(255,255,255,0.06); color: #94a3b8; font-size: 11px;">+10 Pcs</button>
+                        <button type="button" onclick="setSupplyQty(24)" class="btn-action-sm" style="background: rgba(255,255,255,0.06); color: #94a3b8; font-size: 11px;">+24 Pcs (1 Dus)</button>
+                        <button type="button" onclick="setSupplyQty(500)" class="btn-action-sm" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-size: 11px; font-weight: 700;">+500 Lbr (1 Rim)</button>
+                        <button type="button" onclick="setSupplyQty(2500)" class="btn-action-sm" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-size: 11px; font-weight: 700;">+2.500 Lbr (1 Box/5 Rim)</button>
+                    </div>
+                </div>
+
+                {{-- STATUS PENERIMAAN --}}
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 700; color: #fff; margin-bottom: 6px;">
+                        Status Pengiriman <span style="color: #f43f5e;">*</span>
+                    </label>
+                    <select name="status" class="form-control" style="width: 100%; background: #0f172a; border: 1px solid var(--border-glass); color: #fff; border-radius: 6px; padding: 9px 12px; font-size: 12.5px;" required>
+                        <option value="received" selected>✅ Langsung Diterima di Kasir (Stok Bertambah Otomatis Sekarang)</option>
+                        <option value="in_transit">🚚 Dalam Pengiriman (Surat Jalan Aktif, Perlu Konfirmasi Terima)</option>
+                    </select>
+                </div>
+
+                {{-- CATATAN / NO NOTA --}}
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 700; color: #fff; margin-bottom: 6px;">
+                        Catatan Pengiriman / No. Surat Jalan / Supplier (Opsional)
+                    </label>
+                    <input type="text" name="operator_notes" class="form-control" style="width: 100%; background: #0f172a; border: 1px solid var(--border-glass); color: #fff; border-radius: 6px; padding: 9px 12px; font-size: 12.5px;" placeholder="Contoh: Beli dari Toko Buku Surya / Restock awal pekan">
+                </div>
+            </div>
+
+            <div class="erp-modal-footer">
+                <button type="button" class="erp-modal-btn" style="background: #1e293b; color: #94a3b8;" onclick="closeSupplyModal()">Batal</button>
+                <button type="submit" class="erp-modal-btn" style="background: linear-gradient(135deg, #0284c7, #38bdf8); color: #fff; font-weight: 700;">
+                    Simpan & Kirim Supply Stok
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openSupplyModal() {
+        const modal = document.getElementById('modalSupplyStok');
+        if (modal) modal.classList.add('active');
+    }
+    function closeSupplyModal() {
+        const modal = document.getElementById('modalSupplyStok');
+        if (modal) modal.classList.remove('active');
+    }
+    function setSupplyQty(amount) {
+        const input = document.getElementById('supplyQtyInput');
+        if (input) input.value = amount;
+    }
+</script>
 @endsection

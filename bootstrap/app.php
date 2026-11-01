@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnforceAuditorReadOnly;
+use App\Http\Middleware\MockTimeMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -16,6 +17,16 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'auditor.readonly' => EnforceAuditorReadOnly::class,
+        ]);
+        $middleware->validateCsrfTokens(except: [
+            'presensi2/clock-in',
+            'presensi2/clock-out',
+            'presensi2/sync-offline',
+            'bagus/presensi2/clock-in',
+            'bagus/presensi2/clock-out',
+        ]);
+        $middleware->web(append: [
+            MockTimeMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

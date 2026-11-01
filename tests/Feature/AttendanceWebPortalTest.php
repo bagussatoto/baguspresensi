@@ -71,12 +71,34 @@ class AttendanceWebPortalTest extends TestCase
         $response = $this->get(route('presensi.login'));
         $response->assertStatus(200);
         $response->assertSee('Presensi Karyawan');
+        $response->assertSee('Password atau PIN 6-Digit');
 
+        // Pertama kali login memberikan password untuk akun baru
         $loginResponse = $this->post(route('presensi.login.post'), [
             'employee_name' => $this->employee->name,
+            'credential' => 'rahasia123',
         ]);
 
         $loginResponse->assertRedirect(route('presensi.index'));
+        $this->assertEquals($this->employee->id, session('presensi_employee_id'));
+
+        // Logout
+        $this->post(route('presensi.logout'));
+
+        // Coba login lagi dengan password salah -> gagal
+        $failResponse = $this->from(route('presensi.login'))->post(route('presensi.login.post'), [
+            'employee_name' => $this->employee->name,
+            'credential' => 'passwordsalah',
+        ]);
+        $failResponse->assertRedirect(route('presensi.login'));
+        $failResponse->assertSessionHas('error');
+
+        // Login lagi dengan password benar -> berhasil
+        $successResponse = $this->post(route('presensi.login.post'), [
+            'employee_name' => $this->employee->name,
+            'credential' => 'rahasia123',
+        ]);
+        $successResponse->assertRedirect(route('presensi.index'));
         $this->assertEquals($this->employee->id, session('presensi_employee_id'));
     }
 
@@ -177,8 +199,29 @@ class AttendanceWebPortalTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_unauthenticated_user_cannot_access_or_submit_leave(): void
+    {
+        $getResponse = $this->get(route('presensi.izin'));
+        $getResponse->assertRedirect(route('presensi.login'));
+        $getResponse->assertSessionHas('error');
+
+        $postResponse = $this->post(route('presensi.izin.submit'), [
+            'leave_type' => LeaveType::Sick->value,
+            'start_date' => '2026-10-15',
+            'end_date' => '2026-10-16',
+            'reason' => 'Demam flu',
+        ]);
+        $postResponse->assertRedirect(route('presensi.login'));
+    }
+
     public function test_employee_can_submit_leave_and_view_history(): void
     {
+        $viewResponse = $this->withSession(['presensi_employee_id' => $this->employee->id])
+            ->get(route('presensi.izin'));
+        $viewResponse->assertStatus(200);
+        $viewResponse->assertSee('Permohonan Izin & Cuti', false);
+        $viewResponse->assertSee('Formulir Pengajuan Baru');
+
         $response = $this->withSession(['presensi_employee_id' => $this->employee->id])
             ->post(route('presensi.izin.submit'), [
                 'leave_type' => LeaveType::Sick->value,
@@ -195,6 +238,12 @@ class AttendanceWebPortalTest extends TestCase
             'leave_type' => 'sick',
             'total_days' => 2,
         ]);
+
+        $viewWithHistory = $this->withSession(['presensi_employee_id' => $this->employee->id])
+            ->get(route('presensi.izin'));
+        $viewWithHistory->assertStatus(200);
+        $viewWithHistory->assertSee('Demam dan flu perlu istirahat dokter');
+        $viewWithHistory->assertSee('Menunggu');
 
         $historyResponse = $this->withSession(['presensi_employee_id' => $this->employee->id])
             ->get(route('presensi.riwayat'));

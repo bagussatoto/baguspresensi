@@ -6,6 +6,7 @@ namespace Modules\MasterData\Domain\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\MasterData\Domain\Enums\CustomerType;
 use Modules\MasterData\Domain\Enums\TaxIdType;
 
@@ -41,6 +42,11 @@ class Customer extends Model
     public function pricelist(): BelongsTo
     {
         return $this->belongsTo(Pricelist::class, 'pricelist_id');
+    }
+
+    public function cafeSales(): HasMany
+    {
+        return $this->hasMany(CafeSale::class, 'customer_id');
     }
 
     /**

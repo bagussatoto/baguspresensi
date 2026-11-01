@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Modules\MasterData\Domain\Enums\CustomerType;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\CafeSale;
+use Modules\MasterData\Domain\Models\Customer;
 use Modules\MasterData\Domain\Models\Employee;
 use Modules\MasterData\Domain\Models\PcStation;
 use Tests\TestCase;
@@ -223,5 +225,37 @@ class AdminSaleTest extends TestCase
         $this->assertDatabaseMissing('cafe_sales', [
             'id' => $sale->id,
         ]);
+    }
+
+    public function test_admin_can_filter_sales_by_registered_customer_code_or_name(): void
+    {
+        $customer = Customer::create([
+            'code' => 'CUST-VIP-077',
+            'name' => 'Ahmad VIP Member',
+            'customer_type' => CustomerType::MEMBER,
+            'is_active' => true,
+        ]);
+
+        $sale = CafeSale::create([
+            'invoice_number' => 'INV-CUST-077',
+            'branch_id' => $this->branch->id,
+            'employee_id' => $this->employee->id,
+            'customer_id' => $customer->id,
+            'customer_name' => $customer->name,
+            'gross_amount' => 50000,
+            'net_amount' => 50000,
+            'payment_method' => 'cash',
+            'payment_status' => 'paid',
+        ]);
+
+        $response = $this->getJson(route('admin.penjualan', ['q' => 'CUST-VIP-077']));
+
+        $response->assertOk();
+        $response->assertJson([
+            'success' => true,
+        ]);
+        $this->assertCount(1, $response->json('sales'));
+        $this->assertEquals('INV-CUST-077', $response->json('sales.0.invoice_number'));
+        $this->assertEquals($customer->id, $response->json('sales.0.customer_id'));
     }
 }

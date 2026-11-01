@@ -36,6 +36,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\View\View;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\Employee;
@@ -85,7 +87,7 @@ class AttendanceWebController extends Controller
     }
 
     /**
-     * Proses Login Karyawan Mandiri.
+     * Proses Login Karyawan Mandiri dengan Verifikasi Password/PIN.
      */
     public function login(Request $request): RedirectResponse
     {
@@ -110,9 +112,73 @@ class AttendanceWebController extends Controller
             return back()->withInput()->with('error', 'Data karyawan tidak ditemukan atau tidak aktif.');
         }
 
+        $credential = trim((string) ($request->input('password') ?: $request->input('credential') ?: ''));
+
+        // Proteksi Brute-Force Rate Limiting
+        $throttleKey = 'presensi_login:emp_'.$employee->id.'|'.$request->ip();
+        if (RateLimiter::tooManyAttempts($throttleKey, 3)) {
+            $seconds = RateLimiter::availableIn($throttleKey);
+            $minutes = (int) ceil($seconds / 60);
+
+            return back()->withInput()->with('error', "Terlalu banyak percobaan login gagal. Demi keamanan akun, akses dikunci selama {$seconds} detik (~{$minutes} menit).");
+        }
+
+        // Verifikasi Kredensial Password atau PIN
+        if (! empty($employee->password) || ! empty($employee->pin)) {
+            if ($credential === '' || ! $this->verifyEmployeeCredential($employee, $credential)) {
+                RateLimiter::hit($throttleKey, 60);
+                $remaining = RateLimiter::remaining($throttleKey, 3);
+                $msg = $remaining > 0
+                    ? "Password atau PIN yang Anda masukkan salah. Sisa kesempatan: {$remaining} kali."
+                    : 'Password atau PIN salah 3 kali berturut-turut. Akses akun dikunci selama 1 menit demi keamanan.';
+
+                return back()->withInput()->with('error', $msg);
+            }
+        } else {
+            // Jika akun karyawan belum memiliki password/PIN, otomatis tetapkan kredensial pertama yang dimasukkan
+            if ($credential !== '') {
+                $employee->update(['password' => Hash::make($credential)]);
+            }
+        }
+
+        RateLimiter::clear($throttleKey);
+
         session(['presensi_employee_id' => $employee->id]);
 
         return redirect()->route('presensi.index')->with('success', 'Selamat datang, '.$employee->name.'!');
+    }
+
+    /**
+     * Verifikasi Kredensial Karyawan (Password atau PIN).
+     */
+    public function verifyEmployeeCredential(Employee $employee, string $credential): bool
+    {
+        $credential = trim($credential);
+        if ($credential === '') {
+            return false;
+        }
+
+        $passwordValid = false;
+        if (! empty($employee->password)) {
+            if ($employee->password === $credential || Hash::check($credential, $employee->password)) {
+                $passwordValid = true;
+                if ($employee->password === $credential) {
+                    $employee->update(['password' => Hash::make($credential)]);
+                }
+            }
+        }
+
+        $pinValid = false;
+        if (! empty($employee->pin)) {
+            if ($employee->pin === $credential || Hash::check($credential, $employee->pin)) {
+                $pinValid = true;
+                if ($employee->pin === $credential) {
+                    $employee->update(['pin' => Hash::make($credential)]);
+                }
+            }
+        }
+
+        return $passwordValid || $pinValid;
     }
 
     /**
@@ -133,7 +199,7 @@ class AttendanceWebController extends Controller
     {
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
-            return redirect()->route('presensi.login');
+            return redirect()->route('presensi.login')->with('error', 'Sesi Anda telah berakhir. Silakan login kembali.');
         }
 
         $today = Carbon::today();
@@ -191,7 +257,7 @@ class AttendanceWebController extends Controller
     {
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
-            return redirect()->route('presensi.login');
+            return redirect()->route('presensi.login')->with('error', 'Sesi Anda telah berakhir. Silakan login kembali.');
         }
 
         $now = Carbon::now();
@@ -455,10 +521,11 @@ class AttendanceWebController extends Controller
     {
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
-            return redirect()->route('presensi.login');
+            return redirect()->route('presensi.login')->with('error', 'Silakan login terlebih dahulu untuk mengakses menu pengajuan izin & cuti.');
         }
 
-        $leaveRequests = LeaveRequest::where('employee_id', $employee->id)
+        $leaveRequests = LeaveRequest::with('approver')
+            ->where('employee_id', $employee->id)
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -478,7 +545,7 @@ class AttendanceWebController extends Controller
     {
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
-            return redirect()->route('presensi.login');
+            return redirect()->route('presensi.login')->with('error', 'Sesi Anda telah berakhir. Silakan login kembali.');
         }
 
         $request->validate([
@@ -528,7 +595,7 @@ class AttendanceWebController extends Controller
     {
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
-            return redirect()->route('presensi.login');
+            return redirect()->route('presensi.login')->with('error', 'Sesi Anda telah berakhir. Silakan login kembali.');
         }
 
         $month = (int) $request->input('month', Carbon::now()->month);
@@ -567,7 +634,7 @@ class AttendanceWebController extends Controller
     {
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
-            return redirect()->route('presensi.login');
+            return redirect()->route('presensi.login')->with('error', 'Sesi Anda telah berakhir. Silakan login kembali.');
         }
 
         return view('presensi.profile', [
@@ -582,7 +649,7 @@ class AttendanceWebController extends Controller
     {
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
-            return redirect()->route('presensi.login');
+            return redirect()->route('presensi.login')->with('error', 'Sesi Anda telah berakhir. Silakan login kembali.');
         }
 
         $corrections = AttendanceCorrection::with(['shift', 'approver', 'attendanceRecord'])
@@ -610,7 +677,7 @@ class AttendanceWebController extends Controller
     {
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
-            return redirect()->route('presensi.login');
+            return redirect()->route('presensi.login')->with('error', 'Sesi Anda telah berakhir. Silakan login kembali.');
         }
 
         $request->validate([
@@ -675,7 +742,7 @@ class AttendanceWebController extends Controller
     {
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
-            return redirect()->route('presensi.login');
+            return redirect()->route('presensi.login')->with('error', 'Sesi Anda telah berakhir. Silakan login kembali.');
         }
 
         // Rekan kerja satu cabang (aktif, selain diri sendiri)
@@ -716,7 +783,7 @@ class AttendanceWebController extends Controller
     {
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
-            return redirect()->route('presensi.login');
+            return redirect()->route('presensi.login')->with('error', 'Sesi Anda telah berakhir. Silakan login kembali.');
         }
 
         $request->validate([
@@ -755,7 +822,7 @@ class AttendanceWebController extends Controller
     ): RedirectResponse {
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
-            return redirect()->route('presensi.login');
+            return redirect()->route('presensi.login')->with('error', 'Sesi Anda telah berakhir. Silakan login kembali.');
         }
 
         $request->validate([
@@ -788,7 +855,7 @@ class AttendanceWebController extends Controller
     {
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
-            return redirect()->route('presensi.login');
+            return redirect()->route('presensi.login')->with('error', 'Sesi Anda telah berakhir. Silakan login kembali.');
         }
 
         if ($swap->requester_id !== $employee->id) {

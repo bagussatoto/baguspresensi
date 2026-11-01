@@ -11,6 +11,7 @@ use App\Models\ShiftStockRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\CafePayment;
@@ -34,21 +35,26 @@ class AdminSaleController extends Controller
      */
     public function index(Request $request): View|JsonResponse
     {
-        $query = CafeSale::with(['employee', 'pcStation', 'branch', 'items.variant.product', 'payments'])
+        $query = CafeSale::with(['employee', 'pcStation', 'branch', 'items.variant.product', 'payments', 'customer'])
             ->orderBy('created_at', 'desc')
             ->orderBy('id', 'desc');
 
         if ($request->filled('q')) {
             $search = trim((string) $request->input('q'));
-            $query->where(function ($q) use ($search): void {
-                $q->where('invoice_number', 'ilike', "%{$search}%")
-                    ->orWhere('customer_name', 'ilike', "%{$search}%")
-                    ->orWhere('payment_reference', 'ilike', "%{$search}%")
-                    ->orWhereHas('employee', function ($eq) use ($search): void {
-                        $eq->where('name', 'ilike', "%{$search}%");
+            $like = DB::connection()->getDriverName() === 'pgsql' ? 'ilike' : 'like';
+            $query->where(function ($q) use ($search, $like): void {
+                $q->where('invoice_number', $like, "%{$search}%")
+                    ->orWhere('customer_name', $like, "%{$search}%")
+                    ->orWhere('payment_reference', $like, "%{$search}%")
+                    ->orWhereHas('employee', function ($eq) use ($search, $like): void {
+                        $eq->where('name', $like, "%{$search}%");
                     })
-                    ->orWhereHas('items', function ($iq) use ($search): void {
-                        $iq->where('item_name', 'ilike', "%{$search}%");
+                    ->orWhereHas('customer', function ($cq) use ($search, $like): void {
+                        $cq->where('name', $like, "%{$search}%")
+                            ->orWhere('code', $like, "%{$search}%");
+                    })
+                    ->orWhereHas('items', function ($iq) use ($search, $like): void {
+                        $iq->where('item_name', $like, "%{$search}%");
                     });
             });
         }

@@ -307,20 +307,42 @@
                         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-top: auto;">
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                                 <div>
-                                    <label style="font-size: 11px; font-weight: 600; color: #475569; display: block; margin-bottom: 4px;">Pelanggan / Unit PC:</label>
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                        <label style="font-size: 11px; font-weight: 600; color: #475569;">Pelanggan / Member / PC:</label>
+                                        <span id="pos-member-badge" style="display: none; font-size: 10px; font-weight: 700; background: #e0e7ff; color: #4338ca; padding: 1px 6px; border-radius: 3px; border: 1px solid #c7d2fe;">
+                                            ⭐ Member
+                                        </span>
+                                    </div>
                                     <div style="display: flex; gap: 4px;">
-                                        <select id="pos-pc-quick-select" onchange="selectPcTarget(this.value)" style="width: 92px; padding: 6px 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11.5px; color: #0284c7; font-weight: 700; background: #e0f2fe; cursor: pointer;">
+                                        <select id="pos-pc-quick-select" onchange="selectTargetCustomerOrPc(this.value)" style="width: 100px; padding: 6px 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11.5px; color: #0284c7; font-weight: 700; background: #e0f2fe; cursor: pointer;">
                                             <option value="Pelanggan Umum">Umum</option>
-                                            @forelse($pcStations as $st)
-                                                <option value="{{ $st->station_code }}">{{ $st->station_code }}</option>
-                                            @empty
-                                                @for($i = 1; $i <= 10; $i++)
-                                                    @php $pcCode = 'PC-' . str_pad($i, 2, '0', STR_PAD_LEFT); @endphp
-                                                    <option value="{{ $pcCode }}">{{ $pcCode }}</option>
-                                                @endfor
-                                            @endforelse
+                                            @if(isset($customers) && $customers->count() > 0)
+                                                <optgroup label="⭐ Member / CRM">
+                                                    @foreach($customers as $c)
+                                                        <option value="CUST:{{ $c->id }}:{{ $c->name }}:{{ $c->customer_type?->label() ?? 'Member' }}">{{ $c->name }} ({{ $c->code }})</option>
+                                                    @endforeach
+                                                </optgroup>
+                                            @endif
+                                            <optgroup label="🖥️ Unit PC">
+                                                @forelse($pcStations as $st)
+                                                    <option value="{{ $st->station_code }}">{{ $st->station_code }}</option>
+                                                @empty
+                                                    @for($i = 1; $i <= 10; $i++)
+                                                        @php $pcCode = 'PC-' . str_pad($i, 2, '0', STR_PAD_LEFT); @endphp
+                                                        <option value="{{ $pcCode }}">{{ $pcCode }}</option>
+                                                    @endfor
+                                                @endforelse
+                                            </optgroup>
                                         </select>
-                                        <input type="text" id="pos-customer-input" value="Pelanggan Umum" placeholder="Nama / PC..." style="flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; color: #0f172a; background: #ffffff;">
+                                        <input type="text" id="pos-customer-input" list="registered-customers-datalist" oninput="onCustomerInputChanged(this.value)" value="Pelanggan Umum" placeholder="Nama / PC..." style="flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; color: #0f172a; background: #ffffff;">
+                                        <input type="hidden" id="pos-customer-id" value="">
+                                        <datalist id="registered-customers-datalist">
+                                            @if(isset($customers))
+                                                @foreach($customers as $c)
+                                                    <option value="{{ $c->name }}" data-id="{{ $c->id }}" data-type="{{ $c->customer_type?->label() ?? 'Member' }}">{{ $c->code }} - {{ $c->name }} ({{ $c->customer_type?->label() ?? 'Member' }})</option>
+                                                @endforeach
+                                            @endif
+                                        </datalist>
                                     </div>
                                 </div>
                                 <div>
@@ -469,7 +491,12 @@
                                     @endforeach
                                 </td>
                                 <td style="padding: 9px 10px; color: #475569;">
-                                    {{ $sale->customer_name }}
+                                    <div style="font-weight: {{ $sale->customer_id ? '700' : '500' }}; color: {{ $sale->customer_id ? '#1e293b' : '#475569' }};">{{ $sale->customer_name }}</div>
+                                    @if($sale->customer)
+                                        <span class="badge" style="background: #e0e7ff; color: #4338ca; border: 1px solid #c7d2fe; font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: 600;">
+                                            ⭐ {{ $sale->customer->customer_type?->label() ?? 'Member' }}
+                                        </span>
+                                    @endif
                                 </td>
                                 <td style="padding: 9px 10px; text-align: right; font-weight: 700; color: {{ $isCancelled ? '#94a3b8' : '#059669' }};">
                                     <span style="{{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
@@ -1262,12 +1289,55 @@
         }
     }
 
-    function selectPcTarget(val) {
+    const registeredCustomers = @json($customers ?? []);
+
+    function selectTargetCustomerOrPc(val) {
         const input = document.getElementById('pos-customer-input');
-        if (input) input.value = val;
-        const quickSelect = document.getElementById('pos-pc-quick-select');
-        if (quickSelect && quickSelect.value !== val) {
-            quickSelect.value = val;
+        const hiddenId = document.getElementById('pos-customer-id');
+        const badge = document.getElementById('pos-member-badge');
+
+        if (val && val.startsWith('CUST:')) {
+            const parts = val.split(':');
+            const custId = parts[1];
+            const custName = parts[2];
+            const custType = parts[3] || 'Member';
+
+            if (input) input.value = custName;
+            if (hiddenId) hiddenId.value = custId;
+            if (badge) {
+                badge.innerText = '⭐ ' + custType;
+                badge.style.display = 'inline-block';
+            }
+        } else {
+            if (input) input.value = val;
+            if (hiddenId) hiddenId.value = '';
+            if (badge) badge.style.display = 'none';
+        }
+    }
+
+    function selectPcTarget(val) {
+        selectTargetCustomerOrPc(val);
+    }
+
+    function onCustomerInputChanged(val) {
+        const trimmed = (val || '').trim().toLowerCase();
+        const hiddenId = document.getElementById('pos-customer-id');
+        const badge = document.getElementById('pos-member-badge');
+
+        const matched = registeredCustomers.find(c =>
+            (c.name && c.name.toLowerCase() === trimmed) ||
+            (c.code && c.code.toLowerCase() === trimmed)
+        );
+
+        if (matched) {
+            if (hiddenId) hiddenId.value = matched.id;
+            if (badge) {
+                badge.innerText = '⭐ ' + (matched.customer_type || 'Member');
+                badge.style.display = 'inline-block';
+            }
+        } else {
+            if (hiddenId) hiddenId.value = '';
+            if (badge) badge.style.display = 'none';
         }
     }
 
@@ -2008,12 +2078,14 @@
         }
 
         try {
+            const customerId = document.getElementById('pos-customer-id')?.value || null;
             const payload = {
                 transaction_type: 'fnb',
                 cart_items: cartItems.map(item => ({
                     variant_id: item.id,
                     qty: item.qty
                 })),
+                customer_id: customerId ? parseInt(customerId) : null,
                 customer_name: customerName,
                 payment_method: currentPaymentMethod,
                 amount_paid: cashPaid,
@@ -2107,7 +2179,10 @@
                         </button>
                     </td>
                     <td style="padding: 9px 10px; color: #1e293b;">${itemsHtml}</td>
-                    <td style="padding: 9px 10px; color: #475569;">${saleObj.customer_name}</td>
+                    <td style="padding: 9px 10px; color: #475569;">
+                        <div style="font-weight: ${saleObj.customer ? '700' : '500'}; color: ${saleObj.customer ? '#1e293b' : '#475569'};">${saleObj.customer_name}</div>
+                        ${saleObj.customer ? `<span class="badge" style="background: #e0e7ff; color: #4338ca; border: 1px solid #c7d2fe; font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: 600; margin-top: 2px; display: inline-block;">⭐ ${saleObj.customer.customer_type ? (saleObj.customer.customer_type.label || saleObj.customer.customer_type) : 'Member'}</span>` : ''}
+                    </td>
                     <td style="padding: 9px 10px; text-align: right; font-weight: 700; color: #059669;">
                         Rp ${grandTotal.toLocaleString('id-ID')}
                     </td>
@@ -2134,8 +2209,15 @@
                     countBadge.innerText = parseInt(countBadge.innerText || 0) + 1;
                 }
 
-                // 4. Kosongkan keranjang
+                // 4. Kosongkan keranjang & reset target pelanggan
                 clearCart();
+                document.getElementById('pos-customer-input').value = 'Pelanggan Umum';
+                const posCustId = document.getElementById('pos-customer-id');
+                if (posCustId) posCustId.value = '';
+                const memberBadge = document.getElementById('pos-member-badge');
+                if (memberBadge) memberBadge.style.display = 'none';
+                const quickSelect = document.getElementById('pos-pc-quick-select');
+                if (quickSelect) quickSelect.value = 'Pelanggan Umum';
             } else {
                 showPosToast(data.message || 'Gagal memproses transaksi.', false);
             }
@@ -2165,7 +2247,8 @@
         }
         document.getElementById('modal-inv-time').innerText = createdDate;
         document.getElementById('modal-inv-cashier').innerText = (sale.employee && sale.employee.name) ? sale.employee.name : 'Kasir Shift';
-        document.getElementById('modal-inv-customer').innerText = sale.customer_name || 'Pelanggan Umum';
+        const memberTag = sale.customer ? ` (⭐ ${sale.customer.customer_type ? (sale.customer.customer_type.label || sale.customer.customer_type) : 'Member'})` : '';
+        document.getElementById('modal-inv-customer').innerText = (sale.customer_name || 'Pelanggan Umum') + memberTag;
         document.getElementById('modal-inv-payment').innerText = (sale.payment_method || 'cash').toUpperCase();
         
         const tbody = document.getElementById('modal-inv-items-body');

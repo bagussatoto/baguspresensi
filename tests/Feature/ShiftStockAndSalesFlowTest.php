@@ -16,10 +16,12 @@ use App\Models\ShiftSalesSummary;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Modules\MasterData\Domain\Enums\CustomerType;
 use Modules\MasterData\Domain\Enums\EmployeeRole;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\CafeSale;
 use Modules\MasterData\Domain\Models\Category;
+use Modules\MasterData\Domain\Models\Customer;
 use Modules\MasterData\Domain\Models\Employee;
 use Modules\MasterData\Domain\Models\PcStation;
 use Modules\MasterData\Domain\Models\Product;
@@ -251,6 +253,8 @@ class ShiftStockAndSalesFlowTest extends TestCase
         $response->assertSee('Shift Sebelumnya');
         $response->assertSee('6. Selesai');
         $response->assertSee('Lanjut ke Halaman Penjualan');
+        $response->assertSee('Restock');
+        $response->assertSee('modal-quick-restock');
     }
 
     public function test_submitting_stok_checklist_fails_if_checklist_incomplete(): void
@@ -461,6 +465,72 @@ class ShiftStockAndSalesFlowTest extends TestCase
         $this->assertEquals($initialStock - 2, $newStock);
     }
 
+    public function test_can_record_fnb_sale_with_registered_customer_member(): void
+    {
+        $this->clockInStaff();
+
+        $customer = Customer::create([
+            'code' => 'CUST-MBR-001',
+            'name' => 'Budi Member Setia',
+            'customer_type' => CustomerType::MEMBER,
+            'phone' => '081234567890',
+            'is_active' => true,
+        ]);
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.penjualan.transaksi'), [
+                'transaction_type' => 'fnb',
+                'cart_items' => [
+                    [
+                        'variant_id' => $this->variantKopi->id,
+                        'qty' => 1,
+                    ],
+                ],
+                'customer_id' => $customer->id,
+                'customer_name' => $customer->name,
+                'payment_method' => 'cash',
+                'amount_paid' => 12000,
+            ]);
+
+        $response->assertOk();
+        $response->assertJson([
+            'success' => true,
+            'sale' => [
+                'customer_id' => $customer->id,
+                'customer_name' => 'Budi Member Setia',
+            ],
+        ]);
+
+        $this->assertDatabaseHas('cafe_sales', [
+            'employee_id' => $this->employee->id,
+            'customer_id' => $customer->id,
+            'customer_name' => 'Budi Member Setia',
+            'total_fnb' => 12000.00,
+            'payment_status' => 'paid',
+        ]);
+    }
+
+    public function test_penjualan_page_renders_registered_customers_in_datalist(): void
+    {
+        $this->clockInStaff();
+
+        $customer = Customer::create([
+            'code' => 'CUST-MBR-002',
+            'name' => 'Siti Langganan Kafe',
+            'customer_type' => CustomerType::MEMBER,
+            'phone' => '08987654321',
+            'is_active' => true,
+        ]);
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.penjualan'));
+
+        $response->assertOk();
+        $response->assertSee('Siti Langganan Kafe');
+        $response->assertSee('CUST-MBR-002');
+        $response->assertSee('registered-customers-datalist');
+    }
+
     public function test_can_record_fnb_sale_with_exact_cash_when_amount_paid_omitted(): void
     {
         $this->clockInStaff();
@@ -536,6 +606,37 @@ class ShiftStockAndSalesFlowTest extends TestCase
             'item_name' => 'Kertas HVS A4 70gsm',
             'qty_requested' => 5,
             'status' => 'pending',
+        ]);
+    }
+
+    public function test_quick_restock_via_ajax_endpoint_returns_json_and_records_shift_stock_request(): void
+    {
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.penjualan.permintaan-stok'), [
+                'item_category' => 'minuman',
+                'item_name' => 'Kopi Kapal Api Panas',
+                'qty_requested' => 2,
+                'unit' => 'Dus',
+                'urgency' => 'high',
+                'notes' => 'Permintaan cepat dari halaman stok',
+            ]);
+
+        $response->assertOk();
+        $response->assertJson([
+            'success' => true,
+            'request' => [
+                'item_name' => 'Kopi Kapal Api Panas',
+                'qty_requested' => 2,
+                'urgency' => 'high',
+            ],
+        ]);
+
+        $this->assertDatabaseHas('shift_stock_requests', [
+            'employee_id' => $this->employee->id,
+            'item_category' => 'minuman',
+            'item_name' => 'Kopi Kapal Api Panas',
+            'qty_requested' => 2,
+            'urgency' => 'high',
         ]);
     }
 

@@ -61,8 +61,18 @@ class EmployeeAuthTest extends TestCase
 
     public function test_employee_can_login_via_post(): void
     {
+        // 1. Gagal jika tanpa password atau password salah
+        $failResponse = $this->from(route('presensi.login'))->post(route('presensi.login.post'), [
+            'employee_id' => $this->employee->id,
+            'credential' => 'wrongpassword',
+        ]);
+        $failResponse->assertRedirect(route('presensi.login'));
+        $this->assertNull(session('presensi_employee_id'));
+
+        // 2. Berhasil login dengan password yang benar
         $response = $this->post(route('presensi.login.post'), [
             'employee_id' => $this->employee->id,
+            'credential' => 'password123',
         ]);
 
         $response->assertRedirect(route('presensi.index'));

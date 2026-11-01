@@ -187,9 +187,11 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::get('/', [AdminDashboardController::class, 'index'])->name('admin.index');
     Route::get('/data', [AdminDashboardController::class, 'dataIndex'])->name('admin.data');
     Route::get('/distribusi', [AdminDashboardController::class, 'distribusiIndex'])->name('admin.distribusi');
+    Route::post('/distribusi/kirim', [AdminDashboardController::class, 'storeTransfer'])->name('admin.distribusi.kirim');
     Route::get('/stok', [AdminDashboardController::class, 'stokIndex'])->name('admin.stok');
     Route::get('/laporan', [AdminDashboardController::class, 'laporanIndex'])->name('admin.laporan');
     Route::post('/distribusi/{id}/terima', [AdminDashboardController::class, 'receiveTransfer'])->name('admin.distribusi.terima');
+    Route::post('/distribusi/permintaan/{id}/penuhi', [AdminDashboardController::class, 'fulfillStockRequest'])->name('admin.distribusi.penuhi');
     Route::get('/merk', [AdminBrandController::class, 'index'])->name('admin.merk');
     Route::post('/merk', [AdminBrandController::class, 'store'])->name('admin.merk.store');
     Route::put('/merk/{brand}', [AdminBrandController::class, 'update'])->name('admin.merk.update');

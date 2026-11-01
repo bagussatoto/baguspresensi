@@ -43,6 +43,7 @@ use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\CafePayment;
 use Modules\MasterData\Domain\Models\CafeSale;
 use Modules\MasterData\Domain\Models\CafeSaleItem;
+use Modules\MasterData\Domain\Models\Customer;
 use Modules\MasterData\Domain\Models\Employee;
 use Modules\MasterData\Domain\Models\PcStation;
 use Modules\MasterData\Domain\Models\ProductVariant;
@@ -2256,6 +2257,9 @@ class AttendanceWebV2Controller extends Controller
             $paperF4Used = min(10, $paperF4Initial);
         }
 
+        $kertasA4Remaining = max(0, $paperA4Initial - $paperA4Used);
+        $kertasF4Remaining = max(0, $paperF4Initial - $paperF4Used);
+
         $kertas = [
             [
                 'id' => 'kertas-a4',
@@ -2264,8 +2268,10 @@ class AttendanceWebV2Controller extends Controller
                 'sebelumnya' => $paperA4Initial,
                 'terjual' => $paperA4Used,
                 'terpakai' => $paperA4Used,
-                'sesudahnya' => max(0, $paperA4Initial - $paperA4Used),
+                'sesudahnya' => $kertasA4Remaining,
                 'rim_info' => $paperA4StockRim.' Rim di Loker',
+                'rim_stock' => $paperA4StockRim,
+                'is_critical' => ($paperA4StockRim < 3 && $kertasA4Remaining < 100),
                 'keterangan' => 'Print tugas, struk & billing',
             ],
             [
@@ -2275,8 +2281,10 @@ class AttendanceWebV2Controller extends Controller
                 'sebelumnya' => $paperF4Initial,
                 'terjual' => $paperF4Used,
                 'terpakai' => $paperF4Used,
-                'sesudahnya' => max(0, $paperF4Initial - $paperF4Used),
+                'sesudahnya' => $kertasF4Remaining,
                 'rim_info' => $paperF4StockRim.' Rim di Loker',
+                'rim_stock' => $paperF4StockRim,
+                'is_critical' => ($paperF4StockRim < 3 && $kertasF4Remaining < 100),
                 'keterangan' => 'Print dokumen legal & folio',
             ],
         ];
@@ -2298,19 +2306,24 @@ class AttendanceWebV2Controller extends Controller
                     ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId)))
                 ->sum('qty');
 
+            // Cari stok awal dari checklist shift jika pernah tercatat
             $initialQty = null;
             if ($existingChecklist && is_array($existingChecklist->food_items)) {
                 foreach ($existingChecklist->food_items as $fItem) {
                     if (is_array($fItem) && (($fItem['variant_id'] ?? null) == $food->id || ($fItem['name'] ?? null) === $food->name)) {
-                        $initialQty = (int) ($fItem['initial_stock'] ?? $fItem['initial_qty'] ?? null);
+                        $initialQty = isset($fItem['sebelumnya']) ? (int) $fItem['sebelumnya'] : (isset($fItem['initial_stock']) ? (int) $fItem['initial_stock'] : null);
                         break;
                     }
                 }
             }
 
-            if ($initialQty === null) {
+            // Jika tidak ada checklist awal atau stok saat ini bertambah (karena supply), gunakan stok fisik terkini
+            if ($initialQty === null || $currentStock > $initialQty) {
                 $initialQty = $currentStock + $soldToday;
             }
+
+            // Sisa stok saat ini selalu merefleksikan stok fisik aktual di inventaris kasir
+            $makananRemaining = $currentStock;
 
             $makanan[] = [
                 'variant_id' => $food->id,
@@ -2319,8 +2332,9 @@ class AttendanceWebV2Controller extends Controller
                 'unit' => 'pcs',
                 'sebelumnya' => $initialQty,
                 'terjual' => $soldToday,
-                'sesudahnya' => max(0, $initialQty - $soldToday),
+                'sesudahnya' => $makananRemaining,
                 'price' => (float) $food->base_price,
+                'is_critical' => ($makananRemaining <= 5),
             ];
         }
 
@@ -2341,19 +2355,23 @@ class AttendanceWebV2Controller extends Controller
                     ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId)))
                 ->sum('qty');
 
+            // Cari stok awal dari checklist shift jika pernah tercatat
             $initialQty = null;
             if ($existingChecklist && is_array($existingChecklist->drink_items)) {
                 foreach ($existingChecklist->drink_items as $dItem) {
                     if (is_array($dItem) && (($dItem['variant_id'] ?? null) == $drink->id || ($dItem['name'] ?? null) === $drink->name)) {
-                        $initialQty = (int) ($dItem['initial_stock'] ?? $dItem['initial_qty'] ?? null);
+                        $initialQty = isset($dItem['sebelumnya']) ? (int) $dItem['sebelumnya'] : (isset($dItem['initial_stock']) ? (int) $dItem['initial_stock'] : null);
                         break;
                     }
                 }
             }
 
-            if ($initialQty === null) {
+            if ($initialQty === null || $currentStock > $initialQty) {
                 $initialQty = $currentStock + $soldToday;
             }
+
+            // Sisa stok saat ini selalu merefleksikan stok fisik aktual di inventaris kasir
+            $minumanRemaining = $currentStock;
 
             $minuman[] = [
                 'variant_id' => $drink->id,
@@ -2362,9 +2380,51 @@ class AttendanceWebV2Controller extends Controller
                 'unit' => 'pcs',
                 'sebelumnya' => $initialQty,
                 'terjual' => $soldToday,
-                'sesudahnya' => max(0, $initialQty - $soldToday),
+                'sesudahnya' => $minumanRemaining,
                 'price' => (float) $drink->base_price,
+                'is_critical' => ($minumanRemaining <= 5),
             ];
+        }
+
+        $criticalItems = [];
+        foreach ($kertas as $k) {
+            if ($k['is_critical']) {
+                $criticalItems[] = [
+                    'type' => 'kertas',
+                    'name' => $k['name'],
+                    'category' => 'kertas',
+                    'remaining' => $k['sesudahnya'].' '.$k['unit'],
+                    'suggested_qty' => 5,
+                    'suggested_unit' => 'Rim',
+                    'urgency' => 'high',
+                ];
+            }
+        }
+        foreach ($minuman as $d) {
+            if ($d['is_critical']) {
+                $criticalItems[] = [
+                    'type' => 'minuman',
+                    'name' => $d['name'],
+                    'category' => 'minuman',
+                    'remaining' => $d['sesudahnya'].' '.$d['unit'],
+                    'suggested_qty' => 1,
+                    'suggested_unit' => 'Dus',
+                    'urgency' => 'normal',
+                ];
+            }
+        }
+        foreach ($makanan as $m) {
+            if ($m['is_critical']) {
+                $criticalItems[] = [
+                    'type' => 'makanan',
+                    'name' => $m['name'],
+                    'category' => 'makanan',
+                    'remaining' => $m['sesudahnya'].' '.$m['unit'],
+                    'suggested_qty' => 1,
+                    'suggested_unit' => 'Dus',
+                    'urgency' => 'normal',
+                ];
+            }
         }
 
         return [
@@ -2374,6 +2434,8 @@ class AttendanceWebV2Controller extends Controller
             'total_kertas_terpakai' => $paperA4Used + $paperF4Used,
             'total_makanan_terjual' => array_sum(array_column($makanan, 'terjual')),
             'total_minuman_terjual' => array_sum(array_column($minuman, 'terjual')),
+            'critical_count' => count($criticalItems),
+            'critical_items' => $criticalItems,
         ];
     }
 
@@ -2410,7 +2472,7 @@ class AttendanceWebV2Controller extends Controller
         $branchId = $employee->branch_id;
 
         // 1. Daftar Penjualan Makanan dan Minuman Hari Ini (Isolasi per Cabang)
-        $fnbSales = CafeSale::with(['items.variant', 'employee'])
+        $fnbSales = CafeSale::with(['items.variant', 'employee', 'customer'])
             ->where('total_fnb', '>', 0)
             ->whereDate('created_at', $workDate->toDateString())
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
@@ -2699,6 +2761,10 @@ class AttendanceWebV2Controller extends Controller
             ->get()
             ->sum(fn ($s) => (float) ($s->net_amount > 0 || $s->discount_amount > 0 ? $s->net_amount : ($s->total_fnb + $s->total_billing)));
 
+        $customers = Customer::where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'code', 'name', 'customer_type', 'phone']);
+
         return view('presensi2.penjualan', [
             'currentEmployee' => $employee,
             'activeShift' => $activeShift,
@@ -2734,6 +2800,7 @@ class AttendanceWebV2Controller extends Controller
             'allPrintLogs' => $allPrintLogs,
             'totalPrintPages' => $totalPrintPages,
             'totalPrintIncome' => $totalPrintIncome,
+            'customers' => $customers,
         ]);
     }
 
@@ -2891,7 +2958,10 @@ class AttendanceWebV2Controller extends Controller
 
             $netAmount = max(0.0, $totalGross - $discountAmount);
             $paymentMethod = (string) $request->input('payment_method', 'cash');
-            $customerName = (string) ($request->input('customer_name') ?: 'Pelanggan Umum');
+
+            $customerId = $request->filled('customer_id') ? (int) $request->input('customer_id') : null;
+            $customer = $customerId ? Customer::find($customerId) : null;
+            $customerName = $customer ? $customer->name : (string) ($request->input('customer_name') ?: 'Pelanggan Umum');
             $amountPaid = (float) ($request->input('amount_paid') ?: $netAmount);
             if ($amountPaid < $netAmount) {
                 $amountPaid = $netAmount;
@@ -2905,6 +2975,7 @@ class AttendanceWebV2Controller extends Controller
                     'invoice_number' => $inv,
                     'branch_id' => $branchId,
                     'employee_id' => $employee->id,
+                    'customer_id' => $customer?->id,
                     'customer_name' => $customerName,
                     'total_fnb' => $totalGross,
                     'total_billing' => 0,
@@ -2994,7 +3065,7 @@ class AttendanceWebV2Controller extends Controller
                         'success' => true,
                         'message' => 'Penjualan F&B senilai Rp '.number_format($netAmount, 0, ',', '.').' berhasil dicatat!',
                         'invoice_number' => $sale->invoice_number,
-                        'sale' => $sale->load(['items.variant', 'employee']),
+                        'sale' => $sale->load(['items.variant', 'employee', 'customer']),
                         'total_fnb' => $netAmount,
                     ]);
                 }
@@ -3027,11 +3098,16 @@ class AttendanceWebV2Controller extends Controller
                 $hours = (int) $request->input('hours', 1);
                 $paymentMethod = (string) $request->input('payment_method', 'cash');
 
+                $customerId = $request->filled('customer_id') ? (int) $request->input('customer_id') : null;
+                $customer = $customerId ? Customer::find($customerId) : null;
+                $customerName = $customer ? $customer->name : ($request->input('customer_name') ?: ($station ? 'User '.$station->station_code : 'User Billing'));
+
                 $sale = CafeSale::create([
                     'invoice_number' => $inv,
                     'branch_id' => $branchId,
                     'employee_id' => $employee->id,
-                    'customer_name' => $request->input('customer_name') ?: ($station ? 'User '.$station->station_code : 'User Billing'),
+                    'customer_id' => $customer?->id,
+                    'customer_name' => $customerName,
                     'pc_station_id' => $station?->id,
                     'total_billing' => $billingAmount,
                     'total_fnb' => 0,
@@ -3072,7 +3148,7 @@ class AttendanceWebV2Controller extends Controller
                         'success' => true,
                         'message' => 'Pendapatan Internet berhasil dicatat!',
                         'invoice_number' => $sale->invoice_number,
-                        'sale' => $sale->load(['items', 'employee']),
+                        'sale' => $sale->load(['items', 'employee', 'customer', 'pcStation']),
                     ]);
                 }
 
@@ -3236,7 +3312,7 @@ class AttendanceWebV2Controller extends Controller
     /**
      * Ajukan Permintaan Stok Barang (Restock Request).
      */
-    public function penjualanStoreStockRequest(Request $request): RedirectResponse
+    public function penjualanStoreStockRequest(Request $request): RedirectResponse|JsonResponse
     {
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
@@ -3255,7 +3331,7 @@ class AttendanceWebV2Controller extends Controller
 
         $reqNumber = 'REQ-STK-'.date('Ymd').'-'.strtoupper(substr(uniqid(), -4));
 
-        ShiftStockRequest::create([
+        $stockRequest = ShiftStockRequest::create([
             'request_number' => $reqNumber,
             'employee_id' => $employee->id,
             'branch_id' => $employee->branch_id ?? 3,
@@ -3268,6 +3344,14 @@ class AttendanceWebV2Controller extends Controller
             'notes' => $request->input('notes'),
             'status' => 'pending',
         ]);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Permintaan restock ('.$request->input('item_name').') berhasil diajukan ke Gudang/Logistik!',
+                'request' => $stockRequest,
+            ]);
+        }
 
         return redirect()->route('presensi2.penjualan')
             ->with('success', 'Permintaan stok barang ('.$request->input('item_name').') berhasil diajukan ke Gudang/Logistik!');
@@ -4823,6 +4907,13 @@ BAT;
             'operator_notes' => trim(($transfer->operator_notes ?? '').' | Dikonfirmasi diterima oleh '.$actorName.' pada '.Carbon::now()->format('d/m/Y H:i')),
             'updated_at' => Carbon::now(),
         ]);
+
+        // Otomatis tambahkan stok fisik pada gudang tujuan (Loker Kasir)
+        $destStock = StockInventory::firstOrCreate(
+            ['warehouse_id' => $transfer->to_warehouse_id, 'product_variant_id' => $transfer->product_variant_id],
+            ['qty_on_hand' => 0, 'safety_stock' => 10]
+        );
+        $destStock->increment('qty_on_hand', (int) $transfer->qty);
 
         return back()->with('success', 'Penerimaan stok distribusi '.$transfer->transfer_code.' ('.$transfer->variant_name.' +'.$transfer->qty.' pcs) berhasil diverifikasi & diterima!');
     }

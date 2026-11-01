@@ -10,6 +10,7 @@ use App\Domains\Attendance\Models\AttendanceRecord;
 use App\Domains\Employee\Models\Shift;
 use App\Domains\Leave\Models\LeaveRequest;
 use App\Http\Controllers\Controller;
+use App\Models\PrinterPrintJob;
 use App\Models\ShiftSalesSummary;
 use App\Models\ShiftStockRequest;
 use Carbon\Carbon;
@@ -21,9 +22,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\CafeSale;
+use Modules\MasterData\Domain\Models\CafeSaleItem;
 use Modules\MasterData\Domain\Models\Commission;
 use Modules\MasterData\Domain\Models\Employee;
+use Modules\MasterData\Domain\Models\ProductVariant;
 use Modules\MasterData\Domain\Models\StockInventory;
+use Modules\MasterData\Domain\Models\Warehouse;
 
 /**
  * Controller Admin Dashboard Terpadu Maya Graha Kencana.
@@ -59,6 +63,7 @@ class AdminDashboardController extends Controller
         $stockStatsTotalSku = $stockStats['total_sku'];
 
         $reportSummary = $this->getReportSummaryData($today, $billingPerShift);
+        $profitAnalytics = $this->getProfitAndPrinterAnalytics($today, $today);
 
         $recentPosSales = CafeSale::with(['employee', 'branch', 'items.variant'])
             ->orderByDesc('created_at')
@@ -76,6 +81,7 @@ class AdminDashboardController extends Controller
             'stockStats',
             'stockStatsTotalSku',
             'reportSummary',
+            'profitAnalytics',
             'recentPosSales'
         ));
     }
@@ -139,13 +145,89 @@ class AdminDashboardController extends Controller
         $stockTransfersCount = $stockTransfers->where('status', '!=', 'received')->count();
         $stockStatsTotalSku = StockInventory::count();
 
+        $productVariants = ProductVariant::with(['product.category'])
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
+        $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get();
+
         return view('admin.dashboard.distribusi', compact(
             'profileData',
             'stockTransfers',
             'stockRequests',
             'stockTransfersCount',
-            'stockStatsTotalSku'
+            'stockStatsTotalSku',
+            'productVariants',
+            'warehouses'
         ));
+    }
+
+    /**
+     * Input Supply / Pengiriman Stok Baru dari Gudang Pusat ke Kasir / Antar Gudang.
+     */
+    public function storeTransfer(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'product_variant_id' => 'required|exists:product_variants,id',
+            'from_warehouse_id' => 'required|exists:warehouses,id',
+            'to_warehouse_id' => 'required|exists:warehouses,id',
+            'qty' => 'required|integer|min:1',
+            'status' => 'required|in:in_transit,received',
+            'operator_notes' => 'nullable|string|max:500',
+        ]);
+
+        $variant = ProductVariant::findOrFail($request->input('product_variant_id'));
+        $qty = (int) $request->input('qty');
+        $fromWhId = (int) $request->input('from_warehouse_id');
+        $toWhId = (int) $request->input('to_warehouse_id');
+        $status = (string) $request->input('status');
+        $notes = (string) $request->input('operator_notes', '');
+
+        $transferCode = 'TRF-'.date('Ymd').'-'.strtoupper(substr(uniqid(), -4));
+
+        $receivedAt = $status === 'received' ? Carbon::now() : null;
+        if ($status === 'received') {
+            $notes = trim($notes.' | Langsung diverifikasi diterima oleh Admin');
+        }
+
+        DB::table('stock_transfer_dispatches')->insert([
+            'transfer_code' => $transferCode,
+            'from_warehouse_id' => $fromWhId,
+            'to_warehouse_id' => $toWhId,
+            'product_variant_id' => $variant->id,
+            'qty' => $qty,
+            'status' => $status,
+            'dispatched_at' => Carbon::now(),
+            'received_at' => $receivedAt,
+            'operator_notes' => $notes ?: 'Pengiriman supply stok via Admin ERP',
+            'created_at' => Carbon::now(),
+            'updated_at' => Carbon::now(),
+        ]);
+
+        // Jika langsung berstatus 'received', otomatis update stok fisik tujuan
+        if ($status === 'received') {
+            $destStock = StockInventory::firstOrCreate(
+                ['warehouse_id' => $toWhId, 'product_variant_id' => $variant->id],
+                ['qty_on_hand' => 0, 'safety_stock' => 10]
+            );
+            $destStock->increment('qty_on_hand', $qty);
+
+            if ($fromWhId !== $toWhId) {
+                $originStock = StockInventory::where('warehouse_id', $fromWhId)
+                    ->where('product_variant_id', $variant->id)
+                    ->first();
+                if ($originStock && $originStock->qty_on_hand >= $qty) {
+                    $originStock->decrement('qty_on_hand', $qty);
+                }
+            }
+        }
+
+        $message = $status === 'received'
+            ? "Supply stok {$variant->name} sejumlah {$qty} unit berhasil diinput dan langsung ditambahkan ke inventaris!"
+            : "Surat jalan pengiriman supply {$variant->name} ({$qty} unit) berhasil dibuat (Kode: {$transferCode}) dalam status pengiriman.";
+
+        return redirect()->route('admin.distribusi')->with('success', $message);
     }
 
     /**
@@ -175,10 +257,29 @@ class AdminDashboardController extends Controller
     public function laporanIndex(Request $request): View
     {
         $today = Carbon::today();
+        $period = (string) $request->input('period', 'today');
+        $branchId = $request->filled('branch_id') && $request->input('branch_id') !== 'all' ? (int) $request->input('branch_id') : null;
+
+        $startDate = match ($period) {
+            'yesterday' => Carbon::yesterday(),
+            '7days' => Carbon::today()->subDays(6),
+            'this_month' => Carbon::today()->startOfMonth(),
+            'custom' => $request->filled('start_date') ? Carbon::parse($request->input('start_date')) : Carbon::today(),
+            default => Carbon::today(),
+        };
+
+        $endDate = match ($period) {
+            'yesterday' => Carbon::yesterday(),
+            'custom' => $request->filled('end_date') ? Carbon::parse($request->input('end_date')) : Carbon::today(),
+            default => Carbon::today(),
+        };
+
         $profileData = $this->getProfileData($request);
         $shifts = Shift::where('is_active', true)->orderBy('start_time')->get();
+        $branches = Branch::where('is_active', true)->orderBy('name')->get();
         $billingPerShift = $this->getBillingDataPerShift($today, $shifts);
         $reportSummary = $this->getReportSummaryData($today, $billingPerShift);
+        $profitAnalytics = $this->getProfitAndPrinterAnalytics($startDate, $endDate, $branchId);
 
         $stockTransfersCount = DB::table('stock_transfer_dispatches')->where('status', '!=', 'received')->count();
         $stockStatsTotalSku = StockInventory::count();
@@ -186,8 +287,14 @@ class AdminDashboardController extends Controller
         return view('admin.dashboard.laporan', compact(
             'profileData',
             'reportSummary',
+            'profitAnalytics',
             'billingPerShift',
             'shifts',
+            'branches',
+            'period',
+            'branchId',
+            'startDate',
+            'endDate',
             'stockTransfersCount',
             'stockStatsTotalSku'
         ));
@@ -210,7 +317,79 @@ class AdminDashboardController extends Controller
             'updated_at' => Carbon::now(),
         ]);
 
-        return back()->with('success', 'Penerimaan stok distribusi transfer '.$transfer->transfer_code.' berhasil dikonfirmasi.');
+        // Otomatis tambahkan stok fisik pada gudang tujuan (Loker Kasir / Pos)
+        $destStock = StockInventory::firstOrCreate(
+            ['warehouse_id' => $transfer->to_warehouse_id, 'product_variant_id' => $transfer->product_variant_id],
+            ['qty_on_hand' => 0, 'safety_stock' => 10]
+        );
+        $destStock->increment('qty_on_hand', (int) $transfer->qty);
+
+        return back()->with('success', 'Penerimaan stok distribusi transfer '.$transfer->transfer_code.' berhasil dikonfirmasi dan stok telah ditambahkan!');
+    }
+
+    /**
+     * Penuhi Permintaan Restock Kasir dan otomatis buat transfer supply.
+     */
+    public function fulfillStockRequest(Request $request, int $id): RedirectResponse
+    {
+        $stockReq = ShiftStockRequest::findOrFail($id);
+
+        $request->validate([
+            'qty_fulfilled' => 'nullable|integer|min:1',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        $qty = $request->filled('qty_fulfilled') ? (int) $request->input('qty_fulfilled') : (int) $stockReq->qty_requested;
+
+        $driver = DB::connection()->getDriverName();
+        $likeOp = $driver === 'pgsql' ? 'ilike' : 'like';
+
+        // Cari varian produk yang cocok dengan nama item
+        $variant = ProductVariant::where('name', $likeOp, "%{$stockReq->item_name}%")
+            ->first();
+
+        // Cari warehouse loker kasir dan gudang pusat
+        $toWarehouse = Warehouse::where('code', 'GDG-KSR')
+            ->orWhere('name', $likeOp, '%kasir%')
+            ->first() ?? Warehouse::first();
+
+        $fromWarehouse = Warehouse::where('code', 'GDG-PST')
+            ->orWhere('name', $likeOp, '%pusat%')
+            ->first() ?? Warehouse::first();
+
+        $transferCode = 'TRF-REQ-'.date('Ymd').'-'.strtoupper(substr(uniqid(), -4));
+
+        if ($variant && $toWarehouse && $fromWarehouse) {
+            DB::table('stock_transfer_dispatches')->insert([
+                'transfer_code' => $transferCode,
+                'from_warehouse_id' => $fromWarehouse->id,
+                'to_warehouse_id' => $toWarehouse->id,
+                'product_variant_id' => $variant->id,
+                'qty' => $qty,
+                'status' => 'received',
+                'dispatched_at' => Carbon::now(),
+                'received_at' => Carbon::now(),
+                'operator_notes' => 'Pemenuhan permintaan kasir '.$stockReq->request_number.' ('.$stockReq->item_name.')',
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ]);
+
+            // Tambah stok fisik loker kasir
+            $destStock = StockInventory::firstOrCreate(
+                ['warehouse_id' => $toWarehouse->id, 'product_variant_id' => $variant->id],
+                ['qty_on_hand' => 0, 'safety_stock' => 10]
+            );
+            $destStock->increment('qty_on_hand', $qty);
+        }
+
+        $stockReq->update([
+            'status' => 'fulfilled',
+            'fulfilled_at' => Carbon::now(),
+            'notes' => trim(($stockReq->notes ?? '').' | Dipenuhi Admin ('.$qty.' '.$stockReq->unit.') ref: '.$transferCode),
+        ]);
+
+        return redirect()->route('admin.distribusi')
+            ->with('success', "Permintaan restock {$stockReq->request_number} ({$stockReq->item_name}) berhasil dipenuhi dan stok fisik kasir telah ditambahkan!");
     }
 
     /**
@@ -870,6 +1049,145 @@ class AdminDashboardController extends Controller
             'total_transactions_today' => CafeSale::whereDate('created_at', $today)->count(),
             'shift_handover_count' => ShiftSalesSummary::whereDate('work_date', $today)->count(),
             'total_drawer_cash' => (float) ShiftSalesSummary::whereDate('work_date', $today)->sum('cash_in_drawer'),
+        ];
+    }
+
+    /**
+     * Hitung analitik Laba Kotor (Gross Profit) F&B, Print Canon USB, Billing, dan utilisasi hardware.
+     */
+    private function getProfitAndPrinterAnalytics(Carbon $startDate, Carbon $endDate, ?int $branchId = null): array
+    {
+        $start = $startDate->copy()->startOfDay();
+        $end = $endDate->copy()->endOfDay();
+
+        // 1. Data Item Penjualan
+        $saleItems = CafeSaleItem::with(['variant', 'sale'])
+            ->whereHas('sale', function ($q) use ($start, $end, $branchId) {
+                $q->whereBetween('created_at', [$start, $end])
+                    ->where('payment_status', '!=', 'cancelled')
+                    ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId));
+            })
+            ->get();
+
+        // F&B Items vs Print Items
+        $fnbItems = $saleItems->filter(function ($it) {
+            $name = strtolower($it->item_name);
+
+            return $it->item_type === 'fnb' || (! str_contains($name, 'kertas') && ! str_contains($name, 'print') && ! str_contains($name, 'sewa pc'));
+        });
+
+        $totalFnbRevenue = (float) $fnbItems->sum('subtotal');
+        $totalFnbCost = 0.0;
+        $productBreakdown = [];
+
+        foreach ($fnbItems as $it) {
+            $costPrice = ($it->variant && $it->variant->cost_price > 0)
+                ? (float) $it->variant->cost_price
+                : ((float) $it->unit_price * 0.70);
+            $subtotalCost = $costPrice * $it->qty;
+            $totalFnbCost += $subtotalCost;
+
+            $itemName = $it->item_name;
+            if (! isset($productBreakdown[$itemName])) {
+                $productBreakdown[$itemName] = [
+                    'name' => $itemName,
+                    'qty' => 0,
+                    'revenue' => 0.0,
+                    'cost' => 0.0,
+                    'profit' => 0.0,
+                ];
+            }
+            $productBreakdown[$itemName]['qty'] += $it->qty;
+            $productBreakdown[$itemName]['revenue'] += (float) $it->subtotal;
+            $productBreakdown[$itemName]['cost'] += $subtotalCost;
+            $productBreakdown[$itemName]['profit'] += ((float) $it->subtotal - $subtotalCost);
+        }
+
+        $fnbGrossProfit = max(0.0, $totalFnbRevenue - $totalFnbCost);
+        $fnbMargin = $totalFnbRevenue > 0 ? round(($fnbGrossProfit / $totalFnbRevenue) * 100, 1) : 0.0;
+
+        // Top 5 Products by Profit
+        uasort($productBreakdown, fn ($a, $b) => $b['profit'] <=> $a['profit']);
+        $topProducts = array_slice($productBreakdown, 0, 5);
+
+        // 2. Data Print & Printer Canon USB
+        $printJobs = PrinterPrintJob::with('branch')
+            ->where(function ($q) use ($startDate, $endDate, $start, $end) {
+                $q->whereBetween('printed_at', [$start, $end])
+                    ->orWhere(function ($sq) use ($startDate, $endDate) {
+                        $sq->whereDate('work_date', '>=', $startDate->toDateString())
+                            ->whereDate('work_date', '<=', $endDate->toDateString());
+                    });
+            })
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->orderByDesc('printed_at')
+            ->get();
+
+        $posPrintItems = $saleItems->filter(function ($it) {
+            $name = strtolower($it->item_name);
+
+            return str_contains($name, 'kertas') || str_contains($name, 'print');
+        });
+
+        $spoolerPages = (int) $printJobs->sum('pages');
+        $posPages = (int) $posPrintItems->sum('qty');
+        $totalPrintPages = max($spoolerPages, $posPages);
+
+        $spoolerPrintRevenue = (float) $printJobs->sum('total_amount');
+        $posPrintRevenue = (float) $posPrintItems->sum('subtotal');
+        $totalPrintRevenue = max($spoolerPrintRevenue, $posPrintRevenue);
+
+        // Estimasi biaya modal kertas + tinta (Rp 250 / lembar: HVS ~Rp 100 + tinta ~Rp 150)
+        $costPerSheet = 250.0;
+        $totalPrintCost = $totalPrintPages * $costPerSheet;
+        $printGrossProfit = max(0.0, $totalPrintRevenue - $totalPrintCost);
+        $printMargin = $totalPrintRevenue > 0 ? round(($printGrossProfit / $totalPrintRevenue) * 100, 1) : 0.0;
+
+        $printerStats = [
+            'total_jobs' => $printJobs->count(),
+            'total_pages' => $totalPrintPages,
+            'bw_pages' => (int) $printJobs->where('color_mode', 'bw')->sum('pages'),
+            'color_pages' => (int) $printJobs->where('color_mode', '!=', 'bw')->sum('pages'),
+            'revenue' => $totalPrintRevenue,
+            'cost' => $totalPrintCost,
+            'gross_profit' => $printGrossProfit,
+            'margin' => $printMargin,
+            'connected_printers' => $printJobs->pluck('printer_name')->unique()->values()->all(),
+            'recent_jobs' => $printJobs->take(5),
+        ];
+
+        // 3. Billing Warnet
+        $totalBillingRevenue = (float) CafeSale::whereBetween('created_at', [$start, $end])
+            ->where('payment_status', '!=', 'cancelled')
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->sum('total_billing');
+
+        // 4. Ringkasan Laba Kotor Gabungan
+        $grandRevenue = $totalFnbRevenue + $totalPrintRevenue + $totalBillingRevenue;
+        $grandCost = $totalFnbCost + $totalPrintCost;
+        $grandGrossProfit = max(0.0, $grandRevenue - $grandCost);
+        $grandMargin = $grandRevenue > 0 ? round(($grandGrossProfit / $grandRevenue) * 100, 1) : 0.0;
+
+        return [
+            'fnb' => [
+                'revenue' => $totalFnbRevenue,
+                'cost' => $totalFnbCost,
+                'gross_profit' => $fnbGrossProfit,
+                'margin' => $fnbMargin,
+                'top_products' => $topProducts,
+            ],
+            'print' => $printerStats,
+            'billing' => [
+                'revenue' => $totalBillingRevenue,
+                'gross_profit' => $totalBillingRevenue,
+                'margin' => 100.0,
+            ],
+            'overall' => [
+                'revenue' => $grandRevenue,
+                'cogs' => $grandCost,
+                'gross_profit' => $grandGrossProfit,
+                'margin' => $grandMargin,
+            ],
         ];
     }
 

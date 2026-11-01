@@ -43,14 +43,47 @@
         </p>
     </div>
 
-    <!-- Quick Actions -->
-    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 14px;">
-        <a href="{{ route('presensi.scan') }}" class="btn btn-emerald" style="padding: 14px;">
-            📸 Masuk / Pulang
-        </a>
-        <a href="{{ route('presensi.riwayat') }}" class="btn btn-ghost" style="padding: 14px;">
-            📅 Lihat Riwayat
-        </a>
+    <!-- Ringkasan Statistik Bulan Ini -->
+    <div class="glass-card" style="padding: 16px;">
+        <div style="font-size: 13px; font-weight: 700; color: #e2e8f0; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+            <span>📊 Ringkasan Presensi Bulan Ini</span>
+            <span style="font-size: 11px; color: #94a3b8; font-weight: normal;">{{ \Carbon\Carbon::now()->translatedFormat('F Y') }}</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center;">
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 10px 6px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05);">
+                <div style="font-size: 18px; font-weight: 800; color: #34d399;">{{ $monthlyStats['total_hadir'] }}</div>
+                <div style="font-size: 10.5px; color: #94a3b8; margin-top: 2px;">Hadir</div>
+            </div>
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 10px 6px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05);">
+                <div style="font-size: 18px; font-weight: 800; color: #fbbf24;">{{ $monthlyStats['total_telat'] }}</div>
+                <div style="font-size: 10.5px; color: #94a3b8; margin-top: 2px;">Telat</div>
+            </div>
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 10px 6px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05);">
+                <div style="font-size: 18px; font-weight: 800; color: #818cf8;">{{ $monthlyStats['total_lembur_jam'] }}j</div>
+                <div style="font-size: 10.5px; color: #94a3b8; margin-top: 2px;">Lembur</div>
+            </div>
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 10px 6px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05);">
+                <div style="font-size: 18px; font-weight: 800; color: #38bdf8;">{{ $monthlyStats['total_izin'] }}</div>
+                <div style="font-size: 10.5px; color: #94a3b8; margin-top: 2px;">Izin/Cuti</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Banner Permohonan Cuti -->
+    <div class="glass-card" style="margin-top: 16px; background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(14, 165, 233, 0.1)); border-color: rgba(99, 102, 241, 0.3);">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <div>
+                <h4 style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 4px;">
+                    🏖️ Perlu Izin atau Cuti?
+                </h4>
+                <p style="font-size: 12px; color: #cbd5e1; margin: 0;">
+                    Ajukan izin sakit, cuti tahunan, atau urusan penting resmi langsung dari portal mandiri Anda.
+                </p>
+            </div>
+            <a href="{{ route('presensi.izin') }}" style="background: rgba(255, 255, 255, 0.15); color: #fff; text-decoration: none; padding: 8px 14px; border-radius: 10px; font-size: 12px; font-weight: 700; white-space: nowrap; border: 1px solid rgba(255, 255, 255, 0.25);">
+                Buka Formulir →
+            </a>
+        </div>
     </div>
 </div>
 @endsection

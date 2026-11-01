@@ -81,6 +81,34 @@
     <form action="{{ route('presensi2.stok.store') }}" method="POST">
         @csrf
 
+        {{-- PERINGATAN DINI STOK KRITIS / MENIPIS --}}
+        @if(($stockComparisons['critical_count'] ?? 0) > 0)
+        <div class="glass-card" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); padding: 14px 18px; margin-bottom: 16px; border-radius: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(239, 68, 68, 0.25); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">
+                        ⚠️
+                    </div>
+                    <div>
+                        <div style="font-size: 13.5px; font-weight: 800; color: #fca5a5;">
+                            Peringatan Dini: Terdapat {{ $stockComparisons['critical_count'] }} Item Stok Kritis / Menipis!
+                        </div>
+                        <div style="font-size: 11.5px; color: #fecaca; margin-top: 2px;">
+                            Stok berada di bawah batas minimum operasional cabang. Klik tombol <strong>⚡ Restock Cepat</strong> untuk mengajukan penambahan barang ke Gudang/Supervisor sebelum shift berganti.
+                        </div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    @foreach(array_slice($stockComparisons['critical_items'] ?? [], 0, 4) as $crit)
+                        <button type="button" onclick="openQuickRestockModal('{{ $crit['category'] }}', '{{ $crit['name'] }}', {{ $crit['suggested_qty'] }}, '{{ $crit['suggested_unit'] }}', '{{ $crit['urgency'] }}')" class="btn" style="background: rgba(239, 68, 68, 0.25); border: 1px solid rgba(239, 68, 68, 0.6); color: #fff; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; cursor: pointer;">
+                            ⚡ {{ $crit['name'] }} ({{ $crit['remaining'] }})
+                        </button>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+        @endif
+
         {{-- 1, 2, & 3. KARTU TERPADU BER-TAB: STOK KERTAS, MINUMAN, & MAKANAN --}}
         <div class="glass-card" style="padding: 20px; margin-bottom: 16px;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; border-bottom: 1px solid var(--border-glass); padding-bottom: 12px; flex-wrap: wrap; gap: 10px;">
@@ -123,6 +151,7 @@
                         </thead>
                         <tbody>
                             @foreach($stockComparisons['kertas'] ?? [] as $k)
+                            @php $isCrit = (bool) ($k['is_critical'] ?? false); @endphp
                             <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
                                 <td style="padding: 10px; color: #fff; font-weight: 600;">
                                     {{ $k['name'] }}
@@ -133,11 +162,18 @@
                                 <td style="padding: 10px; text-align: center; color: #fbbf24; font-weight: 700;">
                                     {{ $k['terjual'] > 0 ? '-'.$k['terjual'] : '0' }} <span style="font-size: 10px; color: var(--text-muted);">{{ $k['unit'] }}</span>
                                 </td>
-                                <td style="padding: 10px; text-align: center; color: #34d399; font-weight: 700;">
+                                <td style="padding: 10px; text-align: center; color: {{ $isCrit ? '#f87171' : '#34d399' }}; font-weight: 700;">
                                     {{ $k['sesudahnya'] }} <span style="font-size: 10px; color: var(--text-muted);">{{ $k['unit'] }}</span>
                                 </td>
                                 <td style="padding: 10px; text-align: right;">
-                                    <span class="badge badge-present" style="font-size: 10px;">{{ $k['rim_info'] }}</span>
+                                    <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                                        <span class="badge {{ $isCrit ? '' : 'badge-present' }}" style="{{ $isCrit ? 'background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4);' : '' }} font-size: 10px;">
+                                            {{ $k['rim_info'] }}
+                                        </span>
+                                        <button type="button" onclick="openQuickRestockModal('kertas', '{{ $k['name'] }}', 5, 'Rim', '{{ $isCrit ? 'high' : 'normal' }}')" class="btn" style="padding: 4px 9px; font-size: 10.5px; font-weight: 700; background: {{ $isCrit ? 'rgba(239, 68, 68, 0.25)' : 'rgba(14, 165, 233, 0.2)' }}; border: 1px solid {{ $isCrit ? 'rgba(239, 68, 68, 0.5)' : 'rgba(14, 165, 233, 0.4)' }}; color: {{ $isCrit ? '#fca5a5' : '#38bdf8' }}; border-radius: 6px; cursor: pointer;">
+                                            ⚡ Restock
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                             @endforeach
@@ -160,11 +196,12 @@
                                 <th style="padding: 8px 10px; text-align: center;">Stok Shift Sebelumnya</th>
                                 <th style="padding: 8px 10px; text-align: center;">Penjualan Hari Ini</th>
                                 <th style="padding: 8px 10px; text-align: center;">Sisa Stok Saat Ini</th>
-                                <th style="padding: 8px 10px; text-align: right;">Status</th>
+                                <th style="padding: 8px 10px; text-align: right;">Status & Tindakan</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($stockComparisons['minuman'] ?? [] as $d)
+                            @php $isCrit = (bool) ($d['is_critical'] ?? ($d['sesudahnya'] <= 5)); @endphp
                             <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
                                 <td style="padding: 9px 10px; color: #fff; font-weight: 600;">
                                     {{ $d['name'] }}
@@ -175,15 +212,20 @@
                                 <td style="padding: 9px 10px; text-align: center; color: #fbbf24; font-weight: 700;">
                                     {{ $d['terjual'] > 0 ? '-'.$d['terjual'] : '0' }} <span style="font-size: 10px; color: var(--text-muted);">pcs</span>
                                 </td>
-                                <td style="padding: 9px 10px; text-align: center; color: #34d399; font-weight: 700;">
+                                <td style="padding: 9px 10px; text-align: center; color: {{ $isCrit ? '#f87171' : '#34d399' }}; font-weight: 700;">
                                     {{ $d['sesudahnya'] }} <span style="font-size: 10px; color: var(--text-muted);">pcs</span>
                                 </td>
                                 <td style="padding: 9px 10px; text-align: right;">
-                                    @if($d['sesudahnya'] <= 5)
-                                        <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; font-size: 10px;">Menipis</span>
-                                    @else
-                                        <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 10px;">Aman</span>
-                                    @endif
+                                    <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
+                                        @if($isCrit)
+                                            <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); font-size: 10px;">⚠️ Kritis</span>
+                                        @else
+                                            <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 10px;">✓ Aman</span>
+                                        @endif
+                                        <button type="button" onclick="openQuickRestockModal('minuman', '{{ $d['name'] }}', 1, 'Dus', '{{ $isCrit ? 'high' : 'normal' }}')" class="btn" style="padding: 3px 8px; font-size: 10px; font-weight: 700; background: {{ $isCrit ? 'rgba(239,68,68,0.25)' : 'rgba(59,130,246,0.18)' }}; border: 1px solid {{ $isCrit ? 'rgba(239,68,68,0.5)' : 'rgba(59,130,246,0.35)' }}; color: {{ $isCrit ? '#fca5a5' : '#93c5fd' }}; border-radius: 5px; cursor: pointer;">
+                                            ⚡ Restock
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                             @endforeach
@@ -205,11 +247,12 @@
                                 <th style="padding: 8px 10px; text-align: center;">Stok Shift Sebelumnya</th>
                                 <th style="padding: 8px 10px; text-align: center;">Penjualan Hari Ini</th>
                                 <th style="padding: 8px 10px; text-align: center;">Sisa Stok Saat Ini</th>
-                                <th style="padding: 8px 10px; text-align: right;">Status</th>
+                                <th style="padding: 8px 10px; text-align: right;">Status & Tindakan</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($stockComparisons['makanan'] ?? [] as $m)
+                            @php $isCrit = (bool) ($m['is_critical'] ?? ($m['sesudahnya'] <= 5)); @endphp
                             <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
                                 <td style="padding: 9px 10px; color: #fff; font-weight: 600;">
                                     {{ $m['name'] }}
@@ -220,15 +263,20 @@
                                 <td style="padding: 9px 10px; text-align: center; color: #fbbf24; font-weight: 700;">
                                     {{ $m['terjual'] > 0 ? '-'.$m['terjual'] : '0' }} <span style="font-size: 10px; color: var(--text-muted);">pcs</span>
                                 </td>
-                                <td style="padding: 9px 10px; text-align: center; color: #34d399; font-weight: 700;">
+                                <td style="padding: 9px 10px; text-align: center; color: {{ $isCrit ? '#f87171' : '#34d399' }}; font-weight: 700;">
                                     {{ $m['sesudahnya'] }} <span style="font-size: 10px; color: var(--text-muted);">pcs</span>
                                 </td>
                                 <td style="padding: 9px 10px; text-align: right;">
-                                    @if($m['sesudahnya'] <= 5)
-                                        <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171; font-size: 10px;">Menipis</span>
-                                    @else
-                                        <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 10px;">Aman</span>
-                                    @endif
+                                    <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
+                                        @if($isCrit)
+                                            <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); font-size: 10px;">⚠️ Kritis</span>
+                                        @else
+                                            <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 10px;">✓ Aman</span>
+                                        @endif
+                                        <button type="button" onclick="openQuickRestockModal('makanan', '{{ $m['name'] }}', 1, 'Dus', '{{ $isCrit ? 'high' : 'normal' }}')" class="btn" style="padding: 3px 8px; font-size: 10px; font-weight: 700; background: {{ $isCrit ? 'rgba(239,68,68,0.25)' : 'rgba(59,130,246,0.18)' }}; border: 1px solid {{ $isCrit ? 'rgba(239,68,68,0.5)' : 'rgba(59,130,246,0.35)' }}; color: {{ $isCrit ? '#fca5a5' : '#93c5fd' }}; border-radius: 5px; cursor: pointer;">
+                                            ⚡ Restock
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                             @endforeach
@@ -470,11 +518,170 @@
             </div>
         </div>
     </form>
+
+    {{-- FLOATING TOAST NOTIFIKASI RESTOCK STOK --}}
+    <div id="stok-toast" style="display: none; position: fixed; top: 24px; right: 24px; z-index: 9999; padding: 12px 18px; border-radius: 10px; color: #fff; font-size: 13px; font-weight: 600; box-shadow: 0 10px 25px rgba(0,0,0,0.4); max-width: 380px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span id="stok-toast-icon" style="font-size: 18px;">✅</span>
+            <div id="stok-toast-msg">Permintaan restock berhasil dikirim!</div>
+        </div>
+    </div>
+
+    {{-- MODAL AKSI CEPAT RESTOCK STOK --}}
+    <div id="modal-quick-restock" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(5px); z-index: 9998; align-items: center; justify-content: center; padding: 16px;">
+        <div style="background: #0f172a; border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 16px; width: 100%; max-width: 460px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6); overflow: hidden; animation: popIn 0.2s ease-out;">
+            {{-- Modal Header --}}
+            <div style="padding: 16px 20px; border-bottom: 1px solid var(--border-glass); display: flex; align-items: center; justify-content: space-between; background: rgba(139, 92, 246, 0.1);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 34px; height: 34px; border-radius: 8px; background: rgba(239, 68, 68, 0.25); display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                        ⚡
+                    </div>
+                    <div>
+                        <h4 style="font-size: 14.5px; font-weight: 700; color: #fff; margin: 0;">Ajukan Restock Cepat</h4>
+                        <span style="font-size: 11px; color: var(--text-muted);">Kirim permintaan barang langsung ke Gudang / Supervisor</span>
+                    </div>
+                </div>
+                <button type="button" onclick="closeQuickRestockModal()" style="background: transparent; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; padding: 0 4px; line-height: 1;">&times;</button>
+            </div>
+
+            {{-- Modal Body --}}
+            <form id="form-quick-restock" onsubmit="submitQuickRestock(event)" style="padding: 18px 20px;">
+                <input type="hidden" id="qr-category" name="item_category" value="">
+                
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px;">Nama Barang:</label>
+                    <input type="text" id="qr-name" name="item_name" readonly style="width: 100%; padding: 8px 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #38bdf8; font-weight: 700; font-size: 13px;">
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px;">Jumlah Diminta:</label>
+                        <input type="number" id="qr-qty" name="qty_requested" min="1" value="1" required style="width: 100%; padding: 8px 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-weight: 700; font-size: 13px;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px;">Satuan:</label>
+                        <select id="qr-unit" name="unit" style="width: 100%; padding: 8px 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 12.5px;">
+                            <option value="Dus">Dus</option>
+                            <option value="Rim">Rim</option>
+                            <option value="pcs">pcs</option>
+                            <option value="Roll">Roll</option>
+                            <option value="Pak">Pak</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px;">Tingkat Urgensi:</label>
+                    <select id="qr-urgency" name="urgency" style="width: 100%; padding: 8px 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 12.5px; font-weight: 600;">
+                        <option value="normal">Normal (Bisa menyusul)</option>
+                        <option value="high">⚠️ Mendesak (Stok menipis shift ini)</option>
+                        <option value="critical">🚨 Kritis / Segera (Habis saat shift berjalan)</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px;">Catatan (Opsional):</label>
+                    <input type="text" id="qr-notes" name="notes" placeholder="Catatan untuk logistik..." style="width: 100%; padding: 8px 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 12px;">
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                    <button type="button" onclick="closeQuickRestockModal()" class="btn" style="padding: 8px 16px; font-size: 12px; background: rgba(148, 163, 184, 0.15); border: 1px solid rgba(148, 163, 184, 0.3); color: #94a3b8; border-radius: 8px; cursor: pointer;">
+                        Batal
+                    </button>
+                    <button type="submit" id="btn-submit-quick-restock" class="btn btn-emerald" style="padding: 8px 18px; font-size: 12px; font-weight: 700; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                        <span>🚀</span> Kirim Permintaan Restock
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 @endsection
 
 @push('scripts')
 <script>
+    function openQuickRestockModal(category, name, qty, unit, urgency = 'normal') {
+        const modal = document.getElementById('modal-quick-restock');
+        if (!modal) return;
+
+        document.getElementById('qr-category').value = category;
+        document.getElementById('qr-name').value = name;
+        document.getElementById('qr-qty').value = qty || 1;
+        document.getElementById('qr-unit').value = unit || 'pcs';
+        document.getElementById('qr-urgency').value = urgency || 'normal';
+        document.getElementById('qr-notes').value = '';
+
+        modal.style.display = 'flex';
+    }
+
+    function closeQuickRestockModal() {
+        const modal = document.getElementById('modal-quick-restock');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function showStokToast(message, isSuccess = true) {
+        const toast = document.getElementById('stok-toast');
+        if (!toast) return;
+
+        toast.style.display = 'block';
+        toast.style.background = isSuccess ? 'rgba(16, 185, 129, 0.95)' : 'rgba(239, 68, 68, 0.95)';
+        document.getElementById('stok-toast-icon').innerText = isSuccess ? '✅' : '❌';
+        document.getElementById('stok-toast-msg').innerText = message;
+
+        setTimeout(() => {
+            toast.style.display = 'none';
+        }, 4000);
+    }
+
+    async function submitQuickRestock(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btn-submit-quick-restock');
+        if (btn) {
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+            btn.innerHTML = '<span>⏳</span> Mengirim...';
+        }
+
+        const payload = {
+            item_category: document.getElementById('qr-category').value,
+            item_name: document.getElementById('qr-name').value,
+            qty_requested: parseInt(document.getElementById('qr-qty').value) || 1,
+            unit: document.getElementById('qr-unit').value,
+            urgency: document.getElementById('qr-urgency').value,
+            notes: document.getElementById('qr-notes').value,
+        };
+
+        try {
+            const response = await fetch('{{ route("presensi2.penjualan.permintaan-stok") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                closeQuickRestockModal();
+                showStokToast(data.message || `Permintaan restock ${payload.item_name} berhasil dikirim!`);
+            } else {
+                showStokToast(data.message || 'Gagal mengirim permintaan restock.', false);
+            }
+        } catch (err) {
+            console.error('Quick restock error:', err);
+            showStokToast('Terjadi kesalahan koneksi saat mengirim permintaan restock.', false);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.innerHTML = '<span>🚀</span> Kirim Permintaan Restock';
+            }
+        }
+    }
+
     function switchStokAwalTab(tabId, btn) {
         document.querySelectorAll('.stok-awal-tab-pane').forEach(el => {
             el.style.display = 'none';
