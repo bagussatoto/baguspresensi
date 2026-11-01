@@ -26,8 +26,8 @@ class RekapJamKerjaScreenshotSeeder extends Seeder
                 'name' => 'Maya Graha Kencana',
                 'code' => 'NET-PST',
                 'is_headquarters' => true,
-                'address' => 'Jl. Boulevard Kelapa Gading Blok M No. 18, Jakarta Utara',
-                'phone' => '021-45879900',
+                'address' => 'Jl. HOS Cokroaminoto No.84, Tegalrejo, Kec. Tegalrejo, Kota Yogyakarta, Daerah Istimewa Yogyakarta 55253',
+                'phone' => '0822-4176-8402',
                 'is_active' => true,
             ]);
         }

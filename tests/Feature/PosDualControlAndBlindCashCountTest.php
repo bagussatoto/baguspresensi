@@ -1187,6 +1187,142 @@ class PosDualControlAndBlindCashCountTest extends TestCase
         $this->assertEquals(350000.0, (float) $summary->total_internet_sales);
     }
 
+    public function test_cashier_cannot_manually_lock_or_alter_print_counter(): void
+    {
+        // Kasir biasa mencoba mengirimkan override angka print manual
+        $response = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->postJson(route('presensi2.penjualan.kunci-print'), [
+                'action' => 'lock',
+                'locked_print_pages' => 0,
+                'locked_print_amount' => 0,
+            ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_cashier_submitting_print_adjustment_without_pin_is_pending_approval(): void
+    {
+        $response = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->postJson(route('presensi2.penjualan.penyesuaian-print'), [
+                'raw_print_pages' => 20,
+                'raw_print_amount' => 20000,
+                'print_adjustment_pages' => 5,
+                'print_adjustment_amount' => 5000,
+                'print_adjustment_reason' => 'paper_jam',
+                'print_adjustment_notes' => 'Kertas tersangkut di roll printer 5 lembar.',
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson(['success' => true, 'status' => 'pending_approval']);
+
+        $summary = ShiftSalesSummary::where('employee_id', $this->cashier->id)->latest('id')->first();
+        $this->assertNotNull($summary);
+        $this->assertEquals('pending_approval', $summary->print_adjustment_status);
+        $this->assertEquals(5, $summary->print_adjustment_pages);
+        $this->assertEquals(5000.0, (float) $summary->print_adjustment_amount);
+        // Anti-Fraud: omset target kasir BELUM dipotong saat pending
+        $this->assertEquals(20000.0, (float) $summary->locked_print_amount);
+        $this->assertEquals(20, $summary->locked_print_pages);
+
+        // Halaman POS menampilkan badge status menunggu persetujuan
+        $posPage = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->get(route('presensi2.penjualan'));
+        $posPage->assertOk();
+        $posPage->assertSee('MENUNGGU PERSETUJUAN');
+        $posPage->assertSee('Kertas Macet');
+    }
+
+    public function test_supervisor_approves_print_adjustment_successfully(): void
+    {
+        $summary = ShiftSalesSummary::create([
+            'employee_id' => $this->cashier->id,
+            'branch_id' => $this->branch->id,
+            'work_date' => Carbon::today()->toDateString(),
+            'total_fnb_sales' => 50000,
+            'total_internet_sales' => 100000,
+            'raw_print_pages' => 30,
+            'raw_print_amount' => 30000,
+            'print_adjustment_pages' => 10,
+            'print_adjustment_amount' => 10000,
+            'print_adjustment_reason' => 'bad_ink',
+            'print_adjustment_notes' => 'Tinta bergaris hitam rusak',
+            'print_adjustment_status' => 'pending_approval',
+            'is_print_locked' => true,
+            'locked_print_pages' => 30,
+            'locked_print_amount' => 30000,
+            'status' => 'open',
+        ]);
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->supervisor->id])
+            ->postJson(route('presensi2.penjualan.penyesuaian-print.approve', ['summary' => $summary->id]));
+
+        $response->assertStatus(200);
+        $response->assertJson(['success' => true]);
+
+        $summary->refresh();
+        $this->assertEquals('approved', $summary->print_adjustment_status);
+        $this->assertEquals(20, $summary->locked_print_pages);
+        $this->assertEquals(20000.0, (float) $summary->locked_print_amount);
+    }
+
+    public function test_supervisor_rejects_print_adjustment_successfully(): void
+    {
+        $summary = ShiftSalesSummary::create([
+            'employee_id' => $this->cashier->id,
+            'branch_id' => $this->branch->id,
+            'work_date' => Carbon::today()->toDateString(),
+            'total_fnb_sales' => 50000,
+            'total_internet_sales' => 100000,
+            'raw_print_pages' => 20,
+            'raw_print_amount' => 20000,
+            'print_adjustment_pages' => 5,
+            'print_adjustment_amount' => 5000,
+            'print_adjustment_reason' => 'paper_jam',
+            'print_adjustment_notes' => 'Klaim kertas macet',
+            'print_adjustment_status' => 'pending_approval',
+            'is_print_locked' => true,
+            'locked_print_pages' => 20,
+            'locked_print_amount' => 20000,
+            'status' => 'open',
+        ]);
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->supervisor->id])
+            ->postJson(route('presensi2.penjualan.penyesuaian-print.reject', ['summary' => $summary->id]), [
+                'rejection_reason' => 'Fisik kertas rusak tidak ditemukan di tempat sampah printer.',
+            ]);
+
+        $response->assertStatus(200);
+
+        $summary->refresh();
+        $this->assertEquals('rejected', $summary->print_adjustment_status);
+        $this->assertEquals('Fisik kertas rusak tidak ditemukan di tempat sampah printer.', $summary->print_adjustment_rejection_reason);
+        $this->assertEquals(20, $summary->locked_print_pages);
+        $this->assertEquals(20000.0, (float) $summary->locked_print_amount);
+    }
+
+    public function test_cashier_with_valid_supervisor_pin_print_adjustment_is_instantly_approved(): void
+    {
+        $response = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+            ->postJson(route('presensi2.penjualan.penyesuaian-print'), [
+                'raw_print_pages' => 15,
+                'raw_print_amount' => 15000,
+                'print_adjustment_pages' => 5,
+                'print_adjustment_amount' => 5000,
+                'print_adjustment_reason' => 'internal_use',
+                'print_adjustment_notes' => 'Cetak jadwal shift karyawan operasional toko.',
+                'supervisor_pin' => '998877', // PIN Supervisor valid
+            ]);
+
+        $response->assertStatus(200);
+        $response->assertJson(['success' => true, 'is_approved' => true, 'status' => 'approved']);
+
+        $summary = ShiftSalesSummary::where('employee_id', $this->cashier->id)->latest('id')->first();
+        $this->assertNotNull($summary);
+        $this->assertEquals('approved', $summary->print_adjustment_status);
+        $this->assertEquals(10, $summary->locked_print_pages);
+        $this->assertEquals(10000.0, (float) $summary->locked_print_amount);
+    }
+
     private function makePendingBillingAdjustment(): ShiftSalesSummary
     {
         return ShiftSalesSummary::create([

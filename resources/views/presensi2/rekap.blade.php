@@ -974,6 +974,48 @@
         </div>
     @endif
 
+    {{-- ALERT OTORISASI DUAL CONTROL: PENYESUAIAN PRINT KERTAS PENDING APPROVAL --}}
+    @if($salesSummary && $salesSummary->isPrintAdjustmentPending() && isset($currentEmployee) && $currentEmployee->canApproveBillingAdjustment())
+        <div class="screen-only-rekap" style="background: rgba(2, 132, 199, 0.12); border: 1px solid rgba(2, 132, 199, 0.45); border-radius: 8px; padding: 14px 18px; margin-bottom: 16px; color: #bae6fd; box-shadow: 0 4px 16px rgba(0,0,0,0.25);">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                <div style="flex: 1; min-width: 280px;">
+                    <div style="font-weight: 800; font-size: 14px; display: flex; align-items: center; gap: 8px; color: #38bdf8;">
+                        <span style="font-size: 18px;">🖨️</span>
+                        <span>PERSETUJUAN ADMIN: Pengajuan Kompensasi Print Kertas Kasir</span>
+                        <span style="font-size: 10px; background: #0369a1; color: #ffffff; padding: 2px 8px; border-radius: 9999px; font-weight: 700;">Anti-Fraud Dual Control</span>
+                    </div>
+                    <div style="font-size: 12px; color: #cbd5e1; margin-top: 6px; line-height: 1.5;">
+                        Kasir <strong>{{ $salesSummary->employee?->name ?? 'Kasir Shift' }}</strong> mengajukan kompensasi kertas rusak:
+                        <strong style="color: #f87171;">-{{ $salesSummary->print_adjustment_pages }} lbr (-Rp {{ number_format((float) $salesSummary->print_adjustment_amount, 0, ',', '.') }})</strong>
+                        ({{ $salesSummary->printAdjustmentReasonLabel() }})
+                    </div>
+                    @if($salesSummary->print_adjustment_notes)
+                        <div style="font-size: 11px; color: #94a3b8; margin-top: 4px; font-style: italic;">
+                            "{{ $salesSummary->print_adjustment_notes }}"
+                        </div>
+                    @endif
+                    <div style="font-size: 11px; color: #38bdf8; margin-top: 4px;">
+                        <em>*Demi keamanan saldo kas, potongan print BELUM memotong uang kasir sampai Anda menyetujuinya di bawah ini.</em>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <form action="{{ route('presensi2.penjualan.penyesuaian-print.approve', $salesSummary->id) }}" method="POST" onsubmit="return confirm('Setujui kompensasi print {{ $salesSummary->print_adjustment_pages }} lbr (Rp {{ number_format((float) $salesSummary->print_adjustment_amount, 0, ',', '.') }}) untuk kasir {{ $salesSummary->employee?->name }}?')">
+                        @csrf
+                        <button type="submit" style="padding: 9px 16px; background: #0284c7; color: #fff; border: none; border-radius: 6px; font-size: 12.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);">
+                            <span>✓</span> Setujui Print
+                        </button>
+                    </form>
+                    <form action="{{ route('presensi2.penjualan.penyesuaian-print.reject', $salesSummary->id) }}" method="POST" onsubmit="return confirm('Tolak pengajuan penyesuaian print ini? Kasir wajib menyetor omset penuh tanpa potongan.')">
+                        @csrf
+                        <button type="submit" style="padding: 9px 16px; background: #dc2626; color: #fff; border: none; border-radius: 6px; font-size: 12.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                            <span>✕</span> Tolak
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    @endif
+
     {{-- RINGKASAN KEUANGAN SHIFT (METRIC CARDS) --}}
     <div class="screen-only-rekap" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 16px;">
         {{-- Total Omset Kotor --}}
@@ -1058,6 +1100,34 @@
                 <span>{{ $isPrintLocked ? '🔒 Nilai Terkunci' : (($realHardwarePages ?? 0) > 0 ? '🖨️ Canon USB Live' : '🔄 POS Otomatis') }}</span>
                 <span>{{ $totalPrintPages }} Lembar @if(($realHardwarePages ?? 0) > 0)<small style="opacity: 0.8;">(USB: {{ $realHardwarePages }})</small>@endif</span>
             </div>
+            @if($salesSummary && ($salesSummary->hasPrintAdjustment() || $salesSummary->print_adjustment_status === 'rejected'))
+                @php
+                    $adjStatus = $salesSummary->print_adjustment_status ?? 'approved';
+                    $isApproved = $adjStatus === 'approved';
+                    $isPending = $adjStatus === 'pending_approval';
+                    $isRejected = $adjStatus === 'rejected';
+                @endphp
+                <div style="margin-top: 6px; padding: 6px 8px; background: {{ $isApproved ? 'rgba(34, 197, 94, 0.15)' : ($isPending ? 'rgba(245, 158, 11, 0.2)' : 'rgba(239, 68, 68, 0.15)') }}; border: 1px solid {{ $isApproved ? 'rgba(34, 197, 94, 0.3)' : ($isPending ? 'rgba(245, 158, 11, 0.4)' : 'rgba(239, 68, 68, 0.3)') }}; border-radius: 6px; font-size: 11px;">
+                    <div style="display: flex; justify-content: space-between; font-weight: 700; color: {{ $isApproved ? '#86efac' : ($isPending ? '#fde047' : '#fca5a5') }};">
+                        <span>🖨️ {{ $salesSummary->printAdjustmentReasonLabel() }}</span>
+                        <span style="{{ $isRejected ? 'text-decoration: line-through; opacity: 0.6;' : '' }}">-{{ $salesSummary->print_adjustment_pages }} lbr (-Rp {{ number_format((float) $salesSummary->print_adjustment_amount, 0, ',', '.') }})</span>
+                    </div>
+                    <div style="font-size: 10px; margin-top: 3px; color: {{ $isApproved ? '#bbf7d0' : ($isPending ? '#fef08a' : '#fecaca') }}; font-weight: 600;">
+                        @if($isApproved)
+                            ✓ Disetujui Admin: {{ $salesSummary->print_adjustment_approved_by }}
+                        @elseif($isPending)
+                            ⏳ Menunggu Persetujuan Admin (Potongan Belum Aktif)
+                        @elseif($isRejected)
+                            ✕ Ditolak Admin: {{ $salesSummary->print_adjustment_rejection_reason }}
+                        @endif
+                    </div>
+                    @if($salesSummary->print_adjustment_notes)
+                        <div style="font-size: 10px; color: #94a3b8; margin-top: 2px; font-style: italic;">
+                            "{{ $salesSummary->print_adjustment_notes }}"
+                        </div>
+                    @endif
+                </div>
+            @endif
         </div>
     </div>
 

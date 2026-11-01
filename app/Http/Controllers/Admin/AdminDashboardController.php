@@ -71,6 +71,11 @@ class AdminDashboardController extends Controller
             ->take(8)
             ->get();
 
+        $billingPendingCount = ShiftSalesSummary::where(function ($q) {
+            $q->where('billing_adjustment_status', 'pending_approval')
+                ->orWhere('print_adjustment_status', 'pending_approval');
+        })->count();
+
         return view('admin.dashboard.index', compact(
             'profileData',
             'shifts',
@@ -82,7 +87,8 @@ class AdminDashboardController extends Controller
             'stockStatsTotalSku',
             'reportSummary',
             'profitAnalytics',
-            'recentPosSales'
+            'recentPosSales',
+            'billingPendingCount'
         ));
     }
 

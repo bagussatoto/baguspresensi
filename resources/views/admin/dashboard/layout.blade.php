@@ -872,6 +872,7 @@
                         <li><a href="{{ route('admin.karyawan.reset-password') }}" class="nav-sub-link {{ request()->routeIs('admin.karyawan.reset-password') ? 'active' : '' }}"><span>🔑</span> Otorisasi Reset Password/PIN</a></li>
                         <li><a href="{{ route('admin.data', ['tab' => 'tab-jadwal']) }}" class="nav-sub-link {{ request('tab') == 'tab-jadwal' ? 'active' : '' }}"><span>📅</span> Jadwal Shift Karyawan</a></li>
                         <li><a href="{{ route('admin.data', ['tab' => 'tab-billing']) }}" class="nav-sub-link {{ request('tab') == 'tab-billing' ? 'active' : '' }}"><span>💰</span> Data Billing Setiap Shift</a></li>
+                        <li><a href="{{ route('admin.penjualan.penyesuaian-billing') }}" class="nav-sub-link {{ request()->routeIs('admin.penjualan.penyesuaian-billing*') ? 'active' : '' }}"><span>⚡</span> Persetujuan Penyesuaian Billing</a></li>
                         <li><a href="{{ route('admin.data', ['tab' => 'tab-presensi']) }}" class="nav-sub-link {{ request('tab') == 'tab-presensi' ? 'active' : '' }}"><span>👥</span> Presensi Karyawan</a></li>
                         <li><a href="{{ route('admin.data', ['tab' => 'tab-jamkerja']) }}" class="nav-sub-link {{ request('tab') == 'tab-jamkerja' ? 'active' : '' }}"><span>⏱️</span> Jam Kerja Karyawan</a></li>
                         <li><a href="{{ route('admin.data', ['tab' => 'tab-sop']) }}" class="nav-sub-link {{ request('tab') == 'tab-sop' ? 'active' : '' }}"><span>📜</span> SOP Operasional</a></li>
@@ -915,11 +916,31 @@
                     </a>
                 </li>
 
-                {{-- 5. KELUAR --}}
+                {{-- 5. PENYESUAIAN BILLING & PRINT --}}
+                @php
+                    $sidebarBillingPendingCount = \App\Models\ShiftSalesSummary::where(function($q) {
+                        $q->where('billing_adjustment_status', 'pending_approval')
+                          ->orWhere('print_adjustment_status', 'pending_approval');
+                    })->count();
+                @endphp
+                <li>
+                    <a href="{{ route('admin.penjualan.penyesuaian-billing') }}" class="nav-link-item {{ request()->routeIs('admin.penjualan.penyesuaian-billing*') ? 'active' : '' }}">
+                        <span class="nav-item-left">
+                            <span>⚡</span> <span>5. Penyesuaian Billing & Print</span>
+                        </span>
+                        @if($sidebarBillingPendingCount > 0)
+                        <span class="badge-status badge-rose" style="font-size: 10px; padding: 2px 7px;">
+                            {{ $sidebarBillingPendingCount }} Baru
+                        </span>
+                        @endif
+                    </a>
+                </li>
+
+                {{-- 6. KELUAR --}}
                 <li>
                     <a href="javascript:void(0)" onclick="openLogoutModal()" class="nav-link-item" style="color: #fb7185;">
                         <span class="nav-item-left">
-                            <span>🚪</span> <span>5. Keluar</span>
+                            <span>🚪</span> <span>6. Keluar</span>
                         </span>
                     </a>
                 </li>

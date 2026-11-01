@@ -116,6 +116,9 @@ Route::prefix('presensi2')->name('presensi2.')->group(function () {
     Route::post('/penjualan/penyesuaian-billing/{summary}/approve', [AttendanceWebV2Controller::class, 'approveBillingAdjustment'])->name('penjualan.penyesuaian-billing.approve');
     Route::post('/penjualan/penyesuaian-billing/{summary}/reject', [AttendanceWebV2Controller::class, 'rejectBillingAdjustment'])->name('penjualan.penyesuaian-billing.reject');
     Route::post('/penjualan/kunci-print', [AttendanceWebV2Controller::class, 'penjualanKunciPrint'])->name('penjualan.kunci-print');
+    Route::post('/penjualan/penyesuaian-print', [AttendanceWebV2Controller::class, 'penjualanPenyesuaianPrint'])->name('penjualan.penyesuaian-print');
+    Route::post('/penjualan/penyesuaian-print/{summary}/approve', [AttendanceWebV2Controller::class, 'approvePrintAdjustment'])->name('penjualan.penyesuaian-print.approve');
+    Route::post('/penjualan/penyesuaian-print/{summary}/reject', [AttendanceWebV2Controller::class, 'rejectPrintAdjustment'])->name('penjualan.penyesuaian-print.reject');
     Route::get('/penjualan/printer/status', [AttendanceWebV2Controller::class, 'getPrinterStatus'])->name('penjualan.printer.status');
     Route::get('/penjualan/printer/agent-script', [AttendanceWebV2Controller::class, 'downloadPrinterAgentScript'])->name('penjualan.printer.agent-script');
     Route::post('/penjualan/printer/manual-sync', [AttendanceWebV2Controller::class, 'manualSyncPrinterData'])->name('penjualan.printer.manual-sync');
@@ -167,8 +170,19 @@ Route::prefix('presensi2')->name('presensi2.')->group(function () {
 // Route pembatalan penjualan fleksibel (GET & POST) yang langsung masuk ke Admin ERP
 Route::match(['get', 'post'], '/bagus/presensi2/penjualan/{sale}/batal', [AttendanceWebV2Controller::class, 'penjualanCancelTransaction']);
 Route::match(['get', 'post'], '/admin/penjualan/{sale}/batal', [AttendanceWebV2Controller::class, 'penjualanCancelTransaction'])->name('admin.penjualan.batal');
+Route::get('/bagus/presensi2/penjualan', [AttendanceWebV2Controller::class, 'penjualanIndex']);
 Route::get('/bagus/presensi2/rekap', [AttendanceWebV2Controller::class, 'rekapIndex']);
 Route::get('/bagus/presensi2/serah-terima', [AttendanceWebV2Controller::class, 'serahTerimaIndex']);
+
+// Alias URL admin dengan prefix /bagus/admin/...
+Route::middleware(['web', 'auditor.readonly'])->group(function () {
+    Route::get('/bagus/admin/penjualan', [AdminSaleController::class, 'index']);
+    Route::get('/bagus/admin/penjualan/penyesuaian-billing', [AdminSaleController::class, 'billingAdjustmentIndex']);
+    Route::post('/bagus/admin/penjualan/penyesuaian-billing/{summary}/approve', [AdminSaleController::class, 'approveBillingAdjustment']);
+    Route::post('/bagus/admin/penjualan/penyesuaian-billing/{summary}/reject', [AdminSaleController::class, 'rejectBillingAdjustment']);
+    Route::post('/bagus/admin/penjualan/penyesuaian-print/{summary}/approve', [AdminSaleController::class, 'approvePrintAdjustment']);
+    Route::post('/bagus/admin/penjualan/penyesuaian-print/{summary}/reject', [AdminSaleController::class, 'rejectPrintAdjustment']);
+});
 
 // Alias URL alternatif presensi/login2 dan register sesuai kebutuhan user
 Route::get('/presensi/login2', [AttendanceWebV2Controller::class, 'showLogin']);
@@ -295,6 +309,8 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::get('/penjualan/penyesuaian-billing', [AdminSaleController::class, 'billingAdjustmentIndex'])->name('admin.penjualan.penyesuaian-billing');
     Route::post('/penjualan/penyesuaian-billing/{summary}/approve', [AdminSaleController::class, 'approveBillingAdjustment'])->name('admin.penjualan.penyesuaian-billing.approve');
     Route::post('/penjualan/penyesuaian-billing/{summary}/reject', [AdminSaleController::class, 'rejectBillingAdjustment'])->name('admin.penjualan.penyesuaian-billing.reject');
+    Route::post('/penjualan/penyesuaian-print/{summary}/approve', [AdminSaleController::class, 'approvePrintAdjustment'])->name('admin.penjualan.penyesuaian-print.approve');
+    Route::post('/penjualan/penyesuaian-print/{summary}/reject', [AdminSaleController::class, 'rejectPrintAdjustment'])->name('admin.penjualan.penyesuaian-print.reject');
     Route::get('/penjualan/{sale}', [AdminSaleController::class, 'show'])->name('admin.penjualan.show');
     Route::put('/penjualan/{sale}', [AdminSaleController::class, 'update'])->name('admin.penjualan.update');
     Route::post('/penjualan/{sale}/status', [AdminSaleController::class, 'updateStatus'])->name('admin.penjualan.status');

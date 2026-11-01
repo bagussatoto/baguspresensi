@@ -60,6 +60,19 @@ class ShiftSalesSummary extends Model
         'locked_print_amount',
         'locked_print_pages',
         'locked_print_at',
+        'raw_print_pages',
+        'raw_print_amount',
+        'print_adjustment_pages',
+        'print_adjustment_amount',
+        'print_adjustment_reason',
+        'print_adjustment_notes',
+        'print_adjusted_by',
+        'print_adjustment_status',
+        'print_adjustment_approved_by',
+        'print_adjustment_approved_at',
+        'print_adjustment_rejected_by',
+        'print_adjustment_rejected_at',
+        'print_adjustment_rejection_reason',
         'status',
         'deposit_status',
         'deposited_amount',
@@ -100,6 +113,12 @@ class ShiftSalesSummary extends Model
         'locked_print_amount' => 'decimal:2',
         'locked_print_pages' => 'integer',
         'locked_print_at' => 'datetime',
+        'raw_print_pages' => 'integer',
+        'raw_print_amount' => 'decimal:2',
+        'print_adjustment_pages' => 'integer',
+        'print_adjustment_amount' => 'decimal:2',
+        'print_adjustment_approved_at' => 'datetime',
+        'print_adjustment_rejected_at' => 'datetime',
         'deposited_amount' => 'decimal:2',
         'retained_drawer_cash' => 'decimal:2',
         'deposited_at' => 'datetime',
@@ -155,6 +174,21 @@ class ShiftSalesSummary extends Model
     public function isBillingAdjustmentPending(): bool
     {
         return $this->hasBillingAdjustment() && $this->billing_adjustment_status === 'pending_approval';
+    }
+
+    public function hasPrintAdjustment(): bool
+    {
+        return (float) ($this->print_adjustment_amount ?? 0) > 0 || (int) ($this->print_adjustment_pages ?? 0) > 0;
+    }
+
+    public function isPrintAdjustmentApproved(): bool
+    {
+        return $this->hasPrintAdjustment() && $this->print_adjustment_status === 'approved';
+    }
+
+    public function isPrintAdjustmentPending(): bool
+    {
+        return $this->hasPrintAdjustment() && $this->print_adjustment_status === 'pending_approval';
     }
 
     public function isBillingAdjustmentRejected(): bool
@@ -219,6 +253,69 @@ class ShiftSalesSummary extends Model
             'customer_refund' => '🔄 Refund / Kompensasi Waktu Pelanggan',
             'manual_correction' => '✏️ Koreksi Selisih Kasir Manual',
             default => $this->billing_adjustment_reason ?: 'Penyesuaian Operasional',
+        };
+    }
+
+    /**
+     * Setujui penyesuaian print kertas: potongan lembar/nominal resmi memotong target pendapatan print shift.
+     */
+    public function approvePrintAdjustment(string $approverName): void
+    {
+        $rawAmount = (float) ($this->raw_print_amount ?? $this->locked_print_amount ?? 0);
+        $rawPages = (int) ($this->raw_print_pages ?? $this->locked_print_pages ?? 0);
+        $adjAmount = (float) ($this->print_adjustment_amount ?? 0);
+        $adjPages = (int) ($this->print_adjustment_pages ?? 0);
+
+        $netAmount = max(0, $rawAmount - $adjAmount);
+        $netPages = max(0, $rawPages - $adjPages);
+        $now = now();
+
+        $this->print_adjustment_status = 'approved';
+        $this->print_adjustment_approved_by = $approverName;
+        $this->print_adjustment_approved_at = $now;
+        $this->is_print_locked = true;
+        $this->locked_print_amount = $netAmount;
+        $this->locked_print_pages = $netPages;
+        $this->locked_print_at = $now;
+        $this->save();
+    }
+
+    /**
+     * Tolak penyesuaian print kertas: target omset print kembali penuh tanpa potongan.
+     */
+    public function rejectPrintAdjustment(string $rejectorName, string $reason): void
+    {
+        $rawAmount = (float) ($this->raw_print_amount ?? $this->locked_print_amount ?? 0);
+        $rawPages = (int) ($this->raw_print_pages ?? $this->locked_print_pages ?? 0);
+
+        $this->print_adjustment_status = 'rejected';
+        $this->print_adjustment_rejected_by = $rejectorName;
+        $this->print_adjustment_rejected_at = now();
+        $this->print_adjustment_rejection_reason = $reason;
+        $this->is_print_locked = true;
+        $this->locked_print_amount = $rawAmount;
+        $this->locked_print_pages = $rawPages;
+        $this->save();
+    }
+
+    public function printAdjustmentStatusLabel(): string
+    {
+        return match ($this->print_adjustment_status) {
+            'approved' => 'Disetujui Admin/Supervisor',
+            'pending_approval' => 'Menunggu Persetujuan Admin',
+            'rejected' => 'Ditolak Admin',
+            default => 'Tidak Ada',
+        };
+    }
+
+    public function printAdjustmentReasonLabel(): string
+    {
+        return match ($this->print_adjustment_reason) {
+            'paper_jam' => '📄 Kertas Macet / Tersangkut (Paper Jam)',
+            'bad_ink' => '💧 Tinta Rusak / Bergaris / Pudar',
+            'internal_use' => '🏢 Dokumen Operasional Toko Sendiri',
+            'wrong_doc' => '❌ Salah Dokumen / Salah Cetak Pelanggan',
+            default => $this->print_adjustment_reason ?: 'Penyesuaian Print',
         };
     }
 

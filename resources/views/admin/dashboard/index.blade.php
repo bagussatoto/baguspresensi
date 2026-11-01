@@ -197,6 +197,43 @@
                 </a>
             </div>
         </div>
+
+        <!-- KARTU MODUL 5: PENYESUAIAN BILLING & PRINT -->
+        <div class="dashboard-section-card" style="margin-bottom: 0; display: flex; flex-direction: column; justify-content: space-between;">
+            <div style="padding: 22px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(244, 63, 94, 0.15); color: #fb7185; display: flex; align-items: center; justify-content: center; font-size: 22px;">
+                        ⚡
+                    </div>
+                    @php
+                        $pendingCount = $billingPendingCount ?? \App\Models\ShiftSalesSummary::where(function($q) {
+                            $q->where('billing_adjustment_status', 'pending_approval')
+                              ->orWhere('print_adjustment_status', 'pending_approval');
+                        })->count();
+                    @endphp
+                    <span class="badge-status {{ $pendingCount > 0 ? 'badge-rose' : 'badge-emerald' }}">
+                        {{ $pendingCount > 0 ? $pendingCount . ' Menunggu Persetujuan' : 'Semua Terverifikasi' }}
+                    </span>
+                </div>
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 6px;">
+                    5. Persetujuan Penyesuaian Billing & Print
+                </h3>
+                <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 16px;">
+                    Otorisasi penyesuaian billing internet (kompensasi mati listrik) dan print kertas (kertas macet / tinta rusak / cetak toko) dengan dual-control anti-fraud guna mencegah kebocoran kas.
+                </p>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px;">
+                    <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; color: #cbd5e1;">🛡️ Dual-Control</span>
+                    <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; color: #cbd5e1;">⚡ Billing Internet</span>
+                    <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; color: #cbd5e1;">🖨️ Kertas Rusak & Toko</span>
+                    <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; color: #cbd5e1;">📝 Audit Trail</span>
+                </div>
+            </div>
+            <div style="padding: 14px 22px; background: rgba(15, 23, 42, 0.4); border-top: 1px solid var(--border-glass);">
+                <a href="{{ route('admin.penjualan.penyesuaian-billing') }}" class="btn-action-sm btn-action-primary" style="width: 100%; justify-content: center; padding: 10px; font-size: 13px; background: linear-gradient(135deg, #e11d48, #be123c); border-color: #f43f5e;">
+                    Buka Otorisasi Penyesuaian →
+                </a>
+            </div>
+        </div>
     </div>
 </div>
 

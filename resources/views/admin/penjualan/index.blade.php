@@ -1303,8 +1303,8 @@
                 <div class="receipt-card" id="receiptContent">
                     <div class="receipt-header">
                         <div class="receipt-company">MAYA GRAHA KENCANA</div>
-                        <div class="receipt-sub">Jl. Boulevard Kelapa Gading Blok M No. 18, Jakarta Utara</div>
-                        <div class="receipt-sub">Telp: 021-45879900 • NPWP: 01.445.678.9-012.000</div>
+                        <div class="receipt-sub">Jl. HOS Cokroaminoto No.84, Tegalrejo, Kec. Tegalrejo, Kota Yogyakarta, Daerah Istimewa Yogyakarta 55253</div>
+                        <div class="receipt-sub">Telp: 0822-4176-8402</div>
                     </div>
                     <div style="font-size: 11px; margin-bottom: 8px; line-height: 1.5;">
                         <div>No. Invoice : <strong id="recInvoice">INV-NET-...</strong></div>

@@ -2747,9 +2747,18 @@ class AttendanceWebV2Controller extends Controller
 
         $allPrintLogs = $allPrintLogs->sortByDesc('timestamp')->values();
 
-        $isPrintLocked = (bool) ($salesSummary?->is_print_locked);
-        $totalPrintPages = $isPrintLocked ? (int) ($salesSummary->locked_print_pages ?? $spoolerPages) : $spoolerPages;
-        $totalPrintIncome = $isPrintLocked ? (float) ($salesSummary->locked_print_amount ?? $spoolerAmount) : $spoolerAmount;
+        if ($salesSummary && $salesSummary->isPrintAdjustmentApproved()) {
+            $effectivePrintPages = max(0, $spoolerPages - (int) $salesSummary->print_adjustment_pages);
+            $effectivePrintIncome = max(0, $spoolerAmount - (float) $salesSummary->print_adjustment_amount);
+        } else {
+            $effectivePrintPages = $spoolerPages;
+            $effectivePrintIncome = $spoolerAmount;
+        }
+
+        $isClosed = ($salesSummary?->status === 'closed');
+        $isPrintLocked = $isClosed && (bool) ($salesSummary?->is_print_locked);
+        $totalPrintPages = $isPrintLocked ? (int) ($salesSummary->locked_print_pages ?? $effectivePrintPages) : $effectivePrintPages;
+        $totalPrintIncome = $isPrintLocked ? (float) ($salesSummary->locked_print_amount ?? $effectivePrintIncome) : $effectivePrintIncome;
 
         // 4. Monitoring Perbandingan Stok: Sebelumnya vs Terjual vs Sesudahnya
         $stockComparisons = $this->buildStockComparison($workDate, $employee);
@@ -3726,6 +3735,309 @@ class AttendanceWebV2Controller extends Controller
     }
 
     /**
+     * Penyesuaian Print Kertas Shift (Kertas Macet / Paper Jam / Tinta Rusak / Dokumen Toko).
+     */
+    public function penjualanPenyesuaianPrint(Request $request): RedirectResponse|JsonResponse
+    {
+        $employee = $this->getAuthenticatedEmployee();
+        if (! $employee) {
+            return redirect()->route('presensi2.login');
+        }
+
+        $validated = $request->validate([
+            'raw_print_pages' => 'required|integer|min:0',
+            'raw_print_amount' => 'required|numeric|min:0',
+            'print_adjustment_pages' => 'required|integer|min:0',
+            'print_adjustment_amount' => 'required|numeric|min:0',
+            'print_adjustment_reason' => 'required|string|in:paper_jam,bad_ink,internal_use,wrong_doc,other',
+            'print_adjustment_notes' => 'required|string|max:1000',
+            'supervisor_pin' => 'nullable|string|max:50',
+        ]);
+
+        $now = Carbon::now();
+        $activeShift = $this->shiftResolverService->resolveShift(null, $now);
+        $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
+
+        $attendanceToday = AttendanceRecord::where('employee_id', $employee->id)
+            ->where('work_date', $workDate->toDateString())
+            ->latest('id')
+            ->first();
+
+        $summary = ShiftSalesSummary::firstOrNew([
+            'employee_id' => $employee->id,
+            'work_date' => $workDate->toDateString(),
+            'shift_id' => $activeShift?->id,
+        ]);
+
+        if (! $summary->exists) {
+            $summary->branch_id = $employee->branch_id ?? 3;
+            $summary->attendance_record_id = $attendanceToday?->id;
+            $summary->total_fnb_sales = 0;
+            $summary->total_internet_sales = 0;
+            $summary->total_revenue = 0;
+            $summary->cash_in_drawer = 0;
+            $summary->status = 'open';
+        }
+
+        $rawPages = (int) $validated['raw_print_pages'];
+        $rawAmount = (float) $validated['raw_print_amount'];
+        $adjPages = (int) $validated['print_adjustment_pages'];
+        $adjAmount = (float) $validated['print_adjustment_amount'];
+
+        $netPages = max(0, $rawPages - $adjPages);
+        $netAmount = max(0, $rawAmount - $adjAmount);
+
+        // Validasi Otorisasi Dual Control (Anti-Fraud Kasir)
+        $isPrivileged = $employee->canApproveBillingAdjustment();
+        $supervisor = null;
+        $supervisorPin = trim((string) ($validated['supervisor_pin'] ?? ''));
+
+        if (! empty($supervisorPin)) {
+            $supervisor = $this->resolveSupervisorByPin($supervisorPin, $employee->branch_id);
+            if (! $supervisor) {
+                $errMsg = 'PIN Supervisor/Admin tidak valid! Penyesuaian print kertas ditolak untuk keamanan kas.';
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json(['success' => false, 'message' => $errMsg, 'require_supervisor' => true], 422);
+                }
+
+                return back()->with('error', $errMsg);
+            }
+        }
+
+        $isApproved = $isPrivileged || $supervisor !== null;
+        $adjustmentStatus = $isApproved ? 'approved' : 'pending_approval';
+        $approvedBy = $isApproved ? ($supervisor?->name ?? $employee->name) : null;
+        $approvedAt = $isApproved ? $now : null;
+
+        $summary->raw_print_pages = $rawPages;
+        $summary->raw_print_amount = $rawAmount;
+        $summary->print_adjustment_pages = $adjPages;
+        $summary->print_adjustment_amount = $adjAmount;
+        $summary->print_adjustment_reason = $validated['print_adjustment_reason'];
+        $summary->print_adjustment_notes = $validated['print_adjustment_notes'];
+        $summary->print_adjusted_by = $employee->name;
+        $summary->print_adjustment_status = $adjustmentStatus;
+        $summary->print_adjustment_approved_by = $approvedBy;
+        $summary->print_adjustment_approved_at = $approvedAt;
+
+        if ($isApproved) {
+            $summary->is_print_locked = true;
+            $summary->locked_print_pages = $netPages;
+            $summary->locked_print_amount = $netAmount;
+            $summary->locked_print_at = $now;
+        } else {
+            // PENDING APPROVAL: Belum dipotong sampai di-ACC admin
+            $summary->is_print_locked = true;
+            $summary->locked_print_pages = $rawPages;
+            $summary->locked_print_amount = $rawAmount;
+            $summary->locked_print_at = $now;
+        }
+        $summary->save();
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => ShiftSalesSummary::class,
+            'auditable_id' => $summary->id,
+            'action' => $isApproved ? 'shift_print_adjustment_approved' : 'shift_print_adjustment_requested',
+            'old_values' => ['raw_print_pages' => $rawPages, 'raw_print_amount' => $rawAmount],
+            'new_values' => [
+                'raw_print_pages' => $rawPages,
+                'raw_print_amount' => $rawAmount,
+                'print_adjustment_pages' => $adjPages,
+                'print_adjustment_amount' => $adjAmount,
+                'net_print_pages' => $netPages,
+                'net_print_amount' => $netAmount,
+                'status' => $adjustmentStatus,
+                'reason' => $summary->printAdjustmentReasonLabel(),
+                'notes' => $validated['print_adjustment_notes'],
+                'adjusted_by' => $employee->name,
+                'approved_by' => $approvedBy,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Portal Presensi v2',
+            'created_at' => $now,
+        ]));
+
+        $reasonLabel = $summary->printAdjustmentReasonLabel();
+        if ($isApproved) {
+            $message = "Penyesuaian print kertas ({$reasonLabel}) DISETUJUI oleh {$approvedBy}! Potongan {$adjPages} lbr (Rp ".number_format($adjAmount, 0, ',', '.').'), Target print shift dikunci Rp '.number_format($netAmount, 0, ',', '.').'.';
+        } else {
+            $message = "Pengajuan kompensasi print kertas ({$reasonLabel}) sebesar {$adjPages} lbr (Rp ".number_format($adjAmount, 0, ',', '.').') BERHASIL DIAJUKAN! Status: Menunggu Persetujuan Admin. Demi keamanan kas, saldo kas belum dipotong sampai Admin menyetujui.';
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'summary' => $summary->fresh(),
+                'is_approved' => $isApproved,
+                'status' => $adjustmentStatus,
+                'net_print_pages' => $isApproved ? $netPages : $rawPages,
+                'net_print_amount' => $isApproved ? $netAmount : $rawAmount,
+                'print_adjustment_pages' => $adjPages,
+                'print_adjustment_amount' => $adjAmount,
+                'raw_print_amount' => $rawAmount,
+            ]);
+        }
+
+        return redirect()->route('presensi2.penjualan')->with('success', $message);
+    }
+
+    /**
+     * Setujui Penyesuaian Print Kertas Shift oleh Admin/Supervisor.
+     */
+    public function approvePrintAdjustment(Request $request, ShiftSalesSummary $summary): RedirectResponse|JsonResponse
+    {
+        $employee = $this->getAuthenticatedEmployee();
+        if (! $employee) {
+            return redirect()->route('presensi2.login');
+        }
+
+        $isPrivileged = $employee->canApproveBillingAdjustment();
+        $supervisor = null;
+        $supervisorPin = trim((string) $request->input('supervisor_pin', ''));
+
+        if (! empty($supervisorPin)) {
+            $supervisor = $this->resolveSupervisorByPin($supervisorPin, $summary->branch_id);
+        }
+
+        if (! $isPrivileged && ! $supervisor) {
+            $errMsg = 'Akses ditolak! Anda harus login sebagai Admin/Supervisor atau memasukkan PIN Supervisor yang valid.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => $errMsg], 403);
+            }
+
+            return back()->with('error', $errMsg);
+        }
+
+        $approverName = $supervisor?->name ?? $employee->name;
+        $now = Carbon::now();
+
+        if (! $summary->isPrintAdjustmentPending()) {
+            $errMsg = 'Pengajuan ini sudah diproses atau tidak dalam status menunggu persetujuan.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => $errMsg], 422);
+            }
+
+            return back()->with('error', $errMsg);
+        }
+
+        $rawAmount = (float) ($summary->raw_print_amount ?? $summary->locked_print_amount ?? 0);
+        $rawPages = (int) ($summary->raw_print_pages ?? $summary->locked_print_pages ?? 0);
+        $adjAmount = (float) ($summary->print_adjustment_amount ?? 0);
+        $adjPages = (int) ($summary->print_adjustment_pages ?? 0);
+
+        $summary->approvePrintAdjustment($approverName);
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => ShiftSalesSummary::class,
+            'auditable_id' => $summary->id,
+            'action' => 'shift_print_adjustment_approved_by_admin',
+            'old_values' => ['locked_print_amount' => $rawAmount, 'locked_print_pages' => $rawPages],
+            'new_values' => [
+                'status' => 'approved',
+                'approved_by' => $approverName,
+                'potongan_pages' => $adjPages,
+                'potongan_amount' => $adjAmount,
+                'net_print_amount' => $summary->locked_print_amount,
+                'net_print_pages' => $summary->locked_print_pages,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Portal Presensi v2',
+            'created_at' => $now,
+        ]));
+
+        $message = "Pengajuan penyesuaian print kasir {$summary->employee?->name} ({$adjPages} lbr / Rp ".number_format($adjAmount, 0, ',', '.').") TELAH DISETUJUI oleh {$approverName}. Target setor print resmi dipotong.";
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'summary' => $summary->fresh(),
+            ]);
+        }
+
+        return redirect()->route('presensi2.rekap')->with('success', $message);
+    }
+
+    /**
+     * Tolak Penyesuaian Print Kertas Shift oleh Admin/Supervisor.
+     */
+    public function rejectPrintAdjustment(Request $request, ShiftSalesSummary $summary): RedirectResponse|JsonResponse
+    {
+        $employee = $this->getAuthenticatedEmployee();
+        if (! $employee) {
+            return redirect()->route('presensi2.login');
+        }
+
+        $isPrivileged = $employee->canApproveBillingAdjustment();
+        $supervisor = null;
+        $supervisorPin = trim((string) $request->input('supervisor_pin', ''));
+
+        if (! empty($supervisorPin)) {
+            $supervisor = $this->resolveSupervisorByPin($supervisorPin, $summary->branch_id);
+        }
+
+        if (! $isPrivileged && ! $supervisor) {
+            $errMsg = 'Akses ditolak! Anda harus login sebagai Admin/Supervisor atau memasukkan PIN Supervisor yang valid.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => $errMsg], 403);
+            }
+
+            return back()->with('error', $errMsg);
+        }
+
+        $rejectorName = $supervisor?->name ?? $employee->name;
+        $reason = trim((string) $request->input('rejection_reason', 'Ditolak oleh Admin/Supervisor: Indikasi kertas tidak rusak/bukti fisik tidak ditemukan.'));
+        $now = Carbon::now();
+
+        if (! $summary->isPrintAdjustmentPending()) {
+            $errMsg = 'Pengajuan ini sudah diproses atau tidak dalam status menunggu persetujuan.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => $errMsg], 422);
+            }
+
+            return back()->with('error', $errMsg);
+        }
+
+        $rawAmount = (float) ($summary->raw_print_amount ?? $summary->locked_print_amount ?? 0);
+        $rawPages = (int) ($summary->raw_print_pages ?? $summary->locked_print_pages ?? 0);
+
+        $summary->rejectPrintAdjustment($rejectorName, $reason);
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => ShiftSalesSummary::class,
+            'auditable_id' => $summary->id,
+            'action' => 'shift_print_adjustment_rejected_by_admin',
+            'old_values' => ['print_adjustment_amount' => $summary->print_adjustment_amount],
+            'new_values' => [
+                'status' => 'rejected',
+                'rejected_by' => $rejectorName,
+                'rejection_reason' => $reason,
+                'locked_print_amount' => $rawAmount,
+                'locked_print_pages' => $rawPages,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Portal Presensi v2',
+            'created_at' => $now,
+        ]));
+
+        $message = "Pengajuan penyesuaian print kasir {$summary->employee?->name} DITOLAK oleh {$rejectorName}. Kasir wajib mempertanggungjawabkan omset penuh {$rawPages} lembar (Rp ".number_format($rawAmount, 0, ',', '.').').';
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'summary' => $summary->fresh(),
+            ]);
+        }
+
+        return redirect()->route('presensi2.rekap')->with('success', $message);
+    }
+
+    /**
      * Kunci / Buka Kunci Data Print Kertas Shift (Ganti Data Print).
      */
     public function penjualanKunciPrint(Request $request): RedirectResponse|JsonResponse
@@ -3733,6 +4045,15 @@ class AttendanceWebV2Controller extends Controller
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
             return redirect()->route('presensi2.login');
+        }
+
+        if (! $employee->canApproveBillingAdjustment()) {
+            $msg = 'Akses ditolak: Data print kertas shift terekam otomatis dari Spooler Printer dan dikunci otomatis oleh sistem saat Tutup Shift demi integritas kas.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => $msg], 403);
+            }
+
+            return back()->with('error', $msg);
         }
 
         $now = Carbon::now();
@@ -3903,7 +4224,13 @@ class AttendanceWebV2Controller extends Controller
             ->latest('id')
             ->first();
 
-        $isPrintLocked = (bool) ($salesSummary?->is_print_locked);
+        if ($salesSummary && $salesSummary->isPrintAdjustmentApproved()) {
+            $effectivePages = max(0, $effectivePages - (int) $salesSummary->print_adjustment_pages);
+            $effectiveAmount = max(0, $effectiveAmount - (float) $salesSummary->print_adjustment_amount);
+        }
+
+        $isClosed = ($salesSummary?->status === 'closed');
+        $isPrintLocked = $isClosed && (bool) ($salesSummary?->is_print_locked);
         $totalPrintPages = $isPrintLocked ? (int) ($salesSummary->locked_print_pages ?? $effectivePages) : $effectivePages;
         $totalPrintIncome = $isPrintLocked ? (float) ($salesSummary->locked_print_amount ?? $effectiveAmount) : $effectiveAmount;
 
@@ -4164,9 +4491,18 @@ BAT;
         $spoolerAmount = max($autoPrintAmount, $realHardwareAmount);
         $spoolerPages = max($autoPrintPages, $realHardwarePages);
 
-        $totalPrintIncome = ($existingSummary && $existingSummary->is_print_locked && $existingSummary->locked_print_amount !== null)
+        if ($existingSummary && $existingSummary->isPrintAdjustmentApproved()) {
+            $effectivePrintIncome = max(0, $spoolerAmount - (float) $existingSummary->print_adjustment_amount);
+            $effectivePrintPages = max(0, $spoolerPages - (int) $existingSummary->print_adjustment_pages);
+        } else {
+            $effectivePrintIncome = $spoolerAmount;
+            $effectivePrintPages = $spoolerPages;
+        }
+
+        $isClosed = ($existingSummary && $existingSummary->status === 'closed');
+        $totalPrintIncome = ($isClosed && $existingSummary->is_print_locked && $existingSummary->locked_print_amount !== null)
             ? (float) $existingSummary->locked_print_amount
-            : $spoolerAmount;
+            : $effectivePrintIncome;
 
         $totalRevenue = $totalFnb + $totalInternet + $totalPrintIncome;
         $systemExpectedCash = max(0.0, $totalRevenue - $nonCashAmount);
@@ -4229,7 +4565,7 @@ BAT;
                 'stock_audit' => $stockAudit,
                 'is_print_locked' => true,
                 'locked_print_amount' => $totalPrintIncome,
-                'locked_print_pages' => ($existingSummary?->locked_print_pages ?? $spoolerPages),
+                'locked_print_pages' => $effectivePrintPages,
                 'locked_print_at' => ($existingSummary?->locked_print_at ?? Carbon::now()),
                 'status' => 'closed',
                 'handover_status' => 'completed',
@@ -4522,9 +4858,18 @@ BAT;
         $spoolerPages = max($autoPrintPages, $realHardwarePages);
         $spoolerAmount = max($autoPrintAmount, $realHardwareAmount);
 
-        $isPrintLocked = (bool) ($salesSummary?->is_print_locked);
-        $totalPrintPages = $isPrintLocked ? (int) ($salesSummary->locked_print_pages ?? $spoolerPages) : $spoolerPages;
-        $totalPrintIncome = $isPrintLocked ? (float) ($salesSummary->locked_print_amount ?? $spoolerAmount) : $spoolerAmount;
+        if ($salesSummary && $salesSummary->isPrintAdjustmentApproved()) {
+            $effectivePrintPages = max(0, $spoolerPages - (int) $salesSummary->print_adjustment_pages);
+            $effectivePrintIncome = max(0, $spoolerAmount - (float) $salesSummary->print_adjustment_amount);
+        } else {
+            $effectivePrintPages = $spoolerPages;
+            $effectivePrintIncome = $spoolerAmount;
+        }
+
+        $isClosed = ($salesSummary?->status === 'closed');
+        $isPrintLocked = $isClosed && (bool) ($salesSummary?->is_print_locked);
+        $totalPrintPages = $isPrintLocked ? (int) ($salesSummary->locked_print_pages ?? $effectivePrintPages) : $effectivePrintPages;
+        $totalPrintIncome = $isPrintLocked ? (float) ($salesSummary->locked_print_amount ?? $effectivePrintIncome) : $effectivePrintIncome;
 
         // 5. Total Pendapatan Kotor (Gross Revenue) & Non-Tunai (QRIS)
         $totalGrossRevenue = $totalFnbIncome + $totalInternetIncome + $totalPrintIncome;

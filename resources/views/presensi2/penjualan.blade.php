@@ -1113,6 +1113,146 @@
         </div>
     </div>
 
+    {{-- MODAL PENYESUAIAN PRINT KERTAS (KERTAS MACET / TINTA RUSAK / DOKUMEN TOKO) --}}
+    <div id="modal-penyesuaian-print" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.82); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 100000; align-items: center; justify-content: center; padding: 16px;">
+        <div style="background: #ffffff; border-radius: 12px; width: 100%; max-width: 580px; box-shadow: 0 25px 60px rgba(0,0,0,0.6); overflow: hidden; display: flex; flex-direction: column; color: #1e293b;">
+            <div style="background: linear-gradient(135deg, #0284c7, #0369a1); color: #ffffff; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 15px;">
+                    <span>🖨️</span> Penyesuaian Print Kertas (Kertas Rusak / Operasional Toko)
+                </div>
+                <button type="button" onclick="closeModalPenyesuaianPrint()" style="background: none; border: none; color: #ffffff; font-size: 20px; font-weight: bold; cursor: pointer;">✕</button>
+            </div>
+            
+            <form id="form-penyesuaian-print" onsubmit="submitPenyesuaianPrint(event)" style="padding: 18px 20px; max-height: 80vh; overflow-y: auto;">
+                <div style="background: #e0f2fe; border: 1px solid #bae6fd; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 11.5px; color: #0369a1; line-height: 1.4;">
+                    <strong>💡 Perlindungan Kasir Shift (Anti-Tekor Kasir):</strong>
+                    Gunakan fitur ini jika terjadi <strong>kertas macet (paper jam)</strong>, <strong>tinta bergaris/rusak</strong>, atau kasir mencetak <strong>dokumen operasional toko</strong>. Uang cetak yang disesuaikan <strong>tidak akan dibebankan ke kasir</strong> saat tutup shift setelah disetujui.
+                </div>
+
+                {{-- 1. DATA PRINT SISTEM BRUTO --}}
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 700; color: #475569; margin-bottom: 4px;">
+                            1. Lembar Terbaca Sistem *
+                        </label>
+                        <input type="number" id="adj-print-raw-pages" required min="0"
+                               value="{{ (int) ($salesSummary?->raw_print_pages ?? ($salesSummary && $salesSummary->hasPrintAdjustment() ? $totalPrintPages + $salesSummary->print_adjustment_pages : $totalPrintPages)) }}"
+                               oninput="recalculateNetPrint()"
+                               style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: 700; color: #0f172a; outline: none;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11.5px; font-weight: 700; color: #475569; margin-bottom: 4px;">
+                            2. Omset Cetak Terbaca (Rp) *
+                        </label>
+                        <input type="number" id="adj-print-raw-amount" required min="0" step="100"
+                               value="{{ (int) ($salesSummary?->raw_print_amount ?? ($salesSummary && $salesSummary->hasPrintAdjustment() ? $totalPrintIncome + $salesSummary->print_adjustment_amount : $totalPrintIncome)) }}"
+                               oninput="recalculateNetPrint()"
+                               style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: 700; font-family: monospace; color: #0f172a; outline: none;">
+                    </div>
+                </div>
+
+                {{-- 2. ALASAN PENYESUAIAN PRINT --}}
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 11.5px; font-weight: 700; color: #475569; margin-bottom: 4px;">
+                        3. Alasan Kompensasi / Gangguan Cetak *
+                    </label>
+                    <select id="adj-print-reason" required style="width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12.5px; font-weight: 600; color: #0f172a; outline: none; background: #fff;">
+                        <option value="paper_jam" {{ ($salesSummary?->print_adjustment_reason === 'paper_jam' || ! $salesSummary?->print_adjustment_reason) ? 'selected' : '' }}>📄 Kertas Macet / Tersangkut (Paper Jam)</option>
+                        <option value="bad_ink" {{ $salesSummary?->print_adjustment_reason === 'bad_ink' ? 'selected' : '' }}>💧 Tinta Rusak / Bergaris / Pudar</option>
+                        <option value="internal_use" {{ $salesSummary?->print_adjustment_reason === 'internal_use' ? 'selected' : '' }}>🏢 Dokumen Operasional Toko Sendiri (Non-Komersil)</option>
+                        <option value="wrong_doc" {{ $salesSummary?->print_adjustment_reason === 'wrong_doc' ? 'selected' : '' }}>❌ Salah Dokumen / Salah Cetak Pelanggan</option>
+                        <option value="other" {{ $salesSummary?->print_adjustment_reason === 'other' ? 'selected' : '' }}>✏️ Lainnya / Kesalahan Teknis</option>
+                    </select>
+                </div>
+
+                {{-- 3. KALKULATOR LEMBAR RUSAK & POTONGAN --}}
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="font-size: 11.5px; font-weight: 700; color: #0284c7; display: flex; align-items: center; gap: 5px;">
+                            <span>🧮</span> Rincian Kompensasi Lembar Rusak
+                        </span>
+                        <div style="display: flex; gap: 4px;">
+                            <button type="button" onclick="quickSetPrintRate(1000)" style="padding: 2px 6px; font-size: 10px; font-weight: 700; background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; cursor: pointer;">
+                                Hitam Rp 1.000
+                            </button>
+                            <button type="button" onclick="quickSetPrintRate(2000)" style="padding: 2px 6px; font-size: 10px; font-weight: 700; background: #fef3c7; color: #d97706; border: 1px solid #fde68a; border-radius: 4px; cursor: pointer;">
+                                Warna Rp 2.000
+                            </button>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                        <div>
+                            <label style="font-size: 10.5px; color: #64748b; display: block; margin-bottom: 2px;">Jumlah Lembar Rusak *</label>
+                            <input type="number" id="adj-print-deduction-pages" min="0" required
+                                   value="{{ $salesSummary?->print_adjustment_pages ?? 0 }}"
+                                   oninput="calculatePrintDeductionFromRate()"
+                                   style="width: 100%; padding: 7px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px; font-weight: 700; color: #e11d48;">
+                        </div>
+                        <div>
+                            <label style="font-size: 10.5px; color: #64748b; display: block; margin-bottom: 2px;">Tarif Rata-Rata (Rp)</label>
+                            <input type="number" id="adj-print-unit-rate" min="0" step="500" value="1000"
+                                   oninput="calculatePrintDeductionFromRate()"
+                                   style="width: 100%; padding: 7px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 10.5px; color: #64748b; display: block; margin-bottom: 2px;">Nominal Potongan (Rp) *</label>
+                            <input type="number" id="adj-print-deduction-amount" min="0" step="100" required
+                                   value="{{ (int) ($salesSummary?->print_adjustment_amount ?? 0) }}"
+                                   oninput="recalculateNetPrint()"
+                                   style="width: 100%; padding: 7px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px; font-weight: 700; color: #e11d48; font-family: monospace;">
+                        </div>
+                    </div>
+                </div>
+
+                {{-- 4. HASIL BERSIH TARGET SETOR PRINT --}}
+                <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <span style="font-size: 11.5px; color: #15803d; font-weight: 600;">Lembar Efektif Bersih:</span>
+                        <strong id="adj-print-net-pages" style="font-size: 14px; color: #166534;">0 lembar</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 11.5px; color: #15803d; font-weight: 700;">Target Omset Cetak Bersih Shift:</span>
+                        <strong id="adj-print-net-amount" style="font-size: 16px; color: #166534; font-family: monospace;">Rp 0</strong>
+                    </div>
+                </div>
+
+                {{-- 5. CATATAN KRONOLOGI --}}
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 11.5px; font-weight: 700; color: #475569; margin-bottom: 4px;">
+                        5. Catatan / Kronologi Penyesuaian *
+                    </label>
+                    <textarea id="adj-print-notes" required rows="2"
+                              placeholder="Jelaskan dokumen yang rusak/tersangkut atau untuk keperluan apa dokumen dicetak..."
+                              style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; line-height: 1.4; color: #0f172a; outline: none;">{{ $salesSummary?->print_adjustment_notes ?? '' }}</textarea>
+                </div>
+
+                {{-- 6. OTORISASI PIN SUPERVISOR (INSTAN) --}}
+                <div style="background: #fffbeb; border: 1px dashed #f59e0b; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px;">
+                    <label style="display: block; font-size: 11.5px; font-weight: 700; color: #b45309; margin-bottom: 4px;">
+                        🔑 PIN Otorisasi Supervisor / Admin (Opsional)
+                    </label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="password" id="adj-print-supervisor-pin" maxlength="10" placeholder="Masukkan PIN SPV jika ada di outlet"
+                               style="flex: 1; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; font-family: monospace;">
+                    </div>
+                    <span style="font-size: 10px; color: #92400e; display: block; margin-top: 3px;">
+                        * Jika PIN kosong, pengajuan akan masuk antrean persetujuan Admin/Owner di Dashboard.
+                    </span>
+                </div>
+
+                {{-- TOMBOL SUBMIT --}}
+                <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                    <button type="button" onclick="closeModalPenyesuaianPrint()" style="padding: 9px 16px; border-radius: 6px; border: 1px solid #cbd5e1; background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; cursor: pointer;">
+                        Batal
+                    </button>
+                    <button type="submit" id="btn-submit-adj-print" style="padding: 10px 18px; border-radius: 6px; border: none; background: linear-gradient(135deg, #0284c7, #0369a1); color: #fff; font-size: 12.5px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4);">
+                        ⚡ Simpan / Ajukan Penyesuaian Print
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     {{-- 2. MODAL TERPADU: DATA & KUNCI PRINT KERTAS --}}
     <div id="modal-print-kertas" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.78); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 99999; align-items: center; justify-content: center; padding: 16px;">
         <div style="background: #ffffff; border-radius: 8px; width: 100%; max-width: 580px; box-shadow: 0 25px 50px rgba(0,0,0,0.5); overflow: hidden; display: flex; flex-direction: column; color: #1e293b;">
@@ -1170,44 +1310,74 @@
                     </div>
                 </div>
 
-                {{-- SECTION KUNCI DATA TUTUP SHIFT PRINT --}}
+                {{-- SECTION REKAP DATA TUTUP SHIFT PRINT (OTOMATIS & ANTI-FRAUD) --}}
                 <div style="background: {{ $isPrintLocked ? '#ecfeff' : '#f8fafc' }}; border: 1px solid {{ $isPrintLocked ? '#06b6d4' : '#e2e8f0' }}; border-radius: 6px; padding: 12px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                         <div style="font-weight: 700; font-size: 13px; color: {{ $isPrintLocked ? '#155e75' : '#1e293b' }}; display: flex; align-items: center; gap: 6px;">
-                            <span>{{ $isPrintLocked ? '🔒' : '🔓' }}</span> Status Kunci Data Print Kertas Shift
+                            <span>{{ $isPrintLocked ? '🔒' : '🖨️' }}</span> Status Rekap Cetak Print Kertas
                         </div>
                         <span style="font-size: 10.5px; padding: 2px 8px; border-radius: 9999px; font-weight: 700; background: {{ $isPrintLocked ? '#dc2626' : '#16a34a' }}; color: #ffffff;">
-                            {{ $isPrintLocked ? 'TERKUNCI' : 'BELUM DIKUNCI' }}
+                            {{ $isPrintLocked ? 'TERKUNCI (TUTUP SHIFT)' : 'OTOMATIS TERSINKRON' }}
                         </span>
                     </div>
 
-                    @if($isPrintLocked)
-                        <div style="background: #ffffff; padding: 8px 12px; border-radius: 4px; border: 1px solid #a5f3fc; font-size: 12px; color: #1e293b; margin-bottom: 10px;">
-                            <div style="display: flex; justify-content: space-between;">
-                                <div>Total Lembar: <strong style="color: #0891b2; font-size: 13px;">{{ $totalPrintPages }} lembar</strong></div>
-                                <div>Total Nominal: <strong style="color: #0891b2; font-size: 13px;">Rp {{ number_format($totalPrintIncome, 0, ',', '.') }}</strong></div>
-                            </div>
-                            <div style="font-size: 10.5px; color: #6b7280; margin-top: 3px;">Waktu Kunci: {{ $salesSummary?->locked_print_at ? \Carbon\Carbon::parse($salesSummary->locked_print_at)->format('H:i - d/m/Y') : '-' }}</div>
+                    <div style="background: #ffffff; padding: 10px 12px; border-radius: 4px; border: 1px solid #e2e8f0; font-size: 12px; color: #1e293b; margin-bottom: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="color: #64748b;">Total Lembar Terdeteksi:</span>
+                            <strong id="summary-print-pages" style="color: #0891b2; font-size: 13.5px;">{{ $totalPrintPages }} lembar</strong>
                         </div>
-                        <button type="button" onclick="submitToggleLockPrint('unlock')" 
-                                style="width: 100%; background: #ffffff; color: #dc2626; border: 1px solid #dc2626; padding: 7px 12px; font-size: 11.5px; font-weight: 700; border-radius: 4px; cursor: pointer;">
-                            🔓 Buka Kunci Data Print (Izinkan Perubahan)
-                        </button>
-                    @else
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                            <div>
-                                <label style="font-size: 10.5px; font-weight: 600; color: #475569; display: block; margin-bottom: 2px;">Jumlah Lembar Print:</label>
-                                <input type="number" id="input-lock-print-pages" value="{{ (int) $totalPrintPages }}" min="0" oninput="userHasEditedLockInputs = true" style="width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px; font-weight: 700; color: #0f172a;">
-                            </div>
-                            <div>
-                                <label style="font-size: 10.5px; font-weight: 600; color: #475569; display: block; margin-bottom: 2px;">Nominal Print (Rp):</label>
-                                <input type="number" id="input-lock-print-amount" value="{{ (int) $totalPrintIncome }}" min="0" oninput="userHasEditedLockInputs = true" style="width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12.5px; font-weight: 700; color: #0f172a;">
-                            </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <span style="color: #64748b;">Total Nominal Pendapatan:</span>
+                            <strong id="summary-print-amount" style="color: #059669; font-size: 14px;">Rp {{ number_format($totalPrintIncome, 0, ',', '.') }}</strong>
                         </div>
-                        <button type="button" onclick="submitToggleLockPrint('lock')" 
-                                style="width: 100%; background: #00c0ef; color: #ffffff; border: none; padding: 8px 14px; font-size: 11.5px; font-weight: 700; border-radius: 4px; cursor: pointer;">
-                            🔒 Kunci Data Print Shift Ini
-                        </button>
+
+                        {{-- STATUS PENYESUAIAN PRINT JIKA ADA --}}
+                        @if($salesSummary && $salesSummary->hasPrintAdjustment())
+                            <div style="margin-top: 8px; padding: 8px 10px; border-radius: 6px; font-size: 11px;
+                                        background: {{ $salesSummary->print_adjustment_status === 'approved' ? '#ecfdf5' : ($salesSummary->print_adjustment_status === 'rejected' ? '#fff1f2' : '#fef3c7') }};
+                                        border: 1px solid {{ $salesSummary->print_adjustment_status === 'approved' ? '#a7f3d0' : ($salesSummary->print_adjustment_status === 'rejected' ? '#fecdd3' : '#fde68a') }};
+                                        color: {{ $salesSummary->print_adjustment_status === 'approved' ? '#065f46' : ($salesSummary->print_adjustment_status === 'rejected' ? '#9f1239' : '#92400e') }};">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;">
+                                    <strong style="display: flex; align-items: center; gap: 4px;">
+                                        @if($salesSummary->print_adjustment_status === 'approved')
+                                            <span>✅</span> PENYESUAIAN DISETUJUI
+                                        @elseif($salesSummary->print_adjustment_status === 'rejected')
+                                            <span>❌</span> PENYESUAIAN DITOLAK
+                                        @else
+                                            <span>⏳</span> MENUNGGU PERSETUJUAN
+                                        @endif
+                                    </strong>
+                                    <span style="font-weight: 700;">-{{ $salesSummary->print_adjustment_pages }} lbr (-Rp {{ number_format($salesSummary->print_adjustment_amount, 0, ',', '.') }})</span>
+                                </div>
+                                <div style="font-size: 10.5px;">
+                                    Alasan: {{ $salesSummary->printAdjustmentReasonLabel() }}
+                                    @if($salesSummary->print_adjustment_approved_by)
+                                        &bull; Disetujui oleh: <strong>{{ $salesSummary->print_adjustment_approved_by }}</strong>
+                                    @elseif($salesSummary->print_adjustment_rejected_by)
+                                        &bull; Ditolak oleh: <strong>{{ $salesSummary->print_adjustment_rejected_by }}</strong>
+                                    @endif
+                                </div>
+                            </div>
+                        @endif
+
+                        <div style="margin-top: 8px; font-size: 11px; color: #64748b; background: #f8fafc; padding: 6px 8px; border-radius: 4px; border: 1px dashed #cbd5e1; display: flex; align-items: flex-start; gap: 6px; line-height: 1.4;">
+                            <span style="font-size: 12px;">🛡️</span>
+                            <span>
+                                @if($isPrintLocked)
+                                    Data dibekukan secara permanen saat tutup shift ({{ $salesSummary?->locked_print_at ? \Carbon\Carbon::parse($salesSummary->locked_print_at)->format('H:i - d/m/Y') : '-' }}).
+                                @else
+                                    Dihitung otomatis murni dari <strong>Spooler Printer Hardware & Kasir POS</strong>. Nilai akan otomatis dikunci permanen oleh sistem saat kasir melakukan <strong>Tutup Shift</strong> guna mencegah selisih kas.
+                                @endif
+                            </span>
+                        </div>
+                    </div>
+
+                    {{-- TOMBOL PENYESUAIAN PRINT (DUAL CONTROL) --}}
+                    @if(! $isPrintLocked)
+                    <button type="button" onclick="openModalPenyesuaianPrint()"
+                            style="width: 100%; background: linear-gradient(135deg, #0284c7, #0369a1); color: #ffffff; border: none; padding: 8px 12px; font-size: 11.5px; font-weight: 700; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                        <span>⚡</span> Ajukan Penyesuaian Print (Kertas Rusak/Internal)
+                    </button>
                     @endif
                 </div>
 
@@ -1904,6 +2074,146 @@
         }
     }
 
+    function openModalPenyesuaianPrint() {
+        const modal = document.getElementById('modal-penyesuaian-print');
+        if (modal) modal.style.display = 'flex';
+        recalculateNetPrint();
+    }
+
+    function closeModalPenyesuaianPrint() {
+        const modal = document.getElementById('modal-penyesuaian-print');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function quickSetPrintRate(rate) {
+        const rateEl = document.getElementById('adj-print-unit-rate');
+        if (rateEl) {
+            rateEl.value = rate;
+            calculatePrintDeductionFromRate();
+        }
+    }
+
+    function calculatePrintDeductionFromRate() {
+        const pagesEl = document.getElementById('adj-print-deduction-pages');
+        const rateEl = document.getElementById('adj-print-unit-rate');
+        const dedEl = document.getElementById('adj-print-deduction-amount');
+        if (!pagesEl || !rateEl || !dedEl) return;
+
+        const pages = Math.max(0, parseInt(pagesEl.value) || 0);
+        const rate = Math.max(0, parseFloat(rateEl.value) || 0);
+        dedEl.value = pages * rate;
+        recalculateNetPrint();
+    }
+
+    function recalculateNetPrint() {
+        const rawPagesEl = document.getElementById('adj-print-raw-pages');
+        const rawAmountEl = document.getElementById('adj-print-raw-amount');
+        const dedPagesEl = document.getElementById('adj-print-deduction-pages');
+        const dedAmountEl = document.getElementById('adj-print-deduction-amount');
+        const netPagesEl = document.getElementById('adj-print-net-pages');
+        const netAmountEl = document.getElementById('adj-print-net-amount');
+
+        if (!rawPagesEl || !rawAmountEl || !dedPagesEl || !dedAmountEl || !netPagesEl || !netAmountEl) return;
+
+        const rawPages = Math.max(0, parseInt(rawPagesEl.value) || 0);
+        const rawAmount = Math.max(0, parseFloat(rawAmountEl.value) || 0);
+        const dedPages = Math.max(0, parseInt(dedPagesEl.value) || 0);
+        const dedAmount = Math.max(0, parseFloat(dedAmountEl.value) || 0);
+
+        const netPages = Math.max(0, rawPages - dedPages);
+        const netAmount = Math.max(0, rawAmount - dedAmount);
+
+        netPagesEl.innerText = `${netPages} lembar`;
+        netAmountEl.innerText = `Rp ${netAmount.toLocaleString('id-ID')}`;
+    }
+
+    async function submitPenyesuaianPrint(event) {
+        event.preventDefault();
+
+        const rawPages = parseInt(document.getElementById('adj-print-raw-pages').value) || 0;
+        const rawAmount = parseFloat(document.getElementById('adj-print-raw-amount').value) || 0;
+        const adjPages = parseInt(document.getElementById('adj-print-deduction-pages').value) || 0;
+        const adjAmount = parseFloat(document.getElementById('adj-print-deduction-amount').value) || 0;
+        const reason = document.getElementById('adj-print-reason').value;
+        const notes = document.getElementById('adj-print-notes').value.trim();
+        const supervisorPin = document.getElementById('adj-print-supervisor-pin') ? document.getElementById('adj-print-supervisor-pin').value.trim() : '';
+
+        const netPages = Math.max(0, rawPages - adjPages);
+        const netAmount = Math.max(0, rawAmount - adjAmount);
+
+        if (adjPages <= 0 && adjAmount <= 0) {
+            if (!confirm('Jumlah lembar rusak dan potongan Rp 0. Apakah Anda yakin ingin menyimpan tanpa kompensasi?')) {
+                return;
+            }
+        }
+
+        if (!notes) {
+            alert('Wajib mengisi catatan / penjelasan kompensasi kertas print (contoh: Kertas tersangkut di printer roll Canon).');
+            document.getElementById('adj-print-notes').focus();
+            return;
+        }
+
+        const authMode = supervisorPin ? 'Otorisasi PIN Supervisor Langsung' : 'Kirim Pengajuan ke Admin (Menunggu Persetujuan)';
+        const confirmMsg = `Konfirmasi Penyesuaian Print Kertas Shift:\n\n` +
+            `• Lembar Sistem: ${rawPages} lbr (Rp ${rawAmount.toLocaleString('id-ID')})\n` +
+            `• Kompensasi Rusak: -${adjPages} lbr (-Rp ${adjAmount.toLocaleString('id-ID')})\n` +
+            `• Target Bersih Kasir: ${netPages} lbr (Rp ${netAmount.toLocaleString('id-ID')})\n` +
+            `• Mode Otorisasi: ${authMode}\n\n` +
+            (supervisorPin ? 'Penyesuaian akan langsung disetujui & dipotong.' : 'Saldo kasir BELUM terpotong hingga disetujui Admin demi keamanan kas.') +
+            '\n\nLanjutkan?';
+
+        if (!confirm(confirmMsg)) {
+            return;
+        }
+
+        const submitBtn = document.getElementById('btn-submit-adj-print');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerText = 'Memproses...';
+        }
+
+        try {
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const token = csrfMeta ? csrfMeta.content : '{{ csrf_token() }}';
+            const response = await fetch('{{ route("presensi2.penjualan.penyesuaian-print") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': token,
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({
+                    raw_print_pages: rawPages,
+                    raw_print_amount: rawAmount,
+                    print_adjustment_pages: adjPages,
+                    print_adjustment_amount: adjAmount,
+                    print_adjustment_reason: reason,
+                    print_adjustment_notes: notes,
+                    supervisor_pin: supervisorPin,
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                showPosToast(data.message);
+                setTimeout(() => window.location.reload(), 600);
+            } else {
+                alert(data.message || 'Gagal memproses penyesuaian print kertas.');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerText = '⚡ Simpan / Ajukan Penyesuaian Print';
+                }
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Terjadi kesalahan jaringan.');
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerText = '⚡ Simpan / Ajukan Penyesuaian Print';
+            }
+        }
+    }
+
     function openModalPrintKertas() {
         const modal = document.getElementById('modal-print-kertas');
         if (modal) modal.style.display = 'flex';
@@ -1963,55 +2273,7 @@
         }
     }
 
-    async function submitToggleLockPrint(action) {
-        let amount = 0;
-        let pages = 0;
-        if (action === 'lock') {
-            const pagesEl = document.getElementById('input-lock-print-pages');
-            const amountEl = document.getElementById('input-lock-print-amount');
-            pages = pagesEl ? parseInt(pagesEl.value) || 0 : 0;
-            amount = amountEl ? parseFloat(amountEl.value) || 0 : 0;
-            if (!confirm(`Kunci data print kertas shift (${pages} lembar, Rp ${amount.toLocaleString('id-ID')})? Data akan dibekukan untuk rekap shift.`)) {
-                return;
-            }
-        } else {
-            if (!confirm('Buka kembali kunci data print kertas shift?')) {
-                return;
-            }
-        }
-
-        try {
-            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-            const token = csrfMeta ? csrfMeta.content : '{{ csrf_token() }}';
-            const response = await fetch('{{ route("presensi2.penjualan.kunci-print") }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': token,
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify({
-                    action: action,
-                    locked_print_pages: pages,
-                    locked_print_amount: amount
-                })
-            });
-
-            const data = await response.json();
-            if (data.success) {
-                showPosToast(data.message);
-                setTimeout(() => window.location.reload(), 500);
-            } else {
-                alert(data.message || 'Gagal mengubah status kunci data print.');
-            }
-        } catch (err) {
-            console.error(err);
-            alert('Terjadi kesalahan jaringan.');
-        }
-    }
-
     let lastKnownHardwarePages = {{ (int) ($realHardwarePages ?? 0) }};
-    let userHasEditedLockInputs = false;
     let isPrinterPollingActive = false;
 
     function renderPrinterJobsList(jobs) {
@@ -2086,13 +2348,11 @@
             counterDisplay.innerText = hwPages + ' lembar';
         }
 
-        // 4. Update Form Kunci Data (jika kasir belum mengedit manual dan belum dikunci)
-        if (!userHasEditedLockInputs && !data.is_print_locked) {
-            const pagesInput = document.getElementById('input-lock-print-pages');
-            const amountInput = document.getElementById('input-lock-print-amount');
-            if (pagesInput && totalPages > 0) pagesInput.value = totalPages;
-            if (amountInput && totalIncome > 0) amountInput.value = totalIncome;
-        }
+        // 4. Update Summary Rekap Print Shift
+        const sumPagesEl = document.getElementById('summary-print-pages');
+        const sumAmountEl = document.getElementById('summary-print-amount');
+        if (sumPagesEl) sumPagesEl.innerText = `\${totalPages} lembar`;
+        if (sumAmountEl) sumAmountEl.innerText = `Rp \${totalIncome.toLocaleString('id-ID')}`;
 
         // 5. Render Jobs Table jika ada data list
         const jobs = data.latest_jobs || data.jobs;
