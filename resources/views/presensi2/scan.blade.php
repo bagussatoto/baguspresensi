@@ -235,25 +235,28 @@
                 </div>
             </div>
 
-             {{-- PILIHAN SHIFT KERJA --}}
-            <div style="margin-bottom: 20px; text-align: left;">
-                <label for="shift_id" style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; color: #d1d5db; margin-bottom: 8px;">
-                    <span>⏱️ Pilih Shift Kerja:</span>
-                    <span style="font-size: 11px; color: #34d399; font-weight: 500;">✓ Sesuai Jam Kerja Saat Ini</span>
-                </label>
-                <div style="position: relative;">
-                    <select id="shift_id" name="shift_id" onchange="updateSelectedShiftInfo(this)" style="width: 100%; padding: 12px 14px; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(139, 92, 246, 0.35); border-radius: 12px; color: #fff; font-size: 13px; font-weight: 600; outline: none; appearance: none; -webkit-appearance: none; cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);">
-                        @foreach($shifts as $s)
-                            <option value="{{ $s->id }}" {{ $activeShift && $activeShift->id === $s->id ? 'selected' : '' }} data-name="{{ $s->name }}" data-code="{{ $s->code }}" data-start="{{ substr($s->start_time, 0, 5) }}" data-end="{{ substr($s->end_time, 0, 5) }}">
-                                {{ $s->name }} ({{ substr($s->start_time, 0, 5) }} - {{ substr($s->end_time, 0, 5) }}) {{ $activeShift && $activeShift->id === $s->id ? '★ [Shift Saat Ini]' : '' }}
-                            </option>
-                        @endforeach
-                    </select>
-                    <div style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #a78bfa; font-size: 12px;">▼</div>
+            {{-- INFORMASI SHIFT KERJA (OTOMATIS SISTEM TERKUNCI) --}}
+            <div style="margin-bottom: 20px; text-align: left; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(139, 92, 246, 0.35); border-radius: 14px; padding: 14px 16px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                    <span style="font-size: 11px; text-transform: uppercase; color: #a78bfa; font-weight: 700; letter-spacing: 0.05em;">
+                        ⏱️ Shift Kerja Masuk:
+                    </span>
+                    <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 10.5px; padding: 2px 8px; border: 1px solid rgba(16, 185, 129, 0.4);">
+                        ✓ Otomatis Jam Server
+                    </span>
                 </div>
-                <div style="margin-top: 6px; font-size: 11px; color: var(--text-muted);">
-                    Sistem mendeteksi shift berdasarkan jam saat ini. Anda dapat mengganti shift jika diperlukan.
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 22px;">⏰</span>
+                    <div>
+                        <strong style="color: #fff; font-size: 15px; display: block;">
+                            {{ $activeShift->name ?? 'Shift Kerja' }}
+                        </strong>
+                        <span style="font-size: 12px; color: #cbd5e1; font-family: monospace;">
+                            Pukul {{ substr($activeShift->start_time ?? '00:00', 0, 5) }} - {{ substr($activeShift->end_time ?? '00:00', 0, 5) }} WIB
+                        </span>
+                    </div>
                 </div>
+                <input type="hidden" id="shift_id" name="shift_id" value="{{ $activeShift?->id ?? '' }}">
             </div> 
 
             {{-- LIVENESS DETECTION BIOMETRIC CHALLENGE CARD --}}
