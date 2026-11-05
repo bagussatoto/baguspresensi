@@ -7,6 +7,13 @@
     {{-- NETWORK & OFFLINE BUFFER STATUS BANNER --}}
     <div id="network-status-banner" style="display: none; padding: 12px 16px; border-radius: 14px; margin-bottom: 14px; font-size: 13px; font-weight: 600;"></div>
 
+    {{-- FLASH NOTIFIKASI SIMULASI / STATUS --}}
+    @if(session('status') || session('success'))
+        <div style="padding: 12px 16px; border-radius: 14px; margin-bottom: 14px; font-size: 13px; font-weight: 600; background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; display: flex; align-items: center; gap: 8px;">
+            <span>✓</span> {{ session('status') ?? session('success') }}
+        </div>
+    @endif
+
     {{-- HEADER SHIFT & CABANG --}}
     <div class="glass-card" style="padding: 14px 16px; margin-bottom: 14px;">
         <div style="display: flex; align-items: center; justify-content: space-between;">
@@ -49,25 +56,61 @@
     @if(config('app.debug') || app()->environment('local', 'testing'))
     {{-- DEV / QA TIME TRAVEL SIMULATOR --}}
     <div class="glass-card" style="padding: 14px 16px; margin-bottom: 16px; border: 1px dashed rgba(245, 158, 11, 0.45); background: rgba(245, 158, 11, 0.05);">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
             <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #fbbf24;">
-                <span>⏱️ Simulasi Waktu (Mock Jam)</span>
+                <span>⏱️ Simulasi Waktu Presensi</span>
                 @if(session('presensi2_mock_time'))
-                    <span class="badge" style="background: rgba(245, 158, 11, 0.3); color: #fef3c7; font-size: 10px; padding: 2px 6px;">AKTIF</span>
+                    <span class="badge" style="background: rgba(245, 158, 11, 0.3); color: #fef3c7; font-size: 10px; padding: 2px 6px;">
+                        MOCK AKTIF: {{ \Carbon\Carbon::parse(session('presensi2_mock_time'))->translatedFormat('d M H:i') }}
+                    </span>
                 @endif
             </div>
-            @if(session('presensi2_mock_time'))
-                <a href="{{ request()->fullUrlWithQuery(['mock_time' => 'reset']) }}" style="font-size: 11px; color: #f87171; text-decoration: none; font-weight: 600;">
-                    🔄 Reset Normal
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <a href="{{ request()->fullUrlWithQuery(['action' => 'reset_today']) }}" 
+                   onclick="return confirm('Reset seluruh data presensi testing hari ini untuk akun Anda agar bisa mencoba Check-In ulang?')"
+                   style="font-size: 11px; color: #fca5a5; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); padding: 3px 8px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
+                    <span>🗑️</span> Reset Hari Ini
                 </a>
-            @endif
+                <a href="{{ request()->fullUrlWithQuery(['action' => 'reset_all_attendance']) }}" 
+                   onclick="return confirm('PERINGATAN: Apakah Anda yakin ingin MENGHAPUS SEMUA data riwayat presensi di database agar bersih total dan sinkron dari awal?')"
+                   style="font-size: 11px; color: #fca5a5; background: rgba(185, 28, 28, 0.25); border: 1px solid rgba(239, 68, 68, 0.5); padding: 3px 8px; border-radius: 6px; text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                    <span>🔥</span> Kosongkan Riwayat Presensi
+                </a>
+                @if(session('presensi2_mock_time'))
+                    <a href="{{ request()->fullUrlWithQuery(['mock_time' => 'reset', 'mock_date' => null]) }}" style="font-size: 11px; color: #38bdf8; text-decoration: none; font-weight: 600;">
+                        🔄 Real Server
+                    </a>
+                @endif
+            </div>
+        </div>
+
+        {{-- WAKTU PC TURET INFO & TOMBOL SINKRONISASI --}}
+        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                <div>
+                    <div style="font-size: 10px; text-transform: uppercase; color: #9ca3af; letter-spacing: 0.05em;">Waktu Lokal PC Turet:</div>
+                    <div style="font-size: 15px; font-weight: 700; color: #67e8f9; font-family: monospace;">
+                        🖥️ <span id="pc-turet-clock">--:--:--</span> <span id="pc-turet-date" style="font-size: 11px; color: #94a3b8; font-weight: 500;"></span>
+                    </div>
+                </div>
+                <button type="button" onclick="syncToPcTuretTime()" style="padding: 7px 12px; font-size: 12px; background: linear-gradient(135deg, #0284c7, #0369a1); color: #fff; border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 8px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);">
+                    <span>⚡</span> Samakan ke Jam PC Turet
+                </button>
+            </div>
         </div>
 
         <div style="font-size: 11px; color: #d1d5db; margin-bottom: 8px;">
-            Klik tombol di bawah untuk menyimulasikan waktu presensi ke shift yang diinginkan:
+            Atau pilih preset shift kerja / masukkan jam kustom:
         </div>
 
-       
+        {{-- PRESET SHIFT BUTTONS --}}
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;">
+            <a href="{{ request()->fullUrlWithQuery(['mock_time' => 'shift1']) }}" style="padding: 5px 9px; font-size: 11px; background: rgba(59, 130, 246, 0.18); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 6px; text-decoration: none; font-weight: 600;">Shift 1 (01:05)</a>
+            <a href="{{ request()->fullUrlWithQuery(['mock_time' => 'shift2']) }}" style="padding: 5px 9px; font-size: 11px; background: rgba(16, 185, 129, 0.18); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 6px; text-decoration: none; font-weight: 600;">Shift 2 (07:05)</a>
+            <a href="{{ request()->fullUrlWithQuery(['mock_time' => 'shift3']) }}" style="padding: 5px 9px; font-size: 11px; background: rgba(245, 158, 11, 0.18); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 6px; text-decoration: none; font-weight: 600;">Shift 3 (13:05)</a>
+            <a href="{{ request()->fullUrlWithQuery(['mock_time' => 'shift4']) }}" style="padding: 5px 9px; font-size: 11px; background: rgba(139, 92, 246, 0.18); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.35); border-radius: 6px; text-decoration: none; font-weight: 600;">Shift 4 (19:05)</a>
+        </div>
+
         <form method="GET" action="{{ url()->current() }}" style="display: flex; gap: 8px; align-items: center;">
             <input type="text" name="mock_time" placeholder="Jam kustom (contoh: 01:10 atau 06:55)" value="{{ session('presensi2_mock_time') ? \Carbon\Carbon::parse(session('presensi2_mock_time'))->format('H:i') : '' }}" style="flex: 1; padding: 7px 10px; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; color: #fff; font-size: 12px; outline: none;">
             <button type="submit" style="padding: 7px 12px; font-size: 12px; background: #d97706; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
@@ -77,10 +120,111 @@
     </div>
     @endif
 
+    {{-- KARTU INFO PERGANTIAN SHIFT & KASIR SEBELUMNYA --}}
+    <div class="glass-card" style="padding: 16px 18px; margin-bottom: 16px; border-color: rgba(56, 189, 248, 0.3); background: rgba(15, 23, 42, 0.75);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 18px;">🔄</span>
+                <div>
+                    <h4 style="font-size: 14px; font-weight: 700; color: #fff; margin: 0;">Info Pergantian Shift (Sinkron Database)</h4>
+                    <span style="font-size: 11px; color: var(--text-muted);">Data kasir tercatat resmi di database per shift</span>
+                </div>
+            </div>
+            @if(isset($arrivalValidation))
+                <span class="badge" style="background: {{ $arrivalValidation['badge_bg'] }}; color: {{ $arrivalValidation['badge_color'] }}; font-size: 11px; padding: 4px 10px; font-weight: 700; border: 1px solid {{ $arrivalValidation['badge_color'] }}40;">
+                    ● {{ $arrivalValidation['label'] }}
+                </span>
+            @endif
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px;">
+            {{-- KASIR SHIFT SEBELUMNYA --}}
+            <div style="background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 12px 14px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                    <div style="font-size: 10.5px; text-transform: uppercase; color: #94a3b8; font-weight: 600; letter-spacing: 0.04em;">
+                        Kasir Shift Sebelumnya
+                    </div>
+                    <span class="badge" style="font-size: 9.5px; padding: 1px 6px; background: rgba(56, 189, 248, 0.15); color: #38bdf8;">
+                        {{ $previousShift->name ?? 'Shift 1' }}
+                    </span>
+                </div>
+                @if(isset($previousShiftAttendance) && $previousShiftAttendance)
+                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
+                        <span style="font-size: 18px;">👤</span>
+                        <div>
+                            <strong style="color: #38bdf8; font-size: 14px; display: block;">
+                                {{ $previousShiftAttendance->employee->name ?? 'Kasir' }}
+                            </strong>
+                            <span style="font-size: 11px; color: #cbd5e1;">
+                                {{ $previousShiftAttendance->shift->name ?? ($previousShift->name ?? 'Shift Sebelumnya') }}
+                            </span>
+                        </div>
+                    </div>
+                    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255, 255, 255, 0.08); font-size: 11px;">
+                        @if($previousShiftAttendance->clock_out_at)
+                            <span style="color: #34d399; font-weight: 600;">✓ Selesai & Clock Out ({{ $previousShiftAttendance->clock_out_at->format('H:i') }} WIB)</span>
+                        @else
+                            <span style="color: #fbbf24; font-weight: 600;">⏳ Sedang Berdinas / Belum Clock Out</span>
+                        @endif
+                    </div>
+                @else
+                    <div style="margin-top: 6px; font-size: 12px; color: #94a3b8; font-style: italic;">
+                        Belum ada catatan kasir shift sebelumnya di database hari ini.
+                    </div>
+                @endif
+            </div>
+
+            {{-- KASIR BERTUGAS SHIFT INI --}}
+            <div style="background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 12px 14px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                    <div style="font-size: 10.5px; text-transform: uppercase; color: #94a3b8; font-weight: 600; letter-spacing: 0.04em;">
+                        Kasir Bertugas Shift Ini
+                    </div>
+                    <span class="badge" style="font-size: 9.5px; padding: 1px 6px; background: rgba(16, 185, 129, 0.15); color: #34d399;">
+                        {{ $activeShift->name ?? 'Shift 2' }}
+                    </span>
+                </div>
+                @php
+                    $displayActiveEmployee = $activeShiftAttendance?->employee ?? $currentEmployee;
+                    $isAlreadyInDb = (bool) $activeShiftAttendance;
+                @endphp
+                <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
+                    <span style="font-size: 18px;">👤</span>
+                    <div>
+                        <strong style="color: #34d399; font-size: 14px; display: block;">
+                            {{ $displayActiveEmployee->name }}
+                        </strong>
+                        <span style="font-size: 11px; color: #a78bfa; font-family: monospace;">
+                            {{ $activeShift->name ?? 'Shift Kerja' }} ({{ substr($activeShift->start_time ?? '00:00', 0, 5) }} - {{ substr($activeShift->end_time ?? '00:00', 0, 5) }} WIB)
+                        </span>
+                    </div>
+                </div>
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255, 255, 255, 0.08); font-size: 11px;">
+                    @if($isAlreadyInDb)
+                        <span style="color: #34d399; font-weight: 600;">✓ Tercatat di Database (Masuk: {{ $activeShiftAttendance->clock_in_at?->format('H:i') }} WIB)</span>
+                    @else
+                        <span style="color: #38bdf8; font-weight: 600;">● Siap Presensi Masuk (Akun Anda)</span>
+                    @endif
+                </div>
+            </div>
+        </div>
+    </div>
+
     {{-- FORM VERIFIKASI & SUBMIT --}}
     <div class="glass-card" style="padding: 22px 18px;">
         @if(!$attendanceToday)
             {{-- MODE: CLOCK-IN --}}
+            @if(isset($previousRecordToday) && $previousRecordToday)
+                <div style="background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; font-size: 12px; color: #93c5fd; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    <div>
+                        <span>ℹ️</span> Presensi Shift sebelumnya (<strong>{{ $previousRecordToday->shift?->name ?? 'Shift' }}</strong>) telah selesai pukul {{ $previousRecordToday->clock_out_at?->format('H:i') }}. Silakan konfirmasi Check-In untuk shift baru.
+                    </div>
+                    <a href="{{ request()->fullUrlWithQuery(['action' => 'reset_today']) }}" onclick="return confirm('Reset simulasi presensi hari ini?')" style="color: #fca5a5; text-decoration: underline; white-space: nowrap; font-size: 11px;">
+                        Reset Hari Ini
+                    </a>
+                </div>
+            @endif
+
             <div style="margin-bottom: 18px;">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
                     <div style="width: 44px; height: 44px; border-radius: 14px; background: rgba(16, 185, 129, 0.18); display: flex; align-items: center; justify-content: center; font-size: 22px;">✅</div>
@@ -134,22 +278,38 @@
             </button>
 
         @elseif(!$attendanceToday->clock_out_at)
-            {{-- MODE: CLOCK-OUT --}}
-            <div style="margin-bottom: 22px;">
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                    <div style="width: 44px; height: 44px; border-radius: 14px; background: rgba(239, 68, 68, 0.18); display: flex; align-items: center; justify-content: center; font-size: 22px;">🏁</div>
+            {{-- MODE: SUDAH MASUK (AKTIF DINAS) & MENU MASUK SISTEM --}}
+            <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 14px; padding: 14px 16px; margin-bottom: 18px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(16, 185, 129, 0.2); display: flex; align-items: center; justify-content: center; font-size: 22px;">🟢</div>
                     <div>
-                        <h4 style="font-size: 17px; font-weight: 700; color: #fff;">Presensi Pulang</h4>
-                        <p style="font-size: 13px; color: var(--text-muted);">
-                            Masuk pukul <strong style="color: #34d399;">{{ $attendanceToday->clock_in_at?->format('H:i') }}</strong> — klik tombol di bawah untuk konfirmasi kepulangan.
+                        <h4 style="font-size: 15px; font-weight: 700; color: #34d399; margin: 0;">Presensi Masuk Berhasil Masuk ke Sistem!</h4>
+                        <p style="font-size: 12.5px; color: #cbd5e1; margin-top: 3px;">
+                            Status Anda <strong>Sedang Aktif Berdinas</strong> (Masuk pukul <strong style="color: #34d399;">{{ $attendanceToday->clock_in_at?->format('H:i') }} WIB</strong>).
                         </p>
                     </div>
                 </div>
             </div>
 
-            <button type="button" id="btn-clock-out" onclick="submitAttendance('out')" class="btn btn-rose" style="padding: 16px; font-size: 16px; width: 100%;">
-                <span>🏁</span> Konfirmasi Check-Out
-            </button>
+            {{-- TOMBOL UTAMA: MASUK KE SISTEM / POS KASIR --}}
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px;">
+                <a href="{{ route('presensi2.index') }}" style="background: linear-gradient(135deg, #0284c7, #0ea5e9); color: #fff; font-size: 15px; font-weight: 700; padding: 13px 18px; border-radius: 12px; text-decoration: none; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(14, 165, 233, 0.35);">
+                    <span>🚀</span> Masuk ke Beranda Sistem
+                </a>
+                <a href="{{ route('presensi2.pos') }}" style="background: linear-gradient(135deg, #7c3aed, #8b5cf6); color: #fff; font-size: 14px; font-weight: 700; padding: 12px 18px; border-radius: 12px; text-decoration: none; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(139, 92, 246, 0.35);">
+                    <span>🛒</span> Buka POS Kasir Penjualan
+                </a>
+            </div>
+
+            {{-- OPSI PRESENSI PULANG / SELESAI DINAS --}}
+            <div style="padding-top: 14px; border-top: 1px dashed rgba(255, 255, 255, 0.12); text-align: center;">
+                <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px;">
+                    Gunakan tombol di bawah ini saat Anda selesai dinas untuk pulang / serah terima:
+                </div>
+                <button type="button" id="btn-clock-out" onclick="submitAttendance('out')" class="btn btn-rose" style="padding: 12px; font-size: 13.5px; width: 100%; font-weight: 600;">
+                    <span>🏁</span> Konfirmasi Check-Out (Selesai Dinas)
+                </button>
+            </div>
 
         @else
             {{-- SUDAH SELESAI --}}
@@ -193,6 +353,43 @@
         const el = document.getElementById('live-clock');
         if (el) el.textContent = `${h}:${m}:${s}`;
     }, 1000);
+
+    // Live Clock PC Turet (Waktu Lokal Komputer Kasir / Client)
+    function updatePcTuretClock() {
+        const now = new Date();
+        const h = String(now.getHours()).padStart(2, '0');
+        const m = String(now.getMinutes()).padStart(2, '0');
+        const s = String(now.getSeconds()).padStart(2, '0');
+        const el = document.getElementById('pc-turet-clock');
+        if (el) el.textContent = `${h}:${m}:${s}`;
+
+        const elDate = document.getElementById('pc-turet-date');
+        if (elDate) {
+            const options = { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' };
+            elDate.textContent = `(${now.toLocaleDateString('id-ID', options)})`;
+        }
+    }
+    updatePcTuretClock();
+    setInterval(updatePcTuretClock, 1000);
+
+    // Fungsi 1-Klik Samakan ke Jam & Tanggal PC Turet
+    function syncToPcTuretTime() {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+
+        const mockDate = `${y}-${m}-${d}`;
+        const mockTime = `${hh}:${mm}:${ss}`;
+
+        const url = new URL(window.location.href);
+        url.searchParams.set('mock_date', mockDate);
+        url.searchParams.set('mock_time', mockTime);
+        window.location.href = url.toString();
+    }
 
     function updateSelectedShiftInfo(select) {
         const opt = select.options[select.selectedIndex];

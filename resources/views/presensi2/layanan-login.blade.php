@@ -428,7 +428,8 @@
                 </div>
             </button>
 
-            <!-- 4. AMBIL STOK -->
+            <!-- 4. AMBIL STOK (Dinonaktifkan Sementara) -->
+            {{-- 
             <button type="button" class="service-tab-btn {{ $service === 'ambil-stok' ? 'active-ambil-stok' : '' }}" id="tab-ambil-stok" onclick="selectLayanan('ambil-stok')">
                 <span class="tab-icon">📦</span>
                 <div>
@@ -436,6 +437,7 @@
                     <div class="tab-sub">Logistik & Restock Outlet</div>
                 </div>
             </button>
+            --}}
         </div>
 
         {{-- BANNER DESKRIPSI LAYANAN AKTIF --}}

@@ -88,7 +88,7 @@
             <span style="font-size: 22px;">⚠️</span>
             <div style="font-size: 12px; line-height: 1.4; color: #fca5a5;">
                 <strong style="color: #fff; display: block; font-size: 13px;">Presensi Dulu!</strong>
-                Anda belum melakukan presensi masuk untuk shift hari ini. Wajib presensi dulu sebelum membuka serah terima stok barang & kasir penjualan.
+                Anda belum melakukan presensi masuk untuk shift hari ini. Silakan presensi masuk terlebih dahulu sebelum bertugas.
             </div>
         </div>
 
@@ -96,26 +96,12 @@
             <span>🔐</span> Presensi Masuk Sekarang
         </a>
         <div style="font-size: 11px; text-align: center; color: var(--text-muted); line-height: 1.4;">
-            ℹ️ Begitu klik konfirmasi presensi masuk, Anda akan langsung diarahkan ke Halaman Stok Barang & Serah Terima Shift.
+            ℹ️ Begitu klik konfirmasi presensi masuk, kehadiran Anda akan langsung aktif di sistem.
         </div>
     @elseif(!$attendanceToday->clock_out_at)
         <div style="display: flex; flex-direction: column; gap: 10px;">
-            <a href="{{ route('presensi2.stok') }}" class="btn" style="padding: 14px; font-size: 14px; width: 100%; background: linear-gradient(135deg, #7c3aed, #8b5cf6); color: #fff; box-shadow: 0 4px 14px rgba(139, 92, 246, 0.4); display: flex; justify-content: center; align-items: center; gap: 8px;">
-                <span>📦</span> Buka Checklist Stok Barang
-                @if(!$hasCompletedStock)
-                    <span class="badge" style="background: rgba(245, 158, 11, 0.25); color: #fbbf24; font-size: 10px; margin-left: 6px;">Wajib Diisi</span>
-                @else
-                    <span class="badge" style="background: rgba(16, 185, 129, 0.25); color: #34d399; font-size: 10px; margin-left: 6px;">✓ Sudah Lengkap</span>
-                @endif
-            </a>
-            <a href="{{ route('presensi2.penjualan') }}" class="btn btn-emerald" style="padding: 14px; font-size: 14px; width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;"
-               @if(!$hasCompletedStock)
-                   onclick="event.preventDefault(); showIncompleteModal('Pemeriksaan Stok Belum Lengkap!', 'Anda belum menyelesaikan checklist pemeriksaan stok barang & serah terima shift. Silakan lengkapi pemeriksaan stok terlebih dahulu.', '<span>📦</span> Lengkapi Stok Sekarang', '{{ route('presensi2.stok') }}');"
-               @endif>
+            <a href="{{ route('presensi2.penjualan') }}" class="btn btn-emerald" style="padding: 14px; font-size: 14px; width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;">
                 <span>🛒</span> Buka Halaman Penjualan & Kasir Shift
-                @if(!$hasCompletedStock)
-                    <span class="badge" style="background: rgba(245, 158, 11, 0.25); color: #fbbf24; font-size: 10px; margin-left: 6px;">Lengkapi Stok Dulu</span>
-                @endif
             </a>
             <a href="{{ route('presensi2.rekap') }}" class="btn" style="padding: 14px; font-size: 14px; width: 100%; background: linear-gradient(135deg, #0284c7, #0ea5e9); color: #fff; box-shadow: 0 4px 14px rgba(14, 165, 233, 0.4); display: flex; justify-content: center; align-items: center; gap: 8px;">
                 <span>📊</span> Buka Rekap Penjualan & Setor Kas Shift

@@ -504,12 +504,12 @@
                     🎉 Pemeriksaan Selesai!
                 </span>
                 <p style="font-size: 12px; color: var(--text-muted); max-width: 520px; margin: 0 auto;">
-                    Klik tombol di bawah untuk menyimpan checklist stok dan Anda akan langsung diarahkan ke <strong>Halaman Penjualan</strong>.
+                    Klik tombol di bawah untuk menyimpan checklist stok dan Anda akan langsung diarahkan ke <strong>Dashboard POS Kasir Desktop</strong>.
                 </p>
             </div>
 
             <button type="submit" id="btn-submit-stok" class="btn btn-emerald" style="padding: 16px 28px; font-size: 16px; font-weight: 700; width: 100%; max-width: 480px; margin: 0 auto; box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);">
-                <span>🚀</span> 6. Selesai & Lanjut ke Halaman Penjualan
+                <span>🚀</span> 6. Selesai & Buka POS Kasir Desktop
             </button>
 
             <div style="margin-top: 14px; font-size: 11px; color: var(--text-sub); display: flex; align-items: center; justify-content: center; gap: 6px;">

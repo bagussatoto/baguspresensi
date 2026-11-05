@@ -290,7 +290,7 @@ class AttendanceWebV2Controller extends Controller
 
         $employee = $this->getAuthenticatedEmployee();
         if ($employee) {
-            return redirect()->route('presensi2.index');
+            return redirect()->route('presensi2.scan');
         }
 
         $employees = Employee::where('is_active', true)
@@ -1491,7 +1491,7 @@ class AttendanceWebV2Controller extends Controller
                 ->with('success', 'Selamat datang, '.$employee->name.'!');
         }
 
-        return redirect()->route('presensi2.index')
+        return redirect()->route('presensi2.scan')
             ->with('success', 'Selamat datang, '.$employee->name.'!');
     }
 
@@ -1602,8 +1602,25 @@ class AttendanceWebV2Controller extends Controller
     /**
      * Layar Clock-In / Clock-Out via verifikasi kredensial (tanpa GPS & kamera).
      */
-    public function scan(): View|RedirectResponse
+    public function scan(Request $request): View|RedirectResponse
     {
+        // Fitur Cepat Switch Akun Karyawan Simulasi (Dev / QA Mode)
+        if ($request->filled('switch_employee') && (config('app.debug') || app()->environment('local', 'testing'))) {
+            $targetEmp = Employee::where('is_active', true)->where(function ($q) use ($request) {
+                $q->where('id', $request->input('switch_employee'))
+                    ->orWhereRaw('LOWER(name) = ?', [strtolower(trim((string) $request->input('switch_employee')))])
+                    ->orWhere('username', trim((string) $request->input('switch_employee')));
+            })->first();
+
+            if ($targetEmp) {
+                session(['presensi2_employee_id' => $targetEmp->id]);
+                $queryParams = $request->except(['switch_employee']);
+
+                return redirect()->route('presensi2.scan', $queryParams)
+                    ->with('status', 'Berhasil beralih akun simulasi ke: '.$targetEmp->name);
+            }
+        }
+
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
             return redirect()->route('presensi2.login');
@@ -1613,25 +1630,175 @@ class AttendanceWebV2Controller extends Controller
         $activeShift = $this->shiftResolverService->resolveShift(null, $now);
         $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
 
-        $attendanceToday = AttendanceRecord::with('shift')
-            ->where('employee_id', $employee->id)
-            ->whereNull('clock_out_at')
-            ->latest('id')
-            ->first()
-            ?: AttendanceRecord::with('shift')
-                ->where('employee_id', $employee->id)
+        // Fitur Reset Total Semua Presensi (Testing/Simulasi)
+        if ($request->input('action') === 'reset_all_attendance') {
+            AttendanceRecord::query()->delete();
+            $queryParams = $request->except(['action', 'reset_presensi', 'new_shift']);
+
+            return redirect()->route('presensi2.scan', $queryParams)
+                ->with('status', 'Seluruh riwayat presensi berhasil dihapus! Database presensi bersih untuk simulasi baru.');
+        }
+
+        // Fitur Reset Simulasi Pengujian Presensi: Menghapus record presensi testing hari ini agar tester tidak deadlock
+        if ($request->input('action') === 'reset_today' || $request->has('reset_presensi')) {
+            AttendanceRecord::where('employee_id', $employee->id)
                 ->where('work_date', $workDate->toDateString())
+                ->delete();
+
+            $queryParams = $request->except(['action', 'reset_presensi', 'new_shift']);
+
+            return redirect()->route('presensi2.scan', $queryParams)
+                ->with('status', 'Simulasi presensi hari ini berhasil di-reset! Anda dapat melakukan Check-In kembali.');
+        }
+
+        $forceNewShift = $request->boolean('new_shift');
+
+        $attendanceToday = null;
+        if (! $forceNewShift) {
+            // 1. Cek apakah ada record yang sedang aktif berjalan (belum clock out)
+            $attendanceToday = AttendanceRecord::with('shift')
+                ->where('employee_id', $employee->id)
+                ->whereNull('clock_out_at')
                 ->latest('id')
                 ->first();
 
+            // 2. Jika tidak ada yang berlangsung, cek record khusus shift aktif saat ini
+            if (! $attendanceToday && $activeShift) {
+                $attendanceToday = AttendanceRecord::with('shift')
+                    ->where('employee_id', $employee->id)
+                    ->where('work_date', $workDate->toDateString())
+                    ->where('shift_id', $activeShift->id)
+                    ->latest('id')
+                    ->first();
+            }
+
+            // 3. Fallback: jika shift aktif tidak terdeteksi, ambil record terakhir hari ini
+            if (! $attendanceToday && ! $activeShift) {
+                $attendanceToday = AttendanceRecord::with('shift')
+                    ->where('employee_id', $employee->id)
+                    ->where('work_date', $workDate->toDateString())
+                    ->latest('id')
+                    ->first();
+            }
+        }
+
+        // Record shift sebelumnya hari ini (jika ada) untuk informasi kontekstual
+        $previousRecordToday = AttendanceRecord::with('shift')
+            ->where('employee_id', $employee->id)
+            ->where('work_date', $workDate->toDateString())
+            ->whereNotNull('clock_out_at')
+            ->latest('id')
+            ->first();
+
         $branch = $employee->branch ?? Branch::first();
+        $branchId = (int) ($branch->id ?? 1);
         $shifts = Shift::where('is_active', true)->orderBy('start_time')->get();
+
+        // 1. Identifikasi Shift Sebelumnya
+        $previousShift = null;
+        if ($activeShift && $shifts->isNotEmpty()) {
+            $sortedShifts = $shifts->values();
+            $currentIndex = $sortedShifts->search(fn ($s) => $s->id === $activeShift->id);
+            if ($currentIndex !== false) {
+                $prevIndex = ($currentIndex - 1 + $sortedShifts->count()) % $sortedShifts->count();
+                $previousShift = $sortedShifts->get($prevIndex);
+            }
+        }
+
+        // 2. Cari Data Kasir di Shift Sebelumnya pada Cabang yang Sama (HANYA tanggal dinas yang relevan)
+        $previousShiftAttendance = null;
+        $targetPreviousDate = $workDate->copy();
+        if ($previousShift && $previousShift->is_overnight && $activeShift && ! $activeShift->is_overnight) {
+            $targetPreviousDate = $workDate->copy()->subDay();
+        }
+
+        if ($previousShift) {
+            $previousShiftAttendance = AttendanceRecord::with(['employee', 'shift'])
+                ->where('branch_id', $branchId)
+                ->where('shift_id', $previousShift->id)
+                ->whereDate('work_date', $targetPreviousDate->toDateString())
+                ->latest('id')
+                ->first();
+        }
+
+        // Fallback: Jika shift sebelumnya belum ada presensi pada tanggal tersebut,
+        // cari kasir lain yang terakhir clock out pada hari kerja yang sama (bukan record dari bulan lalu)
+        if (! $previousShiftAttendance) {
+            $previousShiftAttendance = AttendanceRecord::with(['employee', 'shift'])
+                ->where('branch_id', $branchId)
+                ->where('employee_id', '!=', $employee->id)
+                ->whereDate('work_date', $workDate->toDateString())
+                ->whereNotNull('clock_out_at')
+                ->latest('clock_out_at')
+                ->first();
+        }
+
+        // 3. Validasi Jam Kedatangan Karyawan Saat Ini vs Jadwal Shift
+        $arrivalValidation = [
+            'status' => 'on_time',
+            'label' => 'Tepat Waktu',
+            'badge_color' => '#10b981',
+            'badge_bg' => 'rgba(16, 185, 129, 0.15)',
+            'message' => 'Waktu kedatangan Anda sesuai dengan jadwal shift.',
+        ];
+
+        if ($activeShift) {
+            $shiftStartTime = Carbon::parse($workDate->toDateString().' '.$activeShift->start_time);
+            $lateTolerance = (clone $shiftStartTime)->addMinutes(15);
+
+            if ($now->lt($shiftStartTime)) {
+                $earlyMinutes = (int) $now->diffInMinutes($shiftStartTime);
+                $arrivalValidation = [
+                    'status' => 'early',
+                    'label' => "Hadir Awal ({$earlyMinutes} menit)",
+                    'badge_color' => '#38bdf8',
+                    'badge_bg' => 'rgba(56, 189, 248, 0.15)',
+                    'message' => "Anda tiba {$earlyMinutes} menit lebih awal dari jadwal shift ({$activeShift->name}). Waktu yang tepat untuk persiapan serah terima.",
+                ];
+            } elseif ($now->gt($lateTolerance)) {
+                $lateMinutes = (int) $shiftStartTime->diffInMinutes($now);
+                $arrivalValidation = [
+                    'status' => 'late',
+                    'label' => "Terlambat ({$lateMinutes} menit)",
+                    'badge_color' => '#f59e0b',
+                    'badge_bg' => 'rgba(245, 158, 11, 0.15)',
+                    'message' => "Anda tiba {$lateMinutes} menit melebihi jam mulai shift ({$activeShift->name}).",
+                ];
+            } else {
+                $arrivalValidation = [
+                    'status' => 'on_time',
+                    'label' => 'Tepat Waktu',
+                    'badge_color' => '#10b981',
+                    'badge_bg' => 'rgba(16, 185, 129, 0.15)',
+                    'message' => "Anda tiba tepat waktu pada jadwal shift ({$activeShift->name}).",
+                ];
+            }
+        }
+
+        // 2b. Cari Data Kasir yang Tercatat di Database untuk Shift Aktif Saat Ini
+        $activeShiftAttendance = null;
+        if ($activeShift) {
+            $activeShiftAttendance = AttendanceRecord::with(['employee', 'shift'])
+                ->where('branch_id', $branchId)
+                ->where('shift_id', $activeShift->id)
+                ->whereDate('work_date', $workDate->toDateString())
+                ->latest('id')
+                ->first();
+        }
+
+        $allEmployees = Employee::where('is_active', true)->orderBy('name', 'asc')->get();
 
         return view('presensi2.scan', [
             'currentEmployee' => $employee,
             'branch' => $branch,
             'activeShift' => $activeShift,
             'attendanceToday' => $attendanceToday,
+            'previousRecordToday' => $previousRecordToday,
+            'previousShift' => $previousShift,
+            'previousShiftAttendance' => $previousShiftAttendance,
+            'activeShiftAttendance' => $activeShiftAttendance,
+            'allEmployees' => $allEmployees,
+            'arrivalValidation' => $arrivalValidation,
             'shifts' => $shifts,
         ]);
     }
@@ -1693,16 +1860,16 @@ class AttendanceWebV2Controller extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Presensi masuk berhasil! Mengalihkan ke Halaman Stok Barang...',
+                'message' => 'Presensi masuk berhasil!',
                 'status' => $record->status->value,
                 'clock_in_at' => $record->clock_in_at?->format('H:i:s'),
-                'redirect_url' => route('presensi2.stok'),
+                'redirect_url' => route('presensi2.scan'),
             ]);
         } catch (AlreadyClockedInException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Anda sudah melakukan presensi masuk untuk shift hari ini. Mengalihkan ke Halaman Stok Barang...',
-                'redirect_url' => route('presensi2.stok'),
+                'message' => 'Anda sudah melakukan presensi masuk untuk shift hari ini.',
+                'redirect_url' => route('presensi2.scan'),
             ], 409);
         } catch (\Throwable $e) {
             return response()->json([
@@ -2207,8 +2374,8 @@ class AttendanceWebV2Controller extends Controller
             ]
         );
 
-        return redirect()->route('presensi2.penjualan')
-            ->with('success', 'Checklist stok barang (sebelumnya), hardware & billing shift berhasil dicatat! Selamat datang di Halaman Penjualan.');
+        return redirect()->route('pos')
+            ->with('success', 'Checklist stok barang, hardware & billing shift berhasil dicatat! Selamat datang di Dashboard POS Desktop.');
     }
 
     /**
@@ -2442,7 +2609,10 @@ class AttendanceWebV2Controller extends Controller
     /**
      * Halaman Penjualan (Kasir F&B, Pendapatan Internet, Permintaan Stok, & Check Out Presensi).
      */
-    public function penjualanIndex(): View|RedirectResponse
+    /**
+     * Helper: Menyiapkan seluruh data view untuk POS Penjualan (Mobile & Desktop).
+     */
+    protected function getPenjualanData(): array|RedirectResponse
     {
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
@@ -2774,7 +2944,7 @@ class AttendanceWebV2Controller extends Controller
             ->orderBy('name')
             ->get(['id', 'code', 'name', 'customer_type', 'phone']);
 
-        return view('presensi2.penjualan', [
+        return [
             'currentEmployee' => $employee,
             'activeShift' => $activeShift,
             'workDate' => $workDate,
@@ -2810,7 +2980,33 @@ class AttendanceWebV2Controller extends Controller
             'totalPrintPages' => $totalPrintPages,
             'totalPrintIncome' => $totalPrintIncome,
             'customers' => $customers,
-        ]);
+        ];
+    }
+
+    /**
+     * Halaman POS Kasir Shift (Tampilan Mobile).
+     */
+    public function penjualanIndex(): View|RedirectResponse
+    {
+        $data = $this->getPenjualanData();
+        if ($data instanceof RedirectResponse) {
+            return $data;
+        }
+
+        return view('presensi2.penjualan', $data);
+    }
+
+    /**
+     * Dashboard POS Penjualan Baru untuk Desktop PC (Landscape 3 Kolom).
+     */
+    public function posDesktopIndex(): View|RedirectResponse
+    {
+        $data = $this->getPenjualanData();
+        if ($data instanceof RedirectResponse) {
+            return $data;
+        }
+
+        return view('presensi2.pos_desktop', $data);
     }
 
     /**
@@ -3404,11 +3600,29 @@ class AttendanceWebV2Controller extends Controller
         }
 
         if ($action === 'unlock') {
+            if (! $employee->canApproveBillingAdjustment()) {
+                $msg = 'Akses ditolak: Data billing shift yang sudah dikunci hanya dapat dibuka kembali oleh Admin / Supervisor.';
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json(['success' => false, 'message' => $msg], 403);
+                }
+
+                return back()->with('error', $msg);
+            }
+
             $summary->is_billing_locked = false;
             $summary->locked_billing_amount = null;
             $summary->locked_billing_at = null;
             $message = 'Kunci data billing shift berhasil dibuka.';
         } else {
+            if ($summary->is_billing_locked && ! $employee->canApproveBillingAdjustment()) {
+                $msg = 'Data billing shift sudah dikunci. Operator tidak dapat mengubah atau mengunci ulang.';
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json(['success' => false, 'message' => $msg], 403);
+                }
+
+                return back()->with('error', $msg);
+            }
+
             $amount = (float) $request->input('locked_billing_amount', 0);
             if ($amount <= 0 && $request->filled('current_billing_amount')) {
                 $amount = (float) $request->input('current_billing_amount');
@@ -4047,15 +4261,6 @@ class AttendanceWebV2Controller extends Controller
             return redirect()->route('presensi2.login');
         }
 
-        if (! $employee->canApproveBillingAdjustment()) {
-            $msg = 'Akses ditolak: Data print kertas shift terekam otomatis dari Spooler Printer dan dikunci otomatis oleh sistem saat Tutup Shift demi integritas kas.';
-            if ($request->wantsJson() || $request->ajax()) {
-                return response()->json(['success' => false, 'message' => $msg], 403);
-            }
-
-            return back()->with('error', $msg);
-        }
-
         $now = Carbon::now();
         $activeShift = $this->shiftResolverService->resolveShift(null, $now);
         $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
@@ -4084,12 +4289,40 @@ class AttendanceWebV2Controller extends Controller
         }
 
         if ($action === 'unlock') {
+            if (! $employee->canApproveBillingAdjustment()) {
+                $msg = 'Akses ditolak: Data print kertas shift yang sudah dikunci hanya dapat dibuka kembali oleh Admin / Supervisor.';
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json(['success' => false, 'message' => $msg], 403);
+                }
+
+                return back()->with('error', $msg);
+            }
+
             $summary->is_print_locked = false;
             $summary->locked_print_amount = null;
             $summary->locked_print_pages = 0;
             $summary->locked_print_at = null;
             $message = 'Kunci data print kertas berhasil dibuka.';
         } else {
+            if ($summary->is_print_locked && ! $employee->canApproveBillingAdjustment()) {
+                $msg = 'Data print kertas shift sudah dikunci. Operator tidak dapat mengubah atau mengunci ulang.';
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json(['success' => false, 'message' => $msg], 403);
+                }
+
+                return back()->with('error', $msg);
+            }
+
+            // Anti-fraud: Kasir biasa dilarang memanipulasi override angka print manual ke 0
+            if (! $employee->canApproveBillingAdjustment() && $request->has('locked_print_pages') && (int) $request->input('locked_print_pages') === 0 && (float) $request->input('locked_print_amount') === 0.0) {
+                $msg = 'Akses ditolak: Operator tidak boleh memanipulasi angka print manual menjadi 0.';
+                if ($request->wantsJson() || $request->ajax()) {
+                    return response()->json(['success' => false, 'message' => $msg], 403);
+                }
+
+                return back()->with('error', $msg);
+            }
+
             $amount = (float) $request->input('locked_print_amount', 0);
             $pages = (int) $request->input('locked_print_pages', 0);
             $summary->is_print_locked = true;

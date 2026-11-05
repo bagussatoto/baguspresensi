@@ -473,6 +473,13 @@
         $penjualanMenu = $navMenus->firstWhere('code', 'presensi2_penjualan');
         $rekapMenu = $navMenus->firstWhere('code', 'presensi2_rekap');
         $riwayatMenu = $navMenus->firstWhere('code', 'presensi2_riwayat');
+
+        /**
+         * MODE SIMULASI PENGUJIAN PRESENSI:
+         * Saat true: Hanya menampilkan 3 menu utama (Beranda, Presensi, Riwayat).
+         * Untuk mengembalikan menu lengkap (Stok, Penjualan, Rekap): Ubah nilainya menjadi false.
+         */
+        $modeSimulasiPresensi = true;
     @endphp
     <!-- BOTTOM NAV BAR (TERINTEGRASI DATABASE NAVICAT SYSTEM_MENUS) -->
     <nav class="mobile-bottom-nav" id="mobileBottomNav">
@@ -484,6 +491,7 @@
             <span class="nav-label">{{ $berandaMenu?->name ?? 'Beranda' }}</span>
         </a>
 
+        @if(!$modeSimulasiPresensi)
         <a href="{{ $stokMenu?->url ?? route('presensi2.stok') }}" 
            class="nav-item {{ request()->routeIs('presensi2.stok*') ? 'active' : '' }}" 
            @if(!$navHasClockedIn)
@@ -493,18 +501,18 @@
             <span class="nav-icon">{{ $stokMenu?->icon ?? '📦' }}</span>
             <span class="nav-label">{{ $stokMenu ? explode(' &', $stokMenu->name)[0] : 'Stok' }}</span>
         </a>
+        @endif
 
         <a href="{{ route('presensi2.scan') }}" class="nav-item {{ request()->routeIs('presensi2.scan*') ? 'active' : '' }}" title="Presensi Masuk & Keluar">
             <span class="nav-icon">🔐</span>
             <span class="nav-label">Presensi</span>
         </a>
 
+        @if(!$modeSimulasiPresensi)
         <a href="{{ $penjualanMenu?->url ?? route('presensi2.penjualan') }}" 
            class="nav-item {{ request()->routeIs('presensi2.penjualan*') ? 'active' : '' }}" 
            @if(!$navHasClockedIn)
                onclick="event.preventDefault(); showPresensiRequiredModal('penjualan');"
-           @elseif(!$navHasCompletedStock)
-               onclick="event.preventDefault(); showIncompleteModal('Pemeriksaan Stok Belum Lengkap!', 'Anda belum menyelesaikan pemeriksaan dan serah terima stok barang awal shift. Silakan lengkapi checklist stok terlebih dahulu.', '<span>📦</span> Lengkapi Stok Sekarang', '{{ route('presensi2.stok') }}');"
            @endif
            title="{{ $penjualanMenu?->description ?? 'Penjualan & Kasir Shift' }}">
             <span class="nav-icon">{{ $penjualanMenu?->icon ?? '🛒' }}</span>
@@ -517,6 +525,7 @@
             <span class="nav-icon">{{ $rekapMenu?->icon ?? '📊' }}</span>
             <span class="nav-label">{{ $rekapMenu ? explode(' &', $rekapMenu->name)[0] : 'Rekap' }}</span>
         </a>
+        @endif
 
         <a href="{{ $riwayatMenu?->url ?? route('presensi2.riwayat') }}" class="nav-item {{ request()->routeIs('presensi2.riwayat*') ? 'active' : '' }}" title="{{ $riwayatMenu?->description ?? 'Riwayat Presensi' }}">
             <span class="nav-icon">{{ $riwayatMenu?->icon ?? '📅' }}</span>

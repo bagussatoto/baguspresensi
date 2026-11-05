@@ -11,6 +11,7 @@ use App\Domains\Attendance\Services\EarlyWarningNotificationService;
 use App\Domains\Employee\Models\Shift;
 use App\Models\EmployeeRegistration;
 use App\Models\PasswordResetRequest;
+use App\Models\ShiftSalesSummary;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -878,5 +879,137 @@ class AttendanceWebV2PortalTest extends TestCase
 
         $resetResponse->assertOk();
         $this->assertNull(session('presensi2_mock_time'));
+    }
+
+    public function test_bagus_presensi2_scan_route_supports_pc_turet_custom_date_and_time_mocking(): void
+    {
+        // Akses via alias /bagus/presensi2/scan dengan mock_date & mock_time dari PC Turet
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get('/bagus/presensi2/scan?mock_date=2026-11-05&mock_time=13:10:00');
+
+        $response->assertOk();
+        $this->assertEquals('2026-11-05 13:10:00', session('presensi2_mock_time'));
+    }
+
+    public function test_pos_desktop_route_loads_desktop_pos_view_successfully(): void
+    {
+        // Berikan status clocked-in agar bisa akses POS
+        AttendanceRecord::create([
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => 1,
+            'work_date' => now()->toDateString(),
+            'clock_in_at' => now(),
+            'status' => 'present',
+        ]);
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get('/bagus/pos');
+
+        $response->assertOk();
+        $response->assertSee('Orderan POS');
+        $response->assertSee('Keranjang Belanja');
+        $response->assertSee('data kosong');
+        $response->assertSee('Simpan Order Penjualan');
+    }
+
+    public function test_serah_terima_displays_pos_desktop_button(): void
+    {
+        AttendanceRecord::create([
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'work_date' => now()->toDateString(),
+            'clock_in_at' => now(),
+            'status' => 'present',
+        ]);
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.serah-terima'));
+
+        $response->assertOk();
+        $response->assertSee('POS Desktop');
+        $response->assertSee(route('pos'));
+    }
+
+    public function test_rekap_slip_displays_operational_adjustments_table(): void
+    {
+        AttendanceRecord::create([
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'work_date' => now()->toDateString(),
+            'clock_in_at' => now(),
+            'status' => 'present',
+        ]);
+
+        $summary = ShiftSalesSummary::create([
+            'branch_id' => $this->branch->id,
+            'employee_id' => $this->employee->id,
+            'work_date' => now()->toDateString(),
+            'shift_code' => 'SHIFT1',
+            'status' => 'open',
+            'total_revenue' => 150000,
+            'billing_adjustment_amount' => 15000,
+            'billing_adjustment_reason' => 'power_outage',
+            'billing_adjustment_status' => 'approved',
+            'billing_adjustment_approved_by' => 'Supervisor Doni',
+            'print_adjustment_amount' => 5000,
+            'print_adjustment_pages' => 5,
+            'print_adjustment_reason' => 'paper_jam',
+            'print_adjustment_status' => 'approved',
+            'print_adjustment_approved_by' => 'Supervisor Doni',
+        ]);
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.rekap', ['summary_id' => $summary->id]));
+
+        $response->assertOk();
+        $response->assertSee('Penyesuaian Operasional Shift');
+        $response->assertSee('Mati Listrik');
+        $response->assertSee('Kertas Rusak');
+        $response->assertSee('15.000');
+    }
+
+    public function test_operator_can_lock_billing_and_print_but_cannot_unlock(): void
+    {
+        AttendanceRecord::create([
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'work_date' => now()->toDateString(),
+            'clock_in_at' => now(),
+            'status' => 'present',
+        ]);
+
+        // 1. Operator mengunci billing
+        $resLockBilling = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.penjualan.kunci-billing'), [
+                'action' => 'lock',
+                'locked_billing_amount' => 125000,
+            ]);
+        $resLockBilling->assertOk();
+        $resLockBilling->assertJson(['success' => true, 'is_billing_locked' => true]);
+
+        // 2. Operator mencoba membuka kunci billing (wajib ditolak 403)
+        $resUnlockBilling = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.penjualan.kunci-billing'), [
+                'action' => 'unlock',
+            ]);
+        $resUnlockBilling->assertStatus(403);
+
+        // 3. Operator mengunci data print
+        $resLockPrint = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.penjualan.kunci-print'), [
+                'action' => 'lock',
+                'locked_print_pages' => 10,
+                'locked_print_amount' => 10000,
+            ]);
+        $resLockPrint->assertOk();
+        $resLockPrint->assertJson(['success' => true, 'is_print_locked' => true]);
+
+        // 4. Operator mencoba membuka kunci print (wajib ditolak 403)
+        $resUnlockPrint = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.penjualan.kunci-print'), [
+                'action' => 'unlock',
+            ]);
+        $resUnlockPrint->assertStatus(403);
     }
 }

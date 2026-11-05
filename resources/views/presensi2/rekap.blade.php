@@ -611,6 +611,50 @@
             </tbody>
         </table>
 
+        {{-- 4b. PENYESUAIAN OPERASIONAL (MATI LISTRIK / KERTAS MACET) --}}
+        @if($salesSummary && ($salesSummary->hasBillingAdjustment() || $salesSummary->hasPrintAdjustment()))
+        <div class="print-section-title" style="text-transform: uppercase;">Penyesuaian Operasional Shift</div>
+        <table class="print-grid-table">
+            <thead>
+                <tr>
+                    <th style="width: 50%; text-align: left;">Keterangan Kejadian</th>
+                    <th style="width: 22%; text-align: center;">Status</th>
+                    <th style="width: 28%; text-align: right;">Potongan</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if($salesSummary->hasBillingAdjustment())
+                <tr>
+                    <td>
+                        Mati Listrik: {{ $salesSummary->billingAdjustmentReasonLabel() }}
+                        @if($salesSummary->billing_blackout_minutes) ({{ $salesSummary->billing_blackout_minutes }} mnt) @endif
+                    </td>
+                    <td style="text-align: center; font-size: 8px;">
+                        {{ strtoupper($salesSummary->billing_adjustment_status) }}
+                    </td>
+                    <td style="text-align: right; font-weight: 700;">
+                        -Rp {{ number_format((float) $salesSummary->billing_adjustment_amount, 0, ',', '.') }}
+                    </td>
+                </tr>
+                @endif
+                @if($salesSummary->hasPrintAdjustment())
+                <tr>
+                    <td>
+                        Kertas Rusak: {{ $salesSummary->printAdjustmentReasonLabel() }}
+                        ({{ $salesSummary->print_adjustment_pages }} lbr)
+                    </td>
+                    <td style="text-align: center; font-size: 8px;">
+                        {{ strtoupper($salesSummary->print_adjustment_status) }}
+                    </td>
+                    <td style="text-align: right; font-weight: 700;">
+                        -Rp {{ number_format((float) $salesSummary->print_adjustment_amount, 0, ',', '.') }}
+                    </td>
+                </tr>
+                @endif
+            </tbody>
+        </table>
+        @endif
+
         {{-- 5. TABEL SUMMARY SERAH TERIMA (4 SHIFT TETAP SESUAI CONTOH GAMBAR 2) --}}
         <div class="print-section-title" style="text-transform: uppercase;">Summary Serah Terima</div>
         <table class="print-grid-table">
