@@ -404,8 +404,17 @@
     </header>
     @endif
 
+    @php
+        $hideBottomNav = request()->routeIs('presensi2.penjualan*')
+            || request()->routeIs('presensi2.rekap*')
+            || request()->routeIs('presensi2.serah-terima*')
+            || request()->is('*penjualan*')
+            || request()->is('*rekap*')
+            || request()->is('*serah-terima*');
+    @endphp
+
     <!-- CONTENT -->
-    <main class="mobile-container {{ request()->is('*login*') || request()->routeIs('presensi2.login') ? 'is-login-page' : '' }}">
+    <main class="mobile-container {{ request()->is('*login*') || request()->routeIs('presensi2.login') ? 'is-login-page' : '' }}" @if($hideBottomNav) style="padding-bottom: 24px;" @endif>
         @if(session('success'))
             <div class="alert-box alert-success" id="flash-success">
                 <span>✅</span>
@@ -481,6 +490,7 @@
          */
         $modeSimulasiPresensi = false;
     @endphp
+    @if(!$hideBottomNav)
     <!-- BOTTOM NAV BAR (TERINTEGRASI DATABASE NAVICAT SYSTEM_MENUS) -->
     <nav class="mobile-bottom-nav" id="mobileBottomNav">
         <!-- Floating Active Bubble Indicator -->
@@ -532,6 +542,7 @@
             <span class="nav-label">{{ $riwayatMenu?->name ?? 'Riwayat' }}</span>
         </a>
     </nav>
+    @endif
 
     <!-- MODAL NOTIFIKASI INTERAKTIF (PRESENSI DULU / BELUM LENGKAP) -->
     <div id="mgk-notification-modal" style="display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.78); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); align-items: center; justify-content: center; padding: 20px;">

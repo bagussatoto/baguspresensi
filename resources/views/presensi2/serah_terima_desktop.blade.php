@@ -449,7 +449,38 @@
             color: #ffffff;
         }
 
-        /* PRINT STYLES FOR THERMAL SLIP */
+        /* PRINT STYLES FOR SUMMARY REPORT TABLE (REKAP FORMAT) */
+        .print-grid-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 6px;
+            font-size: 9.5px;
+            color: #000000;
+            border: 1.5px solid #000000;
+        }
+        .print-grid-table th,
+        .print-grid-table td {
+            border: 1px solid #000000;
+            padding: 2px 4px;
+            color: #000000;
+            vertical-align: middle;
+        }
+        .print-grid-table th {
+            background: #f1f5f9;
+            font-weight: 700;
+        }
+        .print-meta-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 4px;
+            font-size: 9.5px;
+        }
+        .print-meta-table td {
+            padding: 1px 0;
+            color: #000000;
+            vertical-align: top;
+        }
+
         @media print {
             body * {
                 visibility: hidden;
@@ -462,9 +493,11 @@
                 left: 0;
                 top: 0;
                 width: 80mm;
+                max-width: 100%;
+                margin: 0 auto;
                 padding: 4mm;
-                font-family: 'JetBrains Mono', monospace;
-                font-size: 11px;
+                font-family: Arial, Helvetica, sans-serif;
+                font-size: 9.5px;
                 color: #000000;
                 background: #ffffff;
             }
@@ -1225,86 +1258,218 @@
         </div>
     </div>
 
-    {{-- MODAL PREVIEW PRINT THERMAL (58mm / 80mm) --}}
+    {{-- MODAL PREVIEW PRINT THERMAL (FORMAT TABEL SESUAI DATA NAVICAT REKAP) --}}
     <div id="modal-thermal-preview" class="pos-modal-overlay">
-        <div class="pos-modal-box" style="max-width: 420px;">
-            <div class="pos-modal-header" style="background-color: #334155;">
-                <span>🖨️ Bukti Serah Terima Kasir (Thermal)</span>
+        <div class="pos-modal-box" style="max-width: 460px;">
+            <div class="pos-modal-header" style="background-color: #1e293b;">
+                <span>🖨️ Bukti Serah Terima Kasir (Tabel Summary)</span>
                 <button type="button" onclick="closeThermalModal()" style="background: transparent; border: none; color: #fff; font-size: 18px; cursor: pointer;">✕</button>
             </div>
-            <div style="padding: 16px; background: #f8fafc; max-height: 480px; overflow-y: auto;">
-                <div id="thermal-print-area" style="background: #ffffff; border: 1px dashed #cbd5e1; padding: 14px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 1.45; color: #000;">
-                    <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 8px; margin-bottom: 8px;">
-                        <strong style="font-size: 13px;">MAYA GRAHA KENCANA</strong><br>
-                        <span>Cabang: {{ strtoupper($currentEmployee->branch->name ?? 'MAYA 1') }}</span><br>
-                        <span>BUKTI SERAH TERIMA SHIFT</span>
+            <div style="padding: 16px; background: #f8fafc; max-height: 520px; overflow-y: auto;">
+                <div id="thermal-print-area" style="background: #ffffff; border: 1px solid #cbd5e1; padding: 12px 14px; font-family: Arial, Helvetica, sans-serif; font-size: 9.5px; line-height: 1.3; color: #000000; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                    @php
+                        $rekapCode = \Carbon\Carbon::parse($workDate)->format('Ymd')
+                            . '-B' . ($currentEmployee->branch_id ?? 1)
+                            . '-S' . ($activeShift?->id ?? 1)
+                            . '-' . ($salesSummary?->id ?? 18);
+                    @endphp
+
+                    {{-- JUDUL LAPORAN --}}
+                    <div style="font-size: 13px; font-weight: 800; text-align: left; margin-bottom: 6px; letter-spacing: 0.02em; color: #000;">
+                        Laporan Summary Serah Terima Shift
                     </div>
 
-                    <div style="margin-bottom: 8px; font-size: 11px;">
-                        <div>Tanggal : {{ date('d/m/Y H:i:s') }}</div>
-                        <div>Shift   : {{ $activeShift?->id ?? '1' }} ({{ $activeShift?->name ?? 'Pagi' }})</div>
-                        <div>Kasir   : {{ $currentEmployee->name }}</div>
-                        <div>Penerima: <span id="slip-recipient">{{ $defaultDepositRecipient }}</span></div>
+                    {{-- 1. IDENTITAS REKAP & OUTLET --}}
+                    <div style="border: 1px solid #cbd5e1; padding: 5px 7px; margin-bottom: 6px; background: #fff;">
+                        <table class="print-meta-table">
+                            <tbody>
+                                <tr>
+                                    <td style="width: 82px;">Invoice</td>
+                                    <td style="width: 8px;">:</td>
+                                    <td><strong>{{ $rekapCode }}</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Outlet</td>
+                                    <td>:</td>
+                                    <td><strong>{{ strtoupper($currentEmployee->branch->name ?? 'MAYA GRAHA KENCANA') }}</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Tanggal Laporan</td>
+                                    <td>:</td>
+                                    <td><strong>{{ \Carbon\Carbon::parse($workDate)->format('d-m-Y') }}</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Shift Operasional</td>
+                                    <td>:</td>
+                                    <td><strong>{{ $activeShift?->name ?? 'Shift Aktif' }} ({{ substr($activeShift?->start_time ?? '00:00', 0, 5) }} - {{ substr($activeShift?->end_time ?? '00:00', 0, 5) }})</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Kasir Penyerah</td>
+                                    <td>:</td>
+                                    <td><strong>{{ $currentEmployee->name }}</strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Kasir Penerima</td>
+                                    <td>:</td>
+                                    <td><strong><span id="slip-recipient">{{ $defaultDepositRecipient }}</span></strong></td>
+                                </tr>
+                                <tr>
+                                    <td>Waktu Dicetak</td>
+                                    <td>:</td>
+                                    <td><strong>{{ now()->format('d-m-Y H:i') }}</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
 
-                    <div style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 6px 0; margin-bottom: 8px;">
-                        <div style="display: flex; justify-content: space-between;">
-                            <span>Modal Awal Kas</span>
-                            <span>Rp {{ number_format($openingCash ?? 100000, 0, ',', '.') }}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span>Billing Internet</span>
-                            <span>Rp {{ number_format($lockedBillingAmount, 0, ',', '.') }}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span>Print Kertas ({{ $lockedPrintPages }} lbr)</span>
-                            <span>Rp {{ number_format($lockedPrintAmount, 0, ',', '.') }}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span>Omset F&B / POS</span>
-                            <span>Rp {{ number_format($totalFnbSales, 0, ',', '.') }}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; font-weight: bold; margin-top: 4px; border-top: 1px dotted #000; padding-top: 4px;">
-                            <span>Target Sistem</span>
-                            <span>Rp {{ number_format($expectedCash, 0, ',', '.') }}</span>
-                        </div>
-                    </div>
+                    {{-- 2. RINGKASAN KPI --}}
+                    <div style="font-weight: 700; margin: 6px 0 2px 0;">Ringkasan KPI</div>
+                    <table class="print-grid-table">
+                        <thead>
+                            <tr>
+                                <th style="text-align: left; width: 65%;">Ringkasan</th>
+                                <th style="text-align: right; width: 35%;">Nilai</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Total Shift Operasional</td>
+                                <td style="text-align: right; font-weight: 700;">4 Shift</td>
+                            </tr>
+                            <tr>
+                                <td>Total Item Terjual</td>
+                                <td style="text-align: right; font-weight: 700;">{{ $fnbItemSummary ? $fnbItemSummary->sum('total_qty') : 0 }} item</td>
+                            </tr>
+                        </tbody>
+                    </table>
 
-                    <div style="margin-bottom: 8px;">
-                        <div style="display: flex; justify-content: space-between; font-weight: bold;">
-                            <span>Fisik Uang Laci</span>
-                            <span id="slip-physical">Rp {{ number_format($handoverAmountVal + $retainedDrawerVal, 0, ',', '.') }}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span>- Modal Ditinggal</span>
-                            <span id="slip-retained">Rp {{ number_format($retainedDrawerVal, 0, ',', '.') }}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; font-weight: bold; color: #000; border-top: 1px solid #000; padding-top: 2px;">
-                            <span>= Kas Diserahkan</span>
-                            <span id="slip-handover">Rp {{ number_format($handoverAmountVal, 0, ',', '.') }}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; font-size: 10.5px; margin-top: 4px;">
-                            <span>Selisih Kas</span>
-                            <span id="slip-diff">{{ $diffVal >= 0 ? '+Rp '.number_format($diffVal, 0, ',', '.') : '-Rp '.number_format(abs($diffVal), 0, ',', '.') }}</span>
-                        </div>
-                    </div>
+                    {{-- 3. RINGKASAN PEMBAYARAN --}}
+                    <div style="font-weight: 700; margin: 6px 0 2px 0;">Ringkasan Pembayaran</div>
+                    <table class="print-grid-table">
+                        <thead>
+                            <tr>
+                                <th style="text-align: left;">Pembayaran</th>
+                                <th style="text-align: right; width: 45%;">Nilai</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>TUNAI (CASH)</td>
+                                <td style="text-align: right; font-weight: 700;">Rp {{ number_format(max(0, $totalRevenue - ($nonCashAmount ?? 0)), 0, ',', '.') }}</td>
+                            </tr>
+                            @if(($nonCashAmount ?? 0) > 0)
+                            <tr>
+                                <td>NON-TUNAI / QRIS (Masuk Rekening)</td>
+                                <td style="text-align: right; font-weight: 700;">Rp {{ number_format($nonCashAmount ?? 0, 0, ',', '.') }}</td>
+                            </tr>
+                            @endif
+                            <tr style="background: #f8fafc; font-weight: 800;">
+                                <td>TOTAL OMSET KASIR</td>
+                                <td style="text-align: right;">Rp {{ number_format($totalRevenue, 0, ',', '.') }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
 
-                    <div style="text-align: center; border-top: 1px dashed #000; padding-top: 12px; margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                        <div>
-                            <span>Yang Menyerahkan,</span><br><br><br>
-                            <strong>( {{ $currentEmployee->name }} )</strong>
-                        </div>
-                        <div>
-                            <span>Penerima Shift,</span><br><br><br>
-                            <strong>( <span id="slip-sign-recipient">{{ $defaultDepositRecipient }}</span> )</strong>
-                        </div>
-                    </div>
+                    {{-- 4. RINCIAN PENDAPATAN & SERAH TERIMA KAS FISIK LACI --}}
+                    <div style="font-weight: 700; margin: 6px 0 2px 0;">Rekapitulasi Kas & Estafet Fisik Laci</div>
+                    <table class="print-grid-table">
+                        <tbody>
+                            <tr>
+                                <td>Billing Internet</td>
+                                <td style="text-align: right;">Rp {{ number_format($lockedBillingAmount, 0, ',', '.') }}</td>
+                            </tr>
+                            <tr>
+                                <td>Print Kertas ({{ $lockedPrintPages }} lbr)</td>
+                                <td style="text-align: right;">Rp {{ number_format($lockedPrintAmount, 0, ',', '.') }}</td>
+                            </tr>
+                            <tr>
+                                <td>Penjualan POS / F&B</td>
+                                <td style="text-align: right;">Rp {{ number_format($totalFnbSales, 0, ',', '.') }}</td>
+                            </tr>
+                            <tr>
+                                <td>Modal Awal Kas Laci</td>
+                                <td style="text-align: right;">Rp {{ number_format($openingCash ?? 100000, 0, ',', '.') }}</td>
+                            </tr>
+                            <tr style="background: #f1f5f9; font-weight: 700;">
+                                <td>Target Fisik Kas Tunai Laci (Cash Only)</td>
+                                <td style="text-align: right;">Rp {{ number_format($expectedCash, 0, ',', '.') }}</td>
+                            </tr>
+                            <tr>
+                                <td>Total Fisik Uang di Laci</td>
+                                <td style="text-align: right; font-weight: 700;"><span id="slip-physical">Rp {{ number_format($handoverAmountVal + $retainedDrawerVal, 0, ',', '.') }}</span></td>
+                            </tr>
+                            <tr>
+                                <td>Modal Laci Ditinggal Kasir</td>
+                                <td style="text-align: right;"><span id="slip-retained">Rp {{ number_format($retainedDrawerVal, 0, ',', '.') }}</span></td>
+                            </tr>
+                            <tr style="background: #ecfdf5; font-weight: 800; border-top: 1.5px solid #000;">
+                                <td>KAS TUNAI DISERAHKAN KE PENERIMA</td>
+                                <td style="text-align: right; color: #065f46;"><span id="slip-handover">Rp {{ number_format($handoverAmountVal, 0, ',', '.') }}</span></td>
+                            </tr>
+                            <tr>
+                                <td>Status Kas Fisik Laci</td>
+                                <td style="text-align: right; font-weight: 700;"><span id="slip-diff">{{ $diffVal >= 0 ? '+Rp '.number_format($diffVal, 0, ',', '.') : '-Rp '.number_format(abs($diffVal), 0, ',', '.') }}</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    {{-- 5. RINCIAN MENU POS TERJUAL (JIKA ADA DATA DI DATABASE NAVICAT) --}}
+                    @if(isset($fnbItemSummary) && $fnbItemSummary->isNotEmpty())
+                    <div style="font-weight: 700; margin: 6px 0 2px 0;">Rincian Menu POS Terjual</div>
+                    <table class="print-grid-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 24px; text-align: center;">No</th>
+                                <th style="text-align: left;">Nama Produk</th>
+                                <th style="width: 32px; text-align: center;">Qty</th>
+                                <th style="width: 58px; text-align: right;">Harga</th>
+                                <th style="width: 65px; text-align: right;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($fnbItemSummary as $idx => $fnbItem)
+                            <tr>
+                                <td style="text-align: center;">{{ $idx + 1 }}</td>
+                                <td>{{ $fnbItem->item_name }}</td>
+                                <td style="text-align: center;">{{ $fnbItem->total_qty }}</td>
+                                <td style="text-align: right;">{{ number_format((float) $fnbItem->unit_price, 0, ',', '.') }}</td>
+                                <td style="text-align: right; font-weight: 700;">{{ number_format((float) $fnbItem->total_amount, 0, ',', '.') }}</td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                    @endif
+
+                    {{-- 6. TANDA TANGAN ESTAFET SHIFT --}}
+                    <table style="width: 100%; margin-top: 10px; border-collapse: collapse; text-align: center; font-size: 9.5px;">
+                        <tbody>
+                            <tr>
+                                <td style="width: 50%; padding-bottom: 35px;">
+                                    Yang Menyerahkan,
+                                </td>
+                                <td style="width: 50%; padding-bottom: 35px;">
+                                    Penerima Shift,
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <strong>( {{ $currentEmployee->name }} )</strong>
+                                </td>
+                                <td>
+                                    <strong>( <span id="slip-sign-recipient">{{ $defaultDepositRecipient }}</span> )</strong>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
             <div style="padding: 12px 16px; background: #ffffff; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 8px;">
                 <button type="button" onclick="closeThermalModal()" class="btn-action-secondary">Tutup</button>
                 <button type="button" onclick="window.print()" class="btn-action-primary" style="width: auto;">
-                    🖨️ Cetak Slip Sekarang
+                    🖨️ Cetak Tabel Summary
+                </button>
+            </div>
+        </div>
                 </button>
             </div>
         </div>

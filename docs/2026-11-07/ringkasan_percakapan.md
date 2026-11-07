@@ -390,3 +390,27 @@ Berdasarkan persetujuan implementasi mode simulasi serah terima shift kasir:
      - `test_serah_terima_desktop_displays_simulation_bar_and_preset_buttons` ➡️ **PASSED**
      - `test_serah_terima_reset_simulation_action_clears_handover_data` ➡️ **PASSED**
    - Seluruh **40 feature tests** di [`ShiftStockAndSalesFlowTest.php`](file:///var/www/laravel_apps/bagus/tests/Feature/ShiftStockAndSalesFlowTest.php) **LULUS 100% (297 assertions)**.
+
+---
+
+## 22. Penonaktifan Navbar Bawah Halaman Kasir, Redesain Struk Serah Terima Format Tabel Navicat, & Verifikasi Sinkronisasi Database
+
+1. **Penonaktifan Navbar Bawah (Bottom Navigation Bar):**
+   - Navbar bawah (`mobile-bottom-nav`) otomatis dinonaktifkan / disembunyikan pada halaman:
+     - `/presensi2/penjualan`
+     - `/presensi2/rekap`
+     - `/presensi2/serah-terima`
+   - Padding bawah kontainer disesuaikan sehingga layar lebih luas dan nyaman digunakan kasir tanpa terhalang navbar.
+
+2. **Revisi Struk Serah Terima Kasir (Mengadopsi Format Tabel Summary Resmi):**
+   - Modal cetak struk serah terima desktop kini menggunakan format tabel bergaris standar (*Laporan Summary Serah Terima Shift*):
+     - Kotak identitas invoice, tanggal, outlet, shift, kasir penyerah, kasir penerima.
+     - Tabel Ringkasan KPI & Pembayaran (Tunai & Non-Tunai QRIS).
+     - Tabel Rekapitulasi Kas & Estafet Fisik Laci (Modal Awal, Target Tunai, Fisik Laci, Modal Ditinggal, Kas Diserahkan, Status Selisih).
+     - Tabel Rincian Menu POS Terjual (data item, qty, harga, subtotal).
+     - Kolom tanda tangan resmi kedua belah pihak kasir.
+
+3. **Verifikasi Sinkronisasi 3 Data ke Database Navicat:**
+   - **Riwayat Estafet Kasir (14)**: Tersimpan nyata di tabel `shift_sales_summaries` (`handover_status = 'completed'`).
+   - **Audit Sisa Stok Fisik**: Tersimpan nyata di tabel `shift_handover_checklists` (`status = 'completed'`, JSON `drink_items` & `food_items`).
+   - **Rincian Penjualan POS (1 Menu)**: Tersimpan nyata di tabel `cafe_sales` & `cafe_sale_items` (AQUA 600ML Rp 4.000).
