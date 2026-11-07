@@ -6191,9 +6191,34 @@ BAT;
 
         $viewName = $useDesktop ? 'presensi2.serah_terima_desktop' : 'presensi2.serah_terima';
 
+        $branchEmployees = Employee::where('is_active', true)
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->orderBy('name')
+            ->get();
+
+        $operationalShifts = Shift::where('is_active', true)->orderBy('start_time')->get();
+        $nextShiftObj = null;
+        if ($activeShift && $operationalShifts->isNotEmpty()) {
+            $currentIndex = $operationalShifts->search(fn ($s) => $s->id === $activeShift->id);
+            if ($currentIndex !== false) {
+                $nextIndex = ($currentIndex + 1) % $operationalShifts->count();
+                $nextShiftObj = $operationalShifts->get($nextIndex);
+            }
+        }
+
+        $handoverHistorySummaries = ShiftSalesSummary::with(['employee', 'shift', 'branch'])
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->where('handover_status', 'completed')
+            ->orderByDesc('handover_at')
+            ->orderByDesc('id')
+            ->take(15)
+            ->get();
+
         return view($viewName, [
             'currentEmployee' => $employee,
             'activeShift' => $activeShift,
+            'nextShiftObj' => $nextShiftObj,
+            'branchEmployees' => $branchEmployees,
             'nextShiftLabel' => $nextShiftLabel,
             'workDate' => $workDate,
             'attendanceToday' => $attendanceToday,
@@ -6202,6 +6227,7 @@ BAT;
             'handoverChecklist' => $handoverChecklist,
             'todayHandovers' => $todayHandovers,
             'readyToDepositSummaries' => $readyToDepositSummaries,
+            'handoverHistorySummaries' => $handoverHistorySummaries,
             'totalSiapSetor' => $totalSiapSetor,
             'historyDepositSummaries' => $historyDepositSummaries,
             'recentSummaries' => $recentSummaries,
@@ -6449,28 +6475,21 @@ BAT;
                 ]);
                 $message .= ' Presensi Pulang telah otomatis tercatat. Terima kasih!';
             }
-
-            if ($request->wantsJson()) {
-                return response()->json([
-                    'success' => true,
-                    'message' => $message,
-                    'summary' => $summary->fresh(),
-                    'redirect' => route('presensi2.index'),
-                ]);
-            }
-
-            return redirect()->route('presensi2.index')->with('success', $message);
         }
+
+        $isDesktop = $request->input('source') === 'desktop' || $request->input('view') === 'desktop' || $request->is('*desktop*');
+        $redirectRoute = $isDesktop ? 'presensi2.serah-terima.desktop' : 'presensi2.serah-terima';
 
         if ($request->wantsJson()) {
             return response()->json([
                 'success' => true,
                 'message' => $message,
                 'summary' => $summary->fresh(),
+                'redirect' => route($redirectRoute, ['summary_id' => $summary->id]),
             ]);
         }
 
-        return redirect()->route('presensi2.serah-terima', ['summary_id' => $summary->id])
+        return redirect()->route($redirectRoute, ['summary_id' => $summary->id])
             ->with('success', $message);
     }
 

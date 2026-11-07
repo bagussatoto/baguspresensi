@@ -662,33 +662,34 @@
             </div>
 
             <div>
-                <label style="display: block; font-size: 11.5px; color: #cbd5e1; margin-bottom: 5px; font-weight: 600;">Metode Penyetoran Kas *</label>
-                <select name="deposit_method" style="width: 100%; background: rgba(15, 23, 42, 0.85); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 12px; outline: none;">
-                    <option value="safe_dropbox" {{ ($salesSummary?->deposit_method === 'safe_dropbox' || $isShift4) ? 'selected' : '' }}>🔒 Amplop Brankas Kasir (Safe Dropbox) {{ $isShift4 ? '(Rekomendasi Shift 4)' : '' }}</option>
-                    <option value="bank_transfer" {{ $salesSummary?->deposit_method === 'bank_transfer' ? 'selected' : '' }}>🏦 Setor Tunai ATM / Rekening Bank</option>
-                    <option value="next_shift_handover" {{ ($salesSummary?->deposit_method === 'next_shift_handover' && !$isShift4) ? 'selected' : '' }}>🤝 Serah Terima Fisik ke Kasir Selanjutnya</option>
-                    <option value="cash_collector" {{ $salesSummary?->deposit_method === 'cash_collector' ? 'selected' : '' }}>💼 Diserahkan ke Owner / Kolektor</option>
+                <label style="display: block; font-size: 11.5px; color: #cbd5e1; margin-bottom: 5px; font-weight: 600;">Metode Serah Terima Kas *</label>
+                <input type="hidden" name="deposit_method" value="next_shift_handover">
+                <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 8px; padding: 10px 12px; color: #34d399; font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+                    <span>🤝</span> Serah Terima Fisik Kas ke Kasir Selanjutnya (Cash Only)
+                </div>
+            </div>
+
+            <div>
+                <label style="display: block; font-size: 11.5px; color: #cbd5e1; margin-bottom: 5px; font-weight: 600;">Shift / Kasir Penerima *</label>
+                @php
+                    $nextShiftPrefix = ($nextShiftObj ? $nextShiftObj->name : $nextShiftLabel) . ' — ';
+                @endphp
+                <select name="deposit_recipient" required style="width: 100%; background: rgba(15, 23, 42, 0.95); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 12.5px; outline: none; font-weight: 600;">
+                    <optgroup label="Shift Penerima: {{ $nextShiftObj ? $nextShiftObj->name : $nextShiftLabel }}">
+                        @foreach($branchEmployees ?? [] as $emp)
+                            @if($emp->id !== $currentEmployee->id)
+                                <option value="{{ $nextShiftPrefix }}{{ $emp->name }}" {{ (str_contains($defaultDepositRecipient, $emp->name)) ? 'selected' : '' }}>
+                                    👤 {{ $nextShiftPrefix }}{{ $emp->name }}
+                                </option>
+                            @endif
+                        @endforeach
+                    </optgroup>
+                    <optgroup label="Opsi Kasir Lain">
+                        <option value="{{ $nextShiftLabel }}" {{ !str_contains($defaultDepositRecipient, '—') ? 'selected' : '' }}>
+                            👥 {{ $nextShiftLabel }} (Petugas Terjadwal)
+                        </option>
+                    </optgroup>
                 </select>
-            </div>
-
-            <div>
-                <label style="display: block; font-size: 11.5px; color: #cbd5e1; margin-bottom: 5px; font-weight: 600;">Shift Penerima / Kasir Berikutnya *</label>
-                <input type="text" name="deposit_recipient" required placeholder="Contoh: Shift 2 / Grace"
-                       value="{{ $defaultDepositRecipient }}"
-                       style="width: 100%; background: rgba(15, 23, 42, 0.85); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 13px; outline: none;">
-            </div>
-
-            <div>
-                <label style="display: block; font-size: 11.5px; color: #cbd5e1; margin-bottom: 5px; font-weight: 600;">Foto Bukti Setor / Amplop Brankas (Opsional)</label>
-                <input type="file" name="deposit_proof" accept="image/*"
-                       style="width: 100%; background: rgba(15, 23, 42, 0.85); border: 1px solid var(--border-glass); border-radius: 8px; padding: 8px 12px; color: #cbd5e1; font-size: 11.5px; outline: none;">
-                @if($salesSummary?->depositProofUrl())
-                    <div style="margin-top: 4px;">
-                        <a href="{{ $salesSummary->depositProofUrl() }}" target="_blank" style="font-size: 11px; color: #38bdf8; text-decoration: underline;">
-                            🔍 Lihat Foto Bukti Setor
-                        </a>
-                    </div>
-                @endif
             </div>
 
             <div style="grid-column: 1 / -1;">
@@ -701,16 +702,16 @@
             <div style="grid-column: 1 / -1; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-glass); border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 0; color: #e2e8f0; font-size: 12.5px;">
                     <input type="checkbox" name="auto_clock_out" value="1" checked style="width: 18px; height: 18px; accent-color: #10b981; cursor: pointer;">
-                    <span><strong>Selesai Serah Terima</strong>: Otomatis lakukan <strong>Check Out Presensi Pulang</strong></span>
+                    <span><strong>Selesai Serah Terima</strong>: Otomatis lakukan <strong>Check Out Presensi Pulang</strong> &amp; tetap di halaman ini untuk cek rekap</span>
                 </label>
 
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <button type="submit" class="btn btn-emerald" style="padding: 11px 18px; font-size: 13px; font-weight: 700;">
                         <span>🤝</span> Simpan Serah Terima Shift
                     </button>
-                    <button type="button" onclick="openModalSetorKas({{ $salesSummary?->id ?? 'null' }}, {{ (int) $handoverAmountVal }})" class="btn" style="padding: 11px 14px; font-size: 13px; font-weight: 700; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border: 1px solid #d97706; white-space: nowrap;">
-                        <span>🏦</span> Setor Kas
-                    </button>
+                    <a href="{{ route('presensi2.rekap', ['summary_id' => $salesSummary?->id]) }}" class="btn" style="padding: 11px 14px; font-size: 13px; font-weight: 700; background: linear-gradient(135deg, #0284c7, #0369a1); color: #fff; border: 1px solid #0284c7; white-space: nowrap; text-decoration: none;">
+                        <span>📊</span> Cek Rekap &amp; Cetak
+                    </a>
                 </div>
             </div>
         </form>

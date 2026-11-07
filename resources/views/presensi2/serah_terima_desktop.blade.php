@@ -624,22 +624,24 @@
                 </div>
             </div>
 
-            {{-- BOX RINGKASAN AKUMULASI CABANG --}}
+            {{-- BOX RINGKASAN AKSI: CETAK REKAP & STRUK SERAH TERIMA --}}
             <div class="panel-box">
                 <div class="panel-box-header panel-box-header-cyan">
-                    <span>🏦 Akumulasi Siap Setor</span>
-                    <span style="font-size: 11px;">{{ $readyToDepositSummaries->count() }} Shift</span>
+                    <span>🖨️ Cetak Struk & Rekap Kasir</span>
+                    <span style="font-size: 11px;">Shift {{ $activeShift?->id ?? '1' }}</span>
                 </div>
                 <div class="panel-box-body">
-                    <div style="font-size: 20px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: #0284c7; margin-bottom: 4px;">
-                        Rp {{ number_format($totalSiapSetor, 0, ',', '.') }}
+                    <div style="font-size: 11.5px; color: #475569; margin-bottom: 12px; line-height: 1.4;">
+                        Setelah serah terima uang fisik kasir selesai, Anda dapat langsung mencetak bukti serah terima kasir atau membuka tabel rekapitulasi penjualan (Z-Report).
                     </div>
-                    <p style="font-size: 11.5px; color: #64748b; line-height: 1.4; margin-bottom: 10px;">
-                        Total dana tunai yang sudah diserahterimakan dari shift sebelumnya dan menunggu disetor ke bank/kolektor.
-                    </p>
-                    <button type="button" onclick="openModalSetorKas({{ $salesSummary?->id ?? 'null' }}, {{ (int) $handoverAmountVal }})" class="btn-action-secondary" style="width: 100%; justify-content: center; background: #e0f2fe; color: #0369a1; border-color: #bae6fd;">
-                        <span>🏦</span> Setor Kas Sekarang (Bank / Kolektor)
-                    </button>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <button type="button" onclick="previewThermalReceipt()" class="btn-action-primary" style="justify-content: center; background: #00a65a; border-color: #008d4c; color: #ffffff; padding: 8px 12px; font-weight: 700; width: 100%;">
+                            <span>🧾</span> Cetak Struk Serah Terima Kas
+                        </button>
+                        <a href="{{ route('presensi2.rekap', ['summary_id' => $salesSummary?->id]) }}" class="btn-action-secondary" style="justify-content: center; background: #e0f2fe; color: #0369a1; border-color: #bae6fd; text-decoration: none; padding: 8px 12px; font-weight: 700; width: 100%;">
+                            <span>📊</span> Buka Tabel Rekap Penjualan (Z-Report)
+                        </a>
+                    </div>
                 </div>
             </div>
         </section>
@@ -816,38 +818,40 @@
                             <small style="color: #008d4c; font-size: 11px;">Nominal tunai yang diserahkan ke kasir berikutnya / siap disetor</small>
                         </div>
 
-                        {{-- METODE PENYETORAN KAS --}}
+                        {{-- METODE PENYETORAN KAS (CASH ONLY) --}}
                         <div class="form-group">
-                            <label class="form-label">Metode Penyetoran Kas *</label>
-                            <select name="deposit_method" id="select-deposit-method" class="form-control" style="font-size: 12px; background: #fff;">
-                                <option value="safe_dropbox" {{ ($salesSummary?->deposit_method === 'safe_dropbox' || $isShift4) ? 'selected' : '' }}>🔒 Amplop Brankas Kasir (Safe Dropbox) {{ $isShift4 ? '(Rekomendasi SOP Shift 4)' : '' }}</option>
-                                <option value="bank_transfer" {{ $salesSummary?->deposit_method === 'bank_transfer' ? 'selected' : '' }}>🏦 Setor Tunai ATM / Rekening Bank</option>
-                                <option value="next_shift_handover" {{ ($salesSummary?->deposit_method === 'next_shift_handover' && !$isShift4) ? 'selected' : '' }}>🤝 Serah Terima Fisik ke Kasir Selanjutnya</option>
-                                <option value="cash_collector" {{ $salesSummary?->deposit_method === 'cash_collector' ? 'selected' : '' }}>💼 Diserahkan ke Owner / Kolektor</option>
-                            </select>
+                            <label class="form-label">Metode Serah Terima Kas *</label>
+                            <input type="hidden" name="deposit_method" value="next_shift_handover">
+                            <div style="padding: 8px 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 4px; font-size: 12px; font-weight: 700; color: #166534; display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 15px;">🤝</span>
+                                <span>Serah Terima Fisik Kas ke Kasir Selanjutnya (Cash Only)</span>
+                            </div>
+                            <small style="color: #64748b; font-size: 11px; margin-top: 3px; display: block;">Murni estafet fisik uang cash laci kasir secara tatap muka langsung.</small>
                         </div>
 
-                        {{-- KASIR / SHIFT PENERIMA --}}
+                        {{-- KASIR / SHIFT PENERIMA (SESUAI JADWAL SHIFT KARYAWAN) --}}
                         <div class="form-group">
                             <label class="form-label">Shift / Kasir Penerima *</label>
-                            <input type="text" name="deposit_recipient" id="input-recipient" required
-                                   class="form-control"
-                                   placeholder="Contoh: Shift 2 / Grace"
-                                   value="{{ $defaultDepositRecipient }}">
-                        </div>
-
-                        {{-- BUKTI SETOR FOTO --}}
-                        <div class="form-group">
-                            <label class="form-label">Foto Bukti Setor / Amplop Brankas (Opsional)</label>
-                            <input type="file" name="deposit_proof" id="input-deposit-proof" accept="image/*" class="form-control" style="font-size: 11.5px; padding: 5px;">
-                            <small style="color: #64748b; font-size: 11px;">Upload foto struk transfer / amplop setoran brankas jika ada</small>
-                            @if($salesSummary?->depositProofUrl())
-                                <div style="margin-top: 4px;">
-                                    <a href="{{ $salesSummary->depositProofUrl() }}" target="_blank" style="font-size: 11px; color: #0284c7; text-decoration: underline; font-weight: 600;">
-                                        🔍 Lihat Foto Bukti Setor Tersimpan
-                                    </a>
-                                </div>
-                            @endif
+                            @php
+                                $nextShiftPrefix = ($nextShiftObj ? $nextShiftObj->name : $nextShiftLabel) . ' — ';
+                            @endphp
+                            <select name="deposit_recipient" id="input-recipient" class="form-control" required style="font-size: 12.5px; font-weight: 600; color: #1e293b; background: #ffffff;">
+                                <optgroup label="Shift Penerima: {{ $nextShiftObj ? $nextShiftObj->name : $nextShiftLabel }}">
+                                    @foreach($branchEmployees ?? [] as $emp)
+                                        @if($emp->id !== $currentEmployee->id)
+                                            <option value="{{ $nextShiftPrefix }}{{ $emp->name }}" {{ (str_contains($defaultDepositRecipient, $emp->name)) ? 'selected' : '' }}>
+                                                👤 {{ $nextShiftPrefix }}{{ $emp->name }}
+                                            </option>
+                                        @endif
+                                    @endforeach
+                                </optgroup>
+                                <optgroup label="Opsi Kasir Lain">
+                                    <option value="{{ $nextShiftLabel }}" {{ !str_contains($defaultDepositRecipient, '—') ? 'selected' : '' }}>
+                                        👥 {{ $nextShiftLabel }} (Petugas Terjadwal)
+                                    </option>
+                                </optgroup>
+                            </select>
+                            <small style="color: #64748b; font-size: 11px; margin-top: 3px; display: block;">Disesuaikan otomatis dengan jadwal shift berikutnya</small>
                         </div>
 
                         {{-- CATATAN SHIFT --}}
@@ -858,11 +862,14 @@
                                    value="{{ $salesSummary?->handover_notes ?? $salesSummary?->deposit_notes ?? '' }}">
                         </div>
 
+                        {{-- HIDDEN INPUT SOURCE DESKTOP --}}
+                        <input type="hidden" name="source" value="desktop">
+
                         {{-- AUTO CLOCK OUT CHECKBOX --}}
                         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 10px; margin-bottom: 14px;">
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 0; font-size: 12px; color: #1e293b;">
                                 <input type="checkbox" name="auto_clock_out" value="1" checked style="width: 17px; height: 17px; accent-color: #00a65a; cursor: pointer;">
-                                <span><strong>Selesai Serah Terima</strong>: Otomatis lakukan <strong>Presensi Pulang (Clock Out)</strong></span>
+                                <span><strong>Selesai Serah Terima</strong>: Otomatis lakukan <strong>Presensi Pulang (Clock Out)</strong> &amp; tetap di halaman ini untuk cek rekap</span>
                             </label>
                         </div>
 
@@ -893,13 +900,7 @@
             <div style="padding: 12px 16px 0 16px;">
                 <div class="tabs-nav">
                     <button type="button" class="tab-btn active" onclick="switchTab('tab-handovers', this)">
-                        <span>🤝</span> Serah Terima Shift Hari Ini ({{ $todayHandovers->count() }})
-                    </button>
-                    <button type="button" class="tab-btn" onclick="switchTab('tab-ready', this)">
-                        <span>📥</span> Antrean Siap Setor ({{ $readyToDepositSummaries->count() }})
-                    </button>
-                    <button type="button" class="tab-btn" onclick="switchTab('tab-history', this)">
-                        <span>🏦</span> Riwayat Setoran Bank / Kolektor ({{ $historyDepositSummaries->count() }})
+                        <span>🤝</span> Riwayat Estafet Kasir ({{ $handoverHistorySummaries->count() }})
                     </button>
                     <button type="button" class="tab-btn" onclick="switchTab('tab-stock', this)">
                         <span>📦</span> Audit Sisa Stok Fisik
@@ -911,48 +912,57 @@
             </div>
 
             <div class="panel-box-body" style="padding: 0 16px 16px 16px;">
-                {{-- TAB 1: SERAH TERIMA HARI INI --}}
+                {{-- TAB 1: RIWAYAT ESTAFET SERAH TERIMA KASIR (CHAIN OF CUSTODY) --}}
                 <div id="tab-handovers" class="tab-content active">
                     <table class="table-data">
                         <thead>
                             <tr>
                                 <th style="width: 40px; text-align: center;">No</th>
-                                <th>Tanggal & Jam</th>
+                                <th>Tanggal &amp; Jam WIB</th>
                                 <th>Shift</th>
-                                <th>Kasir Penyerah</th>
-                                <th>Kasir Penerima</th>
-                                <th style="text-align: right;">Total Omset</th>
-                                <th style="text-align: right;">Kas Diserahkan</th>
+                                <th>👤 Kasir Penyerah</th>
+                                <th>🤝 Kasir Penerima</th>
+                                <th style="text-align: right;">💵 Kas Diserahkan (Cash)</th>
+                                <th style="text-align: right;">🪙 Modal Ditinggal</th>
+                                <th style="text-align: center;">Status Kas</th>
                                 <th style="text-align: center;">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($todayHandovers as $th)
+                            @forelse($handoverHistorySummaries as $hs)
                                 <tr>
                                     <td style="text-align: center; font-weight: 700; color: #64748b;">{{ $loop->iteration }}</td>
                                     <td style="font-family: monospace;">
-                                        {{ $th->work_date?->format('d-m-Y') ?? date('d-m-Y') }}
-                                        <small style="color: #64748b;">{{ ($th->handover_at ?? $th->updated_at)?->format('H:i') }}</small>
+                                        {{ $hs->handover_at ? $hs->handover_at->format('d-m-Y H:i') : ($hs->work_date?->format('d-m-Y') ?? '-') }}
                                     </td>
-                                    <td><span class="badge-shift">{{ $th->shiftNumber() }}</span></td>
-                                    <td><strong>{{ strtoupper($th->employee->name ?? 'Kasir') }}</strong></td>
-                                    <td style="color: #0284c7;"><strong>{{ $th->handoverRecipientName() }}</strong></td>
-                                    <td style="text-align: right; font-family: 'JetBrains Mono', monospace;">
-                                        Rp {{ number_format((float)$th->total_revenue, 0, ',', '.') }}
-                                    </td>
+                                    <td><span class="badge-shift">{{ $hs->shiftNumber() }}</span></td>
+                                    <td><strong>{{ strtoupper($hs->handover_by ?: ($hs->employee->name ?? 'Kasir')) }}</strong></td>
+                                    <td style="color: #0284c7;"><strong>{{ $hs->handoverRecipientName() }}</strong></td>
                                     <td style="text-align: right; font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #00a65a;">
-                                        Rp {{ number_format((float)$th->handoverAmount(), 0, ',', '.') }}
+                                        Rp {{ number_format((float)$hs->handoverAmount(), 0, ',', '.') }}
+                                    </td>
+                                    <td style="text-align: right; font-family: 'JetBrains Mono', monospace; color: #0284c7;">
+                                        Rp {{ number_format((float)($hs->retained_drawer_cash ?? 0), 0, ',', '.') }}
                                     </td>
                                     <td style="text-align: center;">
-                                        <a href="{{ route('presensi2.rekap', ['summary_id' => $th->id, 'auto_print' => 1, 'print_type' => 'rekap']) }}" title="Cetak Bukti Slip Rekap" class="btn-nav-pill" style="padding: 3px 8px; font-size: 11px;">
-                                            🖨️ Cetak
+                                        @if($hs->cash_difference == 0)
+                                            <span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 11px;">✓ Pas</span>
+                                        @elseif($hs->cash_difference > 0)
+                                            <span style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 11px;">+{{ number_format($hs->cash_difference, 0, ',', '.') }}</span>
+                                        @else
+                                            <span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 11px;">-{{ number_format(abs($hs->cash_difference), 0, ',', '.') }}</span>
+                                        @endif
+                                    </td>
+                                    <td style="text-align: center;">
+                                        <a href="{{ route('presensi2.rekap', ['summary_id' => $hs->id, 'auto_print' => 1, 'print_type' => 'rekap']) }}" title="Cetak Bukti Slip Rekap" class="btn-nav-pill" style="padding: 3px 8px; font-size: 11px;">
+                                            🖨️ Struk
                                         </a>
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="8" style="text-align: center; padding: 20px; color: #94a3b8;">
-                                        Belum ada rekaman serah terima shift hari ini.
+                                    <td colspan="9" style="text-align: center; padding: 20px; color: #94a3b8;">
+                                        Belum ada rekaman riwayat serah terima kasir shift yang tersimpan.
                                     </td>
                                 </tr>
                             @endforelse

@@ -1266,7 +1266,7 @@ class ShiftStockAndSalesFlowTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('SHIFT 4: PENUTUP HARI');
         $response->assertSee('150.000');
-        $response->assertSee('Amplop Brankas Kasir (Safe Dropbox)');
+        $response->assertSee('Amplop Brankas (Safe Dropbox)');
 
         Carbon::setTestNow();
     }
@@ -1312,6 +1312,8 @@ class ShiftStockAndSalesFlowTest extends TestCase
 
     public function test_section_5_cash_handover_expects_only_retained_cash_when_previous_shift_deposited_to_safe(): void
     {
+        Carbon::setTestNow(Carbon::parse('2026-11-08 08:00:00'));
+
         $shift4 = Shift::create([
             'name' => 'Shift 4 Malam',
             'code' => 'SHIFT-4',
@@ -1325,7 +1327,7 @@ class ShiftStockAndSalesFlowTest extends TestCase
             'employee_id' => $this->supervisor->id,
             'branch_id' => $this->branch->id,
             'shift_id' => $shift4->id,
-            'work_date' => Carbon::yesterday()->toDateString(),
+            'work_date' => Carbon::now()->subDay()->toDateString(),
             'total_fnb_sales' => 100000,
             'total_internet_sales' => 400000,
             'total_revenue' => 500000,
@@ -1342,7 +1344,7 @@ class ShiftStockAndSalesFlowTest extends TestCase
             ->get(route('presensi2.stok'));
 
         $response->assertStatus(200);
-        $response->assertSee('Omset Disetor ke Brankas / Bank');
+        $response->assertSee('Setor ke Brankas/Bank');
         $response->assertSee('Wajib Ada di Laci Sekarang');
         $response->assertSee('value="150000"', false);
     }

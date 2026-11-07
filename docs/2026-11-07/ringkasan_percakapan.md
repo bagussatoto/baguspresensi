@@ -323,3 +323,29 @@ Berdasarkan instruksi operasional kasir:
      - `test_pos_desktop_only_offers_cash_and_qris_options` ➡️ **PASSED**
      - `test_serah_terima_calculates_cash_only_excluding_qris_sales` ➡️ **PASSED**
    - Total **37 unit tests** lulus 100% (**273 assertions**) dan lulus formatting **Laravel Pint**.
+
+---
+
+## 19. Refactoring Formulir Serah Terima Shift: Kas Tunai Murni, Estafet Kasir, & Integrasi Cetak Struk
+
+Berdasarkan permintaan penyempurnaan pada formulir Serah Terima Shift (`/presensi2/serah-terima` dan `/presensi2/serah-terima-desktop`):
+
+1. **Metode Penyetoran Kas Murni Serah Terima Uang Tunai (Cash Only):**
+   - Opsi setor ke luar (bank, brankas luar, kolektor) pada saat pergantian shift ditiadakan.
+   - Pilihan metode penyetoran dikunci ke `next_shift_handover` (Serah Terima Kasir Shift Selanjutnya) secara tunai langsung di hadapan kasir penerima.
+2. **Shift & Kasir Penerima Otomatis Sesuai Jadwal:**
+   - Dropdown kasir penerima otomatis menampilkan daftar rekan kerja cabang aktif dengan label shift estafet berikutnya (misal: Shift 1 $\to$ Shift 2).
+3. **Penyederhanaan Form (Penghapusan Foto Bukti Setor):**
+   - Input unggah file `deposit_proof` dihapus karena serah terima uang fisik kasir dilakukan tatap muka langsung di depan laci kasir dan diverifikasi lewat perhitungan lembaran uang.
+4. **Alur Clock-Out Tanpa Terlempar Keluar Halaman:**
+   - Setelah kasir menekan tombol simpan serah terima dengan opsi *Clock Out Otomatis*, sistem tidak lagi me-redirect kasir ke halaman login/scan depan, melainkan **tetap berada di halaman serah terima** dengan status berhasil. Hal ini memungkinkan kasir memeriksa ringkasan akhir dan langsung mencetak bukti struk.
+5. **Tombol Cetak Struk & Rekap Penjualan Cepat:**
+   - Box setor kas eksternal diganti menjadi panel aksi terpadu:
+     - `🖨️ Cetak Struk Bukti Serah Terima` (Cetak struk thermal untuk arsip laci).
+     - `📊 Buka Tabel Rekap Penjualan (Z-Report)` (Membuka detail rekap dan history transaksi kasir).
+6. **Tabel Riwayat Estafet Kasir (*Chain of Custody*):**
+   - Menampilkan tabel riwayat serah terima yang telah tuntas (`completed`) secara persisten dan transparan.
+   - Kolom memuat: Tanggal/Jam, Shift, Kasir Penyerah, Kasir Penerima, Kas Tunai Diserahkan, Modal Ditinggal, Status Kas (Pas/Selisih), dan tombol Cetak Ulang Struk.
+7. **Verifikasi:**
+   - Seluruh 37 automated tests di [`ShiftStockAndSalesFlowTest.php`](file:///var/www/laravel_apps/bagus/tests/Feature/ShiftStockAndSalesFlowTest.php) **LULUS 100% (273 assertions)**.
+   - Kode divalidasi dengan **Laravel Pint**.
