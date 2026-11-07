@@ -488,6 +488,9 @@
             <a href="{{ route('pos') }}" class="btn-nav-pill" title="Kembali ke Layar Penjualan POS Desktop">
                 <span>←</span> <strong>POS Desktop</strong>
             </a>
+            <a href="{{ route('presensi2.rekap', ['summary_id' => $salesSummary?->id]) }}" class="btn-nav-pill" style="color: #0369a1; border-color: #bae6fd; background: #e0f2fe;" title="Buka Detail Rekapitulasi Lengkap">
+                <span>📊</span> Rekap Pendapatan
+            </a>
             <a href="{{ route('presensi2.serah-terima', array_merge(request()->query(), ['view' => 'mobile'])) }}" class="btn-nav-pill" title="Buka Mode Tampilan HP">
                 <span>📱</span> Versi HP
             </a>
@@ -843,6 +846,9 @@
                     <button type="button" class="tab-btn" onclick="switchTab('tab-stock', this)">
                         <span>📦</span> Audit Sisa Stok Fisik
                     </button>
+                    <button type="button" class="tab-btn" onclick="switchTab('tab-fnb-breakdown', this)">
+                        <span>☕</span> Rincian Penjualan POS ({{ $fnbItemSummary->count() ?? 0 }} Menu)
+                    </button>
                 </div>
             </div>
 
@@ -1011,6 +1017,44 @@
                                 <tr>
                                     <td colspan="6" style="text-align: center; padding: 20px; color: #94a3b8;">
                                         Data audit stok fisik tidak tersedia untuk shift ini.
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+
+                {{-- TAB 5: RINCIAN PENJUALAN PRODUK POS & F&B SHIFT --}}
+                <div id="tab-fnb-breakdown" class="tab-content">
+                    <table class="table-data">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px; text-align: center;">No</th>
+                                <th>Nama Menu / Produk F&B</th>
+                                <th style="text-align: center; width: 100px;">Qty Terjual</th>
+                                <th style="text-align: right; width: 140px;">Harga Satuan (Rp)</th>
+                                <th style="text-align: right; width: 160px;">Total Omset (Rp)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($fnbItemSummary ?? [] as $fnbItem)
+                                <tr>
+                                    <td style="text-align: center; font-weight: 700; color: #64748b;">{{ $loop->iteration }}</td>
+                                    <td><strong>{{ $fnbItem->item_name }}</strong></td>
+                                    <td style="text-align: center; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: #0284c7;">
+                                        {{ $fnbItem->total_qty }}
+                                    </td>
+                                    <td style="text-align: right; font-family: 'JetBrains Mono', monospace;">
+                                        Rp {{ number_format((float) $fnbItem->unit_price, 0, ',', '.') }}
+                                    </td>
+                                    <td style="text-align: right; font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #00a65a;">
+                                        Rp {{ number_format((float) $fnbItem->total_amount, 0, ',', '.') }}
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="5" style="text-align: center; padding: 20px; color: #94a3b8;">
+                                        Belum ada rekaman penjualan produk F&B / POS pada shift ini.
                                     </td>
                                 </tr>
                             @endforelse

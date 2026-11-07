@@ -5579,12 +5579,72 @@ BAT;
         $lockedPrintAmount = (float) ($salesSummary?->locked_print_amount ?? 0);
 
         $totalFnbSales = (float) ($salesSummary?->total_fnb_sales ?? 0);
-        $totalRevenue = (float) ($salesSummary?->total_revenue ?? ($lockedBillingAmount + $lockedPrintAmount + $totalFnbSales));
+
+        // Fallback hitung otomatis dari transaksi kasir jika salesSummary belum ditutup
+        if ($totalFnbSales <= 0) {
+            $totalFnbSales = (float) CafeSale::where('total_fnb', '>', 0)
+                ->whereDate('created_at', $workDate->toDateString())
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+                ->where('payment_status', '!=', 'cancelled')
+                ->get()
+                ->sum(fn ($s) => (float) ($s->net_amount > 0 || $s->discount_amount > 0 ? $s->net_amount : $s->total_fnb));
+        }
+
+        if (! $isBillingLocked && $lockedBillingAmount <= 0) {
+            $recordedBilling = (float) CafeSale::where('total_billing', '>', 0)
+                ->whereDate('created_at', $workDate->toDateString())
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+                ->where('payment_status', '!=', 'cancelled')
+                ->sum('total_billing');
+            $activePcBilling = (float) PcStation::where('status', 'occupied')
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+                ->sum('billing_amount');
+            $lockedBillingAmount = $recordedBilling + $activePcBilling;
+        }
+
+        if (! $isPrintLocked && $lockedPrintAmount <= 0) {
+            $printSalesItems = CafeSaleItem::whereHas('sale', function ($q) use ($workDate, $branchId) {
+                $q->whereDate('created_at', $workDate->toDateString())
+                    ->where('payment_status', '!=', 'cancelled')
+                    ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId));
+            })->whereHas('variant.product.category', function ($q) {
+                $q->where('code', 'CAT-PAPER');
+            })->get();
+
+            $autoPrintPages = (int) $printSalesItems->sum('qty');
+            $autoPrintAmount = (float) $printSalesItems->sum('subtotal');
+
+            $printerJobs = PrinterPrintJob::whereDate('work_date', $workDate->toDateString())
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+                ->get();
+            $realPages = (int) $printerJobs->sum('pages');
+            $realAmount = (float) $printerJobs->sum('total_amount');
+
+            $lockedPrintPages = max($autoPrintPages, $realPages);
+            $lockedPrintAmount = max($autoPrintAmount, $realAmount);
+        }
+
+        $totalRevenue = (float) ($salesSummary?->total_revenue ?: ($lockedBillingAmount + $lockedPrintAmount + $totalFnbSales));
         $openingCash = 100000.0;
         $systemExpectedCash = (float) ($salesSummary?->system_expected_cash ?: ($totalRevenue + $openingCash));
         $blindCashCount = (float) ($salesSummary?->blind_cash_count ?? $cashInDrawer);
         $cashDifference = (float) ($salesSummary?->cash_difference ?? ($blindCashCount - $systemExpectedCash));
         $cashDenominations = $salesSummary?->cash_denominations ?? [];
+
+        // Rincian produk F&B yang terjual hari ini
+        $fnbItemSummary = CafeSaleItem::whereDate('created_at', $workDate->toDateString())
+            ->whereHas('sale', fn ($q) => $q->where('payment_status', '!=', 'cancelled')
+                ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId)))
+            ->whereHas('variant.product.category', fn ($q) => $q->whereIn('code', ['CAT-DRINK', 'CAT-FOOD', 'CAT-SNACK']))
+            ->select(
+                'item_name',
+                DB::raw('SUM(qty) as total_qty'),
+                DB::raw('AVG(unit_price) as unit_price'),
+                DB::raw('SUM(subtotal) as total_amount')
+            )
+            ->groupBy('item_name')
+            ->orderByDesc('total_qty')
+            ->get();
 
         $isMobile = preg_match('/(android|iphone|ipad|mobile|phone|ipod)/i', (string) $request->userAgent());
         $requestedView = $request->input('view');
@@ -5633,6 +5693,7 @@ BAT;
             'blindCashCount' => $blindCashCount,
             'cashDifference' => $cashDifference,
             'cashDenominations' => $cashDenominations,
+            'fnbItemSummary' => $fnbItemSummary,
             'useDesktop' => $useDesktop,
         ]);
     }
