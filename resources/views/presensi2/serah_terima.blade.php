@@ -156,8 +156,11 @@
                 <span style="font-size: 11.5px; color: var(--text-sub); margin-right: 4px;">
                     penjualan &gt; <strong style="color: #38bdf8;">{{ $activeShift?->id ?? 'Shift' }}</strong>
                 </span>
+                <a href="{{ route('presensi2.serah-terima', ['view' => 'desktop']) }}" class="btn" style="background: linear-gradient(135deg, #0284c7, #0ea5e9); border: 1px solid #38bdf8; color: #ffffff; padding: 8px 13px; font-size: 12px; font-weight: 700; text-decoration: none; box-shadow: 0 2px 8px rgba(14, 165, 233, 0.4);">
+                    <span>🖥️</span> Serah Terima Desktop
+                </a>
                 <a href="{{ route('pos') }}" class="btn" style="background: linear-gradient(135deg, #4f46e5, #4338ca); border: 1px solid #6366f1; color: #ffffff; padding: 8px 13px; font-size: 12px; font-weight: 700; text-decoration: none; box-shadow: 0 2px 8px rgba(79, 70, 229, 0.4);">
-                    <span>🖥️</span> POS Desktop
+                    <span>💻</span> POS Desktop
                 </a>
                 <a href="{{ route('presensi2.penjualan') }}" class="btn" style="background: rgba(255, 255, 255, 0.08); border: 1px solid var(--border-glass); color: #e2e8f0; padding: 8px 13px; font-size: 12px; font-weight: 600; text-decoration: none;">
                     <span>📱</span> Kasir HP

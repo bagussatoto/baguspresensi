@@ -79,3 +79,25 @@
 - **Pint Formatter:** Berhasil dijalankan dengan `vendor/bin/pint --dirty --format agent` tanpa error style (`{"tool":"pint","result":"passed"}`).
 - **PHP Syntax:** Controller dan view tervalidasi bersih (`No syntax errors detected`).
 
+---
+
+## 9. Serah Terima Kas & Shift untuk Desktop PC (POS Kasir Landscape)
+- **URL Akses:**
+  - `http://192.168.5.10:8086/bagus/presensi2/serah-terima`
+  - `http://192.168.5.10:8086/bagus/presensi2/serah-terima-desktop`
+  - Tombol **🏁 Tutup Shift** pada header POS Desktop (`/bagus/pos`).
+- **Rekomendasi Alur Tutup Shift POS Kasir:**
+  1. Kasir menekan **🔒 Kunci Billing** di POS Desktop untuk mengunci omset sewa PC warnet.
+  2. Kasir menekan **🔒 Kunci Print** di POS Desktop untuk mengunci lembar cetak printer Canon USB.
+  3. Kasir menekan tombol **🏁 Tutup Shift** di POS Desktop ➡️ Sistem otomatis membuka layar **Serah Terima Desktop**.
+- **Komponen Layar Desktop (3 Kolom Landscape):**
+  - **Kolom Kiri (Ringkasan Finansial Terkunci):** Menampilkan rincian Modal Awal Laci, Omset Billing Terkunci, Omset Cetak Kertas Terkunci, Omset POS F&B, dan Total Target Kas Sistem (Expected Cash).
+  - **Kolom Tengah (Kalkulator Denominasi Pecahan Fisik):** Input lembar uang pecahan Rp 100.000 s/d Rp 1.000 serta koin dengan kalkulasi otomatis selisih kas (Pas / Minus / Lebih) secara real-time.
+  - **Kolom Kanan (Formulir Serah Terima & Checkout Pulang):** Pemisahan Modal Ditinggal di laci untuk shift selanjutnya (default Rp 100.000) vs Kas Bersih yang diserahterimakan, nama kasir penerima, catatan shift, dan opsi otomatis Clock Out presensi pulang.
+  - **Fitur Tambahan:**
+    - Modal cetak slip thermal kasir 58mm / 80mm format resmi Maya Graha Kencana.
+    - Modal setor kas ke Bank / Kolektor / Brankas.
+    - Tab riwayat serah terima, antrean siap setor, histori setor bank, dan audit sisa stok fisik produk.
+    - Tombol switch fleksibel antara Mode Desktop (`?view=desktop`) dan Mode HP (`?view=mobile`).
+
+

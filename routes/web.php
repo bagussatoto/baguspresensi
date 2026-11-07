@@ -130,6 +130,7 @@ Route::prefix('presensi2')->name('presensi2.')->group(function () {
 
     // Halaman Serah Terima Shift (Handover Kas Laci, Sisa Stok Fisik & Penyerahan ke Kasir Berikutnya)
     Route::get('/serah-terima', [AttendanceWebV2Controller::class, 'serahTerimaIndex'])->name('serah-terima');
+    Route::get('/serah-terima-desktop', [AttendanceWebV2Controller::class, 'serahTerimaDesktopIndex'])->name('serah-terima.desktop');
     Route::post('/serah-terima', [AttendanceWebV2Controller::class, 'serahTerimaStore'])->name('serah-terima.store');
 
     // Portal Login Khusus Layanan & Presensi Tambahan (GC, Meeting, BO/Training, Ambil Stok)
@@ -177,6 +178,10 @@ Route::get('/bagus/presensi2/pos', [AttendanceWebV2Controller::class, 'posDeskto
 Route::get('/bagus/presensi2/penjualan', [AttendanceWebV2Controller::class, 'penjualanIndex']);
 Route::get('/bagus/presensi2/rekap', [AttendanceWebV2Controller::class, 'rekapIndex']);
 Route::get('/bagus/presensi2/serah-terima', [AttendanceWebV2Controller::class, 'serahTerimaIndex']);
+Route::get('/bagus/presensi2/serah-terima-desktop', [AttendanceWebV2Controller::class, 'serahTerimaDesktopIndex']);
+Route::get('/bagus/serah-terima', [AttendanceWebV2Controller::class, 'serahTerimaIndex']);
+Route::get('/bagus/serah-terima-desktop', [AttendanceWebV2Controller::class, 'serahTerimaDesktopIndex']);
+Route::get('/serah-terima-desktop', [AttendanceWebV2Controller::class, 'serahTerimaDesktopIndex']);
 Route::get('/bagus/presensi2/scan', [AttendanceWebV2Controller::class, 'scan']);
 Route::post('/bagus/presensi2/clock-in', [AttendanceWebV2Controller::class, 'submitClockIn']);
 Route::post('/bagus/presensi2/clock-out', [AttendanceWebV2Controller::class, 'submitClockOut']);

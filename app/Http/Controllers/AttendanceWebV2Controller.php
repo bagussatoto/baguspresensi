@@ -5571,7 +5571,38 @@ BAT;
             }
         }
 
-        return view('presensi2.serah_terima', [
+        $isBillingLocked = (bool) ($salesSummary?->is_billing_locked);
+        $lockedBillingAmount = (float) ($salesSummary?->locked_billing_amount ?? $salesSummary?->total_internet_sales ?? 0);
+
+        $isPrintLocked = (bool) ($salesSummary?->is_print_locked);
+        $lockedPrintPages = (int) ($salesSummary?->locked_print_pages ?? 0);
+        $lockedPrintAmount = (float) ($salesSummary?->locked_print_amount ?? 0);
+
+        $totalFnbSales = (float) ($salesSummary?->total_fnb_sales ?? 0);
+        $totalRevenue = (float) ($salesSummary?->total_revenue ?? ($lockedBillingAmount + $lockedPrintAmount + $totalFnbSales));
+        $openingCash = 100000.0;
+        $systemExpectedCash = (float) ($salesSummary?->system_expected_cash ?: ($totalRevenue + $openingCash));
+        $blindCashCount = (float) ($salesSummary?->blind_cash_count ?? $cashInDrawer);
+        $cashDifference = (float) ($salesSummary?->cash_difference ?? ($blindCashCount - $systemExpectedCash));
+        $cashDenominations = $salesSummary?->cash_denominations ?? [];
+
+        $isMobile = preg_match('/(android|iphone|ipad|mobile|phone|ipod)/i', (string) $request->userAgent());
+        $requestedView = $request->input('view');
+
+        $useDesktop = false;
+        if ($requestedView === 'desktop') {
+            $useDesktop = true;
+        } elseif ($requestedView === 'mobile') {
+            $useDesktop = false;
+        } elseif ($request->is('*serah-terima-desktop*') || $request->is('*pos*')) {
+            $useDesktop = true;
+        } else {
+            $useDesktop = ! $isMobile;
+        }
+
+        $viewName = $useDesktop ? 'presensi2.serah_terima_desktop' : 'presensi2.serah_terima';
+
+        return view($viewName, [
             'currentEmployee' => $employee,
             'activeShift' => $activeShift,
             'nextShiftLabel' => $nextShiftLabel,
@@ -5590,7 +5621,30 @@ BAT;
             'shiftSummariesByDate' => $shiftSummariesByDate,
             'cashInDrawer' => $cashInDrawer,
             'dateParam' => $dateParam,
+            'isBillingLocked' => $isBillingLocked,
+            'lockedBillingAmount' => $lockedBillingAmount,
+            'isPrintLocked' => $isPrintLocked,
+            'lockedPrintPages' => $lockedPrintPages,
+            'lockedPrintAmount' => $lockedPrintAmount,
+            'totalFnbSales' => $totalFnbSales,
+            'totalRevenue' => $totalRevenue,
+            'openingCash' => $openingCash,
+            'systemExpectedCash' => $systemExpectedCash,
+            'blindCashCount' => $blindCashCount,
+            'cashDifference' => $cashDifference,
+            'cashDenominations' => $cashDenominations,
+            'useDesktop' => $useDesktop,
         ]);
+    }
+
+    /**
+     * Tampilan Khusus Serah Terima Shift untuk Desktop PC (Landscape 3 Kolom).
+     */
+    public function serahTerimaDesktopIndex(Request $request): View|RedirectResponse
+    {
+        $request->merge(['view' => 'desktop']);
+
+        return $this->serahTerimaIndex($request);
     }
 
     /**
@@ -5608,6 +5662,8 @@ BAT;
             'deposited_amount' => 'nullable|numeric|min:0',
             'handover_amount' => 'nullable|numeric|min:0',
             'retained_drawer_cash' => 'nullable|numeric|min:0',
+            'blind_cash_count' => 'nullable|numeric|min:0',
+            'cash_denominations' => 'nullable',
             'deposit_method' => 'nullable|in:cash_collector,safe_dropbox,bank_transfer,next_shift_handover',
             'deposit_recipient' => 'nullable|string|max:120',
             'handover_recipient' => 'nullable|string|max:120',
@@ -5682,6 +5738,26 @@ BAT;
             'handover_at' => $now,
             'handover_notes' => $validated['handover_notes'] ?? $validated['deposit_notes'] ?? 'Serah terima langsung ke shift selanjutnya',
         ]);
+
+        if ($request->filled('blind_cash_count')) {
+            $blindCash = (float) $request->input('blind_cash_count');
+            $expected = (float) ($summary->system_expected_cash ?: ($summary->total_revenue + 100000));
+            $summary->update([
+                'blind_cash_count' => $blindCash,
+                'cash_in_drawer' => $blindCash,
+                'cash_difference' => $blindCash - $expected,
+            ]);
+        }
+
+        if ($request->filled('cash_denominations')) {
+            $denoms = $request->input('cash_denominations');
+            if (is_string($denoms)) {
+                $denoms = json_decode($denoms, true);
+            }
+            if (is_array($denoms)) {
+                $summary->update(['cash_denominations' => $denoms]);
+            }
+        }
 
         if ($isSetorAction) {
             // Setor Kas ke Bank, Kolektor, atau Brankas
