@@ -3076,8 +3076,8 @@ class AttendanceWebV2Controller extends Controller
             'credential' => 'required|string|min:4',
         ], [
             'employee_id.required' => 'Pilih nama kasir yang bertugas.',
-            'credential.required' => 'PIN / Password kasir wajib diisi.',
-            'credential.min' => 'PIN / Password minimal 4 karakter.',
+            'credential.required' => 'Password kasir wajib diisi.',
+            'credential.min' => 'Password minimal 4 karakter.',
         ]);
 
         $employee = Employee::where('is_active', true)->find($request->input('employee_id'));
@@ -3089,7 +3089,7 @@ class AttendanceWebV2Controller extends Controller
         if (! $this->verifyEmployeeCredential($employee, $credential)) {
             return redirect()->route('pos.login')
                 ->withInput(['employee_id' => $employee->id])
-                ->withErrors(['credential' => 'PIN atau Password yang Anda masukkan salah.']);
+                ->withErrors(['credential' => 'Password yang Anda masukkan salah.']);
         }
 
         session(['presensi2_employee_id' => $employee->id]);

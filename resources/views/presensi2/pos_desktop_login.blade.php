@@ -74,7 +74,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 24px 16px;
+            padding: 30px 16px;
         }
 
         .pos-login-card {
@@ -82,15 +82,15 @@
             border: 1px solid #d2d6de;
             border-radius: 8px;
             width: 100%;
-            max-width: 480px;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+            max-width: 440px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
             overflow: hidden;
         }
 
         .login-card-header {
             background: linear-gradient(135deg, var(--pos-green), var(--pos-green-dark));
             color: #ffffff;
-            padding: 20px 24px;
+            padding: 22px 24px;
             text-align: center;
         }
 
@@ -102,29 +102,29 @@
         }
 
         .login-card-header p {
-            font-size: 12px;
-            opacity: 0.9;
+            font-size: 12.5px;
+            opacity: 0.92;
         }
 
         .shift-pill-badge {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            background: rgba(255, 255, 255, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.35);
-            padding: 4px 12px;
+            background: rgba(255, 255, 255, 0.22);
+            border: 1px solid rgba(255, 255, 255, 0.38);
+            padding: 5px 14px;
             border-radius: 20px;
             font-size: 11.5px;
             font-weight: 700;
-            margin-top: 10px;
+            margin-top: 12px;
         }
 
         .login-card-body {
-            padding: 24px 28px;
+            padding: 26px 28px;
         }
 
         .form-group {
-            margin-bottom: 16px;
+            margin-bottom: 18px;
         }
 
         .form-label {
@@ -139,7 +139,7 @@
 
         .form-select, .form-input {
             width: 100%;
-            padding: 10px 14px;
+            padding: 11px 14px;
             border: 1px solid #cbd5e1;
             border-radius: 5px;
             font-size: 14px;
@@ -155,59 +155,28 @@
             box-shadow: 0 0 0 3px rgba(0, 166, 90, 0.15);
         }
 
-        .pin-input-wrap {
+        .password-wrap {
             position: relative;
+            display: flex;
+            align-items: center;
         }
 
-        .form-input-pin {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 22px;
-            letter-spacing: 6px;
-            text-align: center;
-            font-weight: 700;
-        }
-
-        /* ON-SCREEN NUMPAD GRID (3x4) */
-        .numpad-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-            margin: 14px 0 18px 0;
-        }
-
-        .btn-num {
-            background: #f8fafc;
-            border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            padding: 10px 0;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 18px;
-            font-weight: 700;
-            color: #1e293b;
+        .password-toggle-btn {
+            position: absolute;
+            right: 12px;
+            background: transparent;
+            border: none;
+            color: #64748b;
             cursor: pointer;
-            transition: all 0.1s ease;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-        }
-
-        .btn-num:hover {
-            background: #e2e8f0;
-            transform: translateY(-1px);
-        }
-
-        .btn-num:active {
-            background: #cbd5e1;
-            transform: translateY(1px);
-        }
-
-        .btn-num.clear {
-            color: #dd4b39;
-            font-size: 14px;
-            font-weight: 800;
-        }
-
-        .btn-num.backspace {
-            color: #f39c12;
             font-size: 16px;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .password-toggle-btn:hover {
+            color: #1e293b;
         }
 
         /* AUTO CLOCK-IN BADGE */
@@ -215,14 +184,15 @@
             background: #f0fdf4;
             border: 1px solid #86efac;
             color: #166534;
-            padding: 9px 12px;
+            padding: 10px 14px;
             border-radius: 5px;
-            font-size: 11.5px;
+            font-size: 12px;
             font-weight: 600;
             display: flex;
             align-items: center;
-            gap: 8px;
-            margin-bottom: 18px;
+            gap: 10px;
+            margin-bottom: 22px;
+            line-height: 1.4;
         }
 
         /* SUBMIT BUTTON */
@@ -305,7 +275,7 @@
         <div class="pos-login-card">
             <div class="login-card-header">
                 <h2>Login Kasir POS Desktop</h2>
-                <p>Silakan pilih kasir dinas dan masukkan PIN untuk mulai transaksi</p>
+                <p>Silakan pilih kasir dinas dan masukkan password untuk mulai transaksi</p>
                 <div class="shift-pill-badge">
                     <span>🕒 Shift Aktif:</span>
                     <strong>{{ $activeShift->name ?? 'Shift ' . ($activeShift->id ?? 1) }}</strong>
@@ -341,41 +311,29 @@
                         </select>
                     </div>
 
-                    {{-- PIN KASIR --}}
+                    {{-- PASSWORD KASIR (DENGAN TOGGLE SHOW/HIDE) --}}
                     <div class="form-group">
-                        <label class="form-label" for="input-pin">PIN / Password Kasir *</label>
-                        <div class="pin-input-wrap">
-                            <input type="password" name="credential" id="input-pin" required
-                                   class="form-input form-input-pin"
-                                   placeholder="••••••" maxlength="16" autocomplete="current-password">
+                        <label class="form-label" for="input-password">Password Kasir *</label>
+                        <div class="password-wrap">
+                            <input type="password" name="credential" id="input-password" required
+                                   class="form-input"
+                                   placeholder="Masukkan password kasir..."
+                                   autocomplete="current-password">
+                            <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility()" title="Lihat/Sembunyikan Password">
+                                <span id="toggle-eye-icon">👁️</span>
+                            </button>
                         </div>
-                    </div>
-
-                    {{-- ON-SCREEN NUMPAD (TOUCH / MOUSE CLICK) --}}
-                    <div class="numpad-grid">
-                        <button type="button" class="btn-num" onclick="appendPin('1')">1</button>
-                        <button type="button" class="btn-num" onclick="appendPin('2')">2</button>
-                        <button type="button" class="btn-num" onclick="appendPin('3')">3</button>
-                        <button type="button" class="btn-num" onclick="appendPin('4')">4</button>
-                        <button type="button" class="btn-num" onclick="appendPin('5')">5</button>
-                        <button type="button" class="btn-num" onclick="appendPin('6')">6</button>
-                        <button type="button" class="btn-num" onclick="appendPin('7')">7</button>
-                        <button type="button" class="btn-num" onclick="appendPin('8')">8</button>
-                        <button type="button" class="btn-num" onclick="appendPin('9')">9</button>
-                        <button type="button" class="btn-num clear" onclick="clearPin()">CLEAR</button>
-                        <button type="button" class="btn-num" onclick="appendPin('0')">0</button>
-                        <button type="button" class="btn-num backspace" onclick="backspacePin()">⌫</button>
                     </div>
 
                     {{-- INFORMASI AUTO CLOCK-IN --}}
                     <div class="auto-clockin-info">
-                        <span style="font-size: 16px;">⏱️</span>
+                        <span style="font-size: 18px;">⏱️</span>
                         <span><strong>Otomatis Presensi Masuk (Clock In):</strong> Sistem langsung mencatatkan jam kedatangan kasir shift ini begitu login berhasil.</span>
                     </div>
 
                     {{-- TOMBOL SUBMIT --}}
                     <button type="submit" class="btn-submit-pos">
-                        <span>🔓</span> Buka Kasir POS Desktop (Enter)
+                        <span>🔓</span> Masuk Kasir POS Desktop (Enter)
                     </button>
                 </form>
             </div>
@@ -399,27 +357,18 @@
             if (el) el.innerText = dateStr + ' • ' + timeStr;
         }, 1000);
 
-        // Numpad Handlers
-        var pinInput = document.getElementById('input-pin');
+        // Toggle Password Show/Hide
+        function togglePasswordVisibility() {
+            var input = document.getElementById('input-password');
+            var icon = document.getElementById('toggle-eye-icon');
+            if (!input) return;
 
-        function appendPin(digit) {
-            if (pinInput && pinInput.value.length < 16) {
-                pinInput.value += digit;
-                pinInput.focus();
-            }
-        }
-
-        function clearPin() {
-            if (pinInput) {
-                pinInput.value = '';
-                pinInput.focus();
-            }
-        }
-
-        function backspacePin() {
-            if (pinInput && pinInput.value.length > 0) {
-                pinInput.value = pinInput.value.slice(0, -1);
-                pinInput.focus();
+            if (input.type === 'password') {
+                input.type = 'text';
+                if (icon) icon.innerText = '🙈';
+            } else {
+                input.type = 'password';
+                if (icon) icon.innerText = '👁️';
             }
         }
     </script>
