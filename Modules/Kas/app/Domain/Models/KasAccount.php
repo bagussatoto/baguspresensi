@@ -16,6 +16,7 @@ class KasAccount extends Model
 
     protected $fillable = [
         'branch_id',
+        'chart_of_account_id',
         'code',
         'name',
         'type',
@@ -31,6 +32,11 @@ class KasAccount extends Model
         'current_balance' => 'float',
         'is_active' => 'boolean',
     ];
+
+    public function chartOfAccount(): BelongsTo
+    {
+        return $this->belongsTo(ChartOfAccount::class, 'chart_of_account_id');
+    }
 
     public function branch(): BelongsTo
     {

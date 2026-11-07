@@ -531,6 +531,47 @@ Berdasarkan laporan error `The route presensi2/penjualan/transaksi/78/cancel cou
    - Seluruh 42 tests di `ShiftStockAndSalesFlowTest` LULUS 100%.
    - Kode diformat dengan Laravel Pint.
 
+---
+
+## 30. Audit & Dokumentasi Role-Based Access Control (RBAC)
+
+Menjawab pertanyaan pengguna mengenai status implementasi RBAC di sistem:
+1. **Analisis Struktur RBAC:**
+   - Sistem sudah memiliki arsitektur RBAC 2-Lapis (*Two-Tier RBAC*):
+     - **Tingkat 1 - Admin Portal (`AdminRole`):** `super_admin`, `branch_admin`, `auditor`.
+     - **Tingkat 2 - Portal Karyawan & POS (`EmployeeRole`):** `kasir`, `supervisor`, `otorisator`, `salesman`, `driver`.
+   - Middleware pelindung: `role:super_admin,...` dan `employee.role:kasir,...`.
+2. **Dokumentasi:**
+   - Menyusun matriks hak akses lengkap di dokumen referensi [`docs/referensi/RBAC/matriks_hak_akses_rbac.md`](file:///var/www/laravel_apps/bagus/docs/referensi/RBAC/matriks_hak_akses_rbac.md).
+
+---
+
+## 31. Implementasi Penuh Modul Chart of Accounts (COA) / Bagan Akun Buku Besar
+
+Menindaklanjuti persetujuan pengguna untuk membuat sistem Chart of Accounts (COA) formal:
+1. **Database Schema & Migrasi ([`create_chart_of_accounts_table.php`](file:///var/www/laravel_apps/bagus/Modules/Kas/database/migrations/2026_11_07_180001_create_chart_of_accounts_table.php)):**
+   - Kolom: `account_code`, `account_name`, `account_category`, `normal_balance`, `parent_id`, `branch_id`, `level`, `is_header`, `is_active`, `opening_balance`, `current_balance`, `description`.
+   - Foreign key relasi terhubung ke `kas_accounts` dan hierarki self-referencing `parent_id`.
+2. **Domain Enums & Models:**
+   - [`AccountCategory.php`](file:///var/www/laravel_apps/bagus/Modules/Kas/app/Domain/Enums/AccountCategory.php): `ASSET` (1), `LIABILITY` (2), `EQUITY` (3), `REVENUE` (4), `COGS` (5), `EXPENSE` (6).
+   - [`NormalBalance.php`](file:///var/www/laravel_apps/bagus/Modules/Kas/app/Domain/Enums/NormalBalance.php): `DEBIT`, `CREDIT`.
+   - [`ChartOfAccount.php`](file:///var/www/laravel_apps/bagus/Modules/Kas/app/Domain/Models/ChartOfAccount.php): Relasi `parent()`, `children()`, `kasAccount()`, `branch()`.
+3. **Standarisasi Seeder Retail & Warnet ([`ChartOfAccountsSeeder.php`](file:///var/www/laravel_apps/bagus/database/seeders/ChartOfAccountsSeeder.php)):**
+   - Memuat 30+ akun baku standar akuntansi Indonesia:
+     - 1-00000: Aset (Kas Kasir, Kas Operasional, Bank BCA, Persediaan FnB, Piutang Usaha, Aset Tetap PC/AC).
+     - 2-00000: Kewajiban (Hutang Usaha Supplier, Titipan Billing Pelanggan).
+     - 3-00000: Ekuitas (Modal Disetor, Laba Ditahan, Laba Tahun Berjalan).
+     - 4-00000: Pendapatan (Penjualan Makanan & Minuman FnB, Billing Internet Warnet, Jasa Print & Scan, Jasa Servis).
+     - 5-00000: HPP (HPP Bahan Makanan Minuman, HPP Kertas & Tinta).
+     - 6-00000: Beban (Beban Listrik PLN, Bandwidth ISP Indihome/Biznet, Gaji Pegawai, Pemeliharaan PC/AC).
+4. **Admin UI & Controller ([`AdminChartOfAccountController.php`](file:///var/www/laravel_apps/bagus/app/Http/Controllers/Admin/AdminChartOfAccountController.php) & [`index.blade.php`](file:///var/www/laravel_apps/bagus/resources/views/admin/coa/index.blade.php)):**
+   - URL: `http://192.168.5.10:8086/bagus/admin/coa`.
+   - Ringkasan KPI saldo 6 kategori akun, filter kategori/status, modal tambah/edit akun, dan toggle status aktif.
+5. **Testing & Penjaminan Kualitas:**
+   - Dibuat feature test [`AdminChartOfAccountTest.php`](file:///var/www/laravel_apps/bagus/tests/Feature/AdminChartOfAccountTest.php) menguji seluruh siklus CRUD COA (7 tests, 22 assertions) LULUS 100%.
+   - Diformat dengan Laravel Pint.
+
+
 
 
 

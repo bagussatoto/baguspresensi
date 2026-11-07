@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\AdminAttendanceController;
 use App\Http\Controllers\Admin\AdminAttendanceSettingController;
 use App\Http\Controllers\Admin\AdminBrandController;
 use App\Http\Controllers\Admin\AdminCategoryController;
+use App\Http\Controllers\Admin\AdminChartOfAccountController;
 use App\Http\Controllers\Admin\AdminCustomerController;
 use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminEmployeeController;
@@ -266,6 +267,13 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::put('/konsumen/{customer}', [AdminCustomerController::class, 'update'])->name('admin.konsumen.update');
     Route::post('/konsumen/{customer}/toggle-status', [AdminCustomerController::class, 'toggleStatus'])->name('admin.konsumen.toggle-status');
     Route::delete('/konsumen/{customer}', [AdminCustomerController::class, 'destroy'])->name('admin.konsumen.destroy');
+
+    // Chart of Accounts (COA) / Bagan Akun Akuntansi & Buku Besar
+    Route::get('/coa', [AdminChartOfAccountController::class, 'index'])->name('admin.coa');
+    Route::post('/coa', [AdminChartOfAccountController::class, 'store'])->name('admin.coa.store');
+    Route::put('/coa/{coa}', [AdminChartOfAccountController::class, 'update'])->name('admin.coa.update');
+    Route::post('/coa/{coa}/toggle-status', [AdminChartOfAccountController::class, 'toggleStatus'])->name('admin.coa.toggle-status');
+    Route::delete('/coa/{coa}', [AdminChartOfAccountController::class, 'destroy'])->name('admin.coa.destroy');
 
     // Stok Limit & Ledger Inventaris Fisik Gudang
     Route::get('/stok-limit', [AdminStockController::class, 'index'])->name('admin.stok-limit');
