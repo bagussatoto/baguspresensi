@@ -1528,4 +1528,28 @@ class ShiftStockAndSalesFlowTest extends TestCase
         $response->assertSee('Target Fisik Kas Tunai (Laci)', false);
         $response->assertSee('Total Uang Fisik di Laci (Cash Only)', false);
     }
+
+    public function test_serah_terima_recipient_automatically_uses_current_logged_in_shift_and_employee_without_select_dropdown(): void
+    {
+        $this->clockInStaff();
+
+        // 1. Cek tampilan mobile
+        $responseMobile = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.serah-terima'));
+
+        $responseMobile->assertStatus(200);
+        $expectedRecipient = $this->shift->name.' — '.$this->employee->name;
+        $responseMobile->assertSee($expectedRecipient);
+        $responseMobile->assertDontSee('<select name="deposit_recipient"', false);
+        $responseMobile->assertSee('name="deposit_recipient" id="input-recipient" value="'.$expectedRecipient.'"', false);
+
+        // 2. Cek tampilan desktop
+        $responseDesktop = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.serah-terima.desktop'));
+
+        $responseDesktop->assertStatus(200);
+        $responseDesktop->assertSee($expectedRecipient);
+        $responseDesktop->assertDontSee('<select name="deposit_recipient"', false);
+        $responseDesktop->assertSee('name="deposit_recipient" id="input-recipient" value="'.$expectedRecipient.'"', false);
+    }
 }

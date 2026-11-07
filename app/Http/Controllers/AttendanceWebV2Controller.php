@@ -6321,9 +6321,10 @@ BAT;
 
         $nextShiftLabel = $this->resolveNextShiftRecipient($activeShift);
         $method = $validated['deposit_method'] ?? 'next_shift_handover';
+        $currentShiftLoginStr = ($activeShift ? $activeShift->name : 'Shift Aktif').' — '.$employee->name;
         $recipient = ! empty($validated['handover_recipient'])
             ? $validated['handover_recipient']
-            : (! empty($validated['deposit_recipient']) ? $validated['deposit_recipient'] : $nextShiftLabel);
+            : (! empty($validated['deposit_recipient']) ? $validated['deposit_recipient'] : $currentShiftLoginStr);
 
         $summary = null;
         if (! empty($validated['summary_id'])) {

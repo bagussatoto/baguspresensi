@@ -124,7 +124,8 @@
 
         $currentDepositStatus = $salesSummary->deposit_status ?? 'unsubmitted';
         $currentHandoverStatus = $salesSummary?->handover_status ?? 'completed';
-        $defaultDepositRecipient = $salesSummary?->handoverRecipientName() ?: ($nextShiftLabel ?? ($isShift4 ? 'Kasir Shift 1 (Pagi)' : 'Kasir Shift Selanjutnya'));
+        $currentShiftLoginStr = ($activeShift ? $activeShift->name : 'Shift Aktif') . ' — ' . $currentEmployee->name;
+        $defaultDepositRecipient = $salesSummary?->handoverRecipientName() ?: $currentShiftLoginStr;
         $handoverAmountVal = (float) ($salesSummary?->handoverAmount() ?? $cashInDrawer);
         $retainedDrawerVal = (float) ($salesSummary?->retained_drawer_cash ?? ($isShift4 ? 150000 : 0));
         $isAlreadyDeposited = $salesSummary?->hasBeenDeposited() ?? false;
@@ -671,25 +672,12 @@
 
             <div>
                 <label style="display: block; font-size: 11.5px; color: #cbd5e1; margin-bottom: 5px; font-weight: 600;">Shift / Kasir Penerima *</label>
-                @php
-                    $nextShiftPrefix = ($nextShiftObj ? $nextShiftObj->name : $nextShiftLabel) . ' — ';
-                @endphp
-                <select name="deposit_recipient" required style="width: 100%; background: rgba(15, 23, 42, 0.95); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 12.5px; outline: none; font-weight: 600;">
-                    <optgroup label="Shift Penerima: {{ $nextShiftObj ? $nextShiftObj->name : $nextShiftLabel }}">
-                        @foreach($branchEmployees ?? [] as $emp)
-                            @if($emp->id !== $currentEmployee->id)
-                                <option value="{{ $nextShiftPrefix }}{{ $emp->name }}" {{ (str_contains($defaultDepositRecipient, $emp->name)) ? 'selected' : '' }}>
-                                    👤 {{ $nextShiftPrefix }}{{ $emp->name }}
-                                </option>
-                            @endif
-                        @endforeach
-                    </optgroup>
-                    <optgroup label="Opsi Kasir Lain">
-                        <option value="{{ $nextShiftLabel }}" {{ !str_contains($defaultDepositRecipient, '—') ? 'selected' : '' }}>
-                            👥 {{ $nextShiftLabel }} (Petugas Terjadwal)
-                        </option>
-                    </optgroup>
-                </select>
+                <input type="hidden" name="deposit_recipient" id="input-recipient" value="{{ $currentShiftLoginStr }}">
+                <div style="background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 8px; padding: 10px 12px; color: #38bdf8; font-size: 12.5px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 16px;">👤</span>
+                    <span>{{ $currentShiftLoginStr }}</span>
+                </div>
+                <small style="color: #94a3b8; font-size: 11px; margin-top: 3px; display: block;">Otomatis sesuai nama kasir &amp; jadwal shift yang login saat ini</small>
             </div>
 
             <div style="grid-column: 1 / -1;">

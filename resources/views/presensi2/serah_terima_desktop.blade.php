@@ -481,7 +481,8 @@
         $handoverAmountVal = (float) ($salesSummary?->handoverAmount() ?? $cashInDrawer);
         $retainedDrawerVal = (float) ($salesSummary?->retained_drawer_cash ?? ($isShift4 ? 150000 : 100000));
         $isAlreadyDeposited = $salesSummary?->hasBeenDeposited() ?? false;
-        $defaultDepositRecipient = $salesSummary?->handoverRecipientName() ?: ($nextShiftLabel ?? ($isShift4 ? 'Kasir Shift 1 (Pagi)' : 'Kasir Shift Selanjutnya'));
+        $currentShiftLoginStr = ($activeShift ? $activeShift->name : 'Shift Aktif') . ' — ' . $currentEmployee->name;
+        $defaultDepositRecipient = $salesSummary?->handoverRecipientName() ?: $currentShiftLoginStr;
         $expectedCash = (float) ($systemExpectedCash ?? max(0.0, ($totalRevenue - ($nonCashAmount ?? 0)) + 100000));
         $diffVal = $handoverAmountVal + $retainedDrawerVal - $expectedCash;
     @endphp
@@ -829,29 +830,15 @@
                             <small style="color: #64748b; font-size: 11px; margin-top: 3px; display: block;">Murni estafet fisik uang cash laci kasir secara tatap muka langsung.</small>
                         </div>
 
-                        {{-- KASIR / SHIFT PENERIMA (SESUAI JADWAL SHIFT KARYAWAN) --}}
+                        {{-- KASIR / SHIFT PENERIMA (SESUAI JADWAL LOGIN SHIFT KARYAWAN SAAT INI) --}}
                         <div class="form-group">
                             <label class="form-label">Shift / Kasir Penerima *</label>
-                            @php
-                                $nextShiftPrefix = ($nextShiftObj ? $nextShiftObj->name : $nextShiftLabel) . ' — ';
-                            @endphp
-                            <select name="deposit_recipient" id="input-recipient" class="form-control" required style="font-size: 12.5px; font-weight: 600; color: #1e293b; background: #ffffff;">
-                                <optgroup label="Shift Penerima: {{ $nextShiftObj ? $nextShiftObj->name : $nextShiftLabel }}">
-                                    @foreach($branchEmployees ?? [] as $emp)
-                                        @if($emp->id !== $currentEmployee->id)
-                                            <option value="{{ $nextShiftPrefix }}{{ $emp->name }}" {{ (str_contains($defaultDepositRecipient, $emp->name)) ? 'selected' : '' }}>
-                                                👤 {{ $nextShiftPrefix }}{{ $emp->name }}
-                                            </option>
-                                        @endif
-                                    @endforeach
-                                </optgroup>
-                                <optgroup label="Opsi Kasir Lain">
-                                    <option value="{{ $nextShiftLabel }}" {{ !str_contains($defaultDepositRecipient, '—') ? 'selected' : '' }}>
-                                        👥 {{ $nextShiftLabel }} (Petugas Terjadwal)
-                                    </option>
-                                </optgroup>
-                            </select>
-                            <small style="color: #64748b; font-size: 11px; margin-top: 3px; display: block;">Disesuaikan otomatis dengan jadwal shift berikutnya</small>
+                            <input type="hidden" name="deposit_recipient" id="input-recipient" value="{{ $currentShiftLoginStr }}">
+                            <div style="padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; font-size: 13px; font-weight: 700; color: #0369a1; display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 16px;">👤</span>
+                                <span>{{ $currentShiftLoginStr }}</span>
+                            </div>
+                            <small style="color: #64748b; font-size: 11px; margin-top: 3px; display: block;">Otomatis sesuai nama kasir &amp; jadwal shift yang login saat ini</small>
                         </div>
 
                         {{-- CATATAN SHIFT --}}

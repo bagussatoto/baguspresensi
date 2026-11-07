@@ -349,3 +349,17 @@ Berdasarkan permintaan penyempurnaan pada formulir Serah Terima Shift (`/presens
 7. **Verifikasi:**
    - Seluruh 37 automated tests di [`ShiftStockAndSalesFlowTest.php`](file:///var/www/laravel_apps/bagus/tests/Feature/ShiftStockAndSalesFlowTest.php) **LULUS 100% (273 assertions)**.
    - Kode divalidasi dengan **Laravel Pint**.
+
+---
+
+## 20. Otomatisasi Kasir/Shift Penerima Sesuai Login Kasir Saat Ini (Tanpa Dropdown Select)
+
+Sesuai arahan operasional:
+1. **Penghapusan Dropdown Select:**
+   - Menghapus elemen dropdown `<select name="deposit_recipient">` dari formulir serah terima shift baik pada versi mobile ([`serah_terima.blade.php`](file:///var/www/laravel_apps/bagus/resources/views/presensi2/serah_terima.blade.php)) maupun desktop ([`serah_terima_desktop.blade.php`](file:///var/www/laravel_apps/bagus/resources/views/presensi2/serah_terima_desktop.blade.php)).
+2. **Otomatisasi Nama & Shift Karyawan yang Sedang Login:**
+   - Nilai dan tampilan kasir/shift secara otomatis terkunci pada nama kasir dan jadwal shift yang sedang login saat ini (misalnya: `Shift 1 Pagi — Bagus`).
+   - Kasir tidak perlu lagi memilih-milih nama rekan kerja lain di dropdown.
+3. **Verifikasi:**
+   - Menambahkan automated feature test `test_serah_terima_recipient_automatically_uses_current_logged_in_shift_and_employee_without_select_dropdown`.
+   - Seluruh **38 feature tests** di [`ShiftStockAndSalesFlowTest.php`](file:///var/www/laravel_apps/bagus/tests/Feature/ShiftStockAndSalesFlowTest.php) **LULUS 100% (281 assertions)**.
