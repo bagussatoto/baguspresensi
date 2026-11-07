@@ -180,6 +180,47 @@
         </div>
     </div>
 
+    {{-- BILAH MODE SIMULASI & PENGUJIAN SHIFT KASIR (MOBILE / RESPONSIVE) --}}
+    <div class="st-card" style="background: linear-gradient(135deg, rgba(88, 28, 135, 0.35), rgba(49, 16, 75, 0.45)); border-color: rgba(168, 85, 247, 0.5); padding: 12px 16px; margin-top: 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <span style="background: #7c3aed; color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 800;">🧪 SIMULASI SHIFT</span>
+                <div style="display: inline-flex; gap: 4px; flex-wrap: wrap;">
+                    @php
+                        $currShiftCode = $activeShift?->code ?? ('SHIFT-' . ($activeShift?->id ?? 1));
+                    @endphp
+                    <a href="{{ request()->fullUrlWithQuery(['shift' => 1]) }}" class="btn" style="padding: 4px 8px; font-size: 11px; {{ ($currShiftCode === 'SHIFT-1' || $activeShift?->id == 1) ? 'background: #10b981; color: #fff; font-weight: 800;' : 'background: rgba(255,255,255,0.08); color: #cbd5e1;' }}">
+                        Shift 1
+                    </a>
+                    <a href="{{ request()->fullUrlWithQuery(['shift' => 2]) }}" class="btn" style="padding: 4px 8px; font-size: 11px; {{ ($currShiftCode === 'SHIFT-2' || $activeShift?->id == 2) ? 'background: #0284c7; color: #fff; font-weight: 800;' : 'background: rgba(255,255,255,0.08); color: #cbd5e1;' }}">
+                        Shift 2
+                    </a>
+                    <a href="{{ request()->fullUrlWithQuery(['shift' => 3]) }}" class="btn" style="padding: 4px 8px; font-size: 11px; {{ ($currShiftCode === 'SHIFT-3' || $activeShift?->id == 3) ? 'background: #f59e0b; color: #fff; font-weight: 800;' : 'background: rgba(255,255,255,0.08); color: #cbd5e1;' }}">
+                        Shift 3
+                    </a>
+                    <a href="{{ request()->fullUrlWithQuery(['shift' => 4]) }}" class="btn" style="padding: 4px 8px; font-size: 11px; {{ ($currShiftCode === 'SHIFT-4' || $activeShift?->id == 4) ? 'background: #ec4899; color: #fff; font-weight: 800;' : 'background: rgba(255,255,255,0.08); color: #cbd5e1;' }}">
+                        Shift 4 EOD
+                    </a>
+                </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                <button type="button" onclick="applyMobileHandoverPreset('match')" class="btn" style="background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #34d399; font-size: 11px; padding: 4px 8px; font-weight: 700;">
+                    🟢 Kas Pas
+                </button>
+                <button type="button" onclick="applyMobileHandoverPreset('shortage')" class="btn" style="background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #f87171; font-size: 11px; padding: 4px 8px; font-weight: 700;">
+                    🔴 Minus 10rb
+                </button>
+                <a href="{{ request()->fullUrlWithQuery(['action' => 'reset_handover']) }}" 
+                   onclick="return confirm('Reset simulasi serah terima shift ini? Status akan dikembalikan menjadi terbuka agar form bersih untuk dicoba lagi.')" 
+                   class="btn" 
+                   style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); color: #f1f5f9; font-size: 11px; padding: 4px 8px;">
+                    🔄 Reset
+                </a>
+            </div>
+        </div>
+    </div>
+
     {{-- BANNER DUAL-CONTROL: PERMINTAAN PERSETUJUAN PENYESUAIAN BILLING MATI LISTRIK --}}
     @if($salesSummary && $salesSummary->isBillingAdjustmentPending() && $currentEmployee->canApproveBillingAdjustment())
         <div style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.45); border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; color: #fde047; box-shadow: 0 4px 16px rgba(0,0,0,0.25);">
@@ -784,6 +825,31 @@
 
     function triggerHardwarePrint() {
         window.location.href = '{{ route("presensi2.rekap", ["summary_id" => $salesSummary?->id, "auto_print" => 1, "print_type" => "hardware"]) }}';
+    }
+
+    function applyMobileHandoverPreset(presetType) {
+        var targetExpected = parseFloat("{{ (float) ($handoverAmountVal + $retainedDrawerVal) }}") || 0;
+        var isShift4 = {{ $isShift4 ? 'true' : 'false' }};
+        var defaultRetained = isShift4 ? 150000 : 0;
+
+        var retained = defaultRetained;
+        var handover = Math.max(0, targetExpected - retained);
+        var note = '';
+
+        if (presetType === 'match') {
+            note = 'Simulasi: Uang fisik pas dan cocok (Selisih Rp 0).';
+        } else if (presetType === 'shortage') {
+            handover = Math.max(0, handover - 10000);
+            note = 'Simulasi: Terjadi selisih kurang kas fisik Rp 10.000.';
+        }
+
+        var handoverInput = document.querySelector('input[name="deposited_amount"]');
+        var retainedInput = document.querySelector('input[name="retained_drawer_cash"]');
+        var notesInput = document.querySelector('input[name="deposit_notes"]');
+
+        if (handoverInput) handoverInput.value = handover;
+        if (retainedInput) retainedInput.value = retained;
+        if (notesInput) notesInput.value = note;
     }
 </script>
 @endsection

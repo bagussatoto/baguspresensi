@@ -5994,11 +5994,37 @@ BAT;
                 ->first();
         }
 
+        // Fitur Reset Simulasi Pengujian Serah Terima Kas Kasir
+        if ($request->input('action') === 'reset_handover' || $request->has('reset_handover')) {
+            if ($salesSummary) {
+                $salesSummary->update([
+                    'status' => 'open',
+                    'handover_status' => 'pending',
+                    'handover_at' => null,
+                    'handover_by' => null,
+                    'handover_notes' => null,
+                    'deposit_status' => 'unsubmitted',
+                    'deposit_method' => null,
+                    'deposited_at' => null,
+                    'deposit_recipient' => null,
+                    'deposit_notes' => null,
+                ]);
+            }
+
+            $queryParams = $request->except(['action', 'reset_handover']);
+            $redirectRoute = $request->is('*desktop*') || $request->input('view') === 'desktop'
+                ? 'presensi2.serah-terima.desktop'
+                : 'presensi2.serah-terima';
+
+            return redirect()->route($redirectRoute, $queryParams)
+                ->with('success', 'Simulasi serah terima kas hari ini berhasil di-reset! Formulir kembali bersih (Status: Belum Serah Terima) untuk pengujian baru.');
+        }
+
         $nextShiftLabel = $this->resolveNextShiftRecipient($activeShift);
         $cashInDrawer = $salesSummary ? (float) ($salesSummary->blind_cash_count ?? $salesSummary->cash_in_drawer ?? $salesSummary->total_revenue) : 0.0;
 
-        // Pastikan serah terima shift tercatat default jika ada sales summary
-        if ($salesSummary && empty($salesSummary->handover_at)) {
+        // Pastikan serah terima shift tercatat default jika sales summary sudah closed sebelumnya
+        if ($salesSummary && empty($salesSummary->handover_at) && $salesSummary->status === 'closed') {
             $salesSummary->update([
                 'handover_status' => 'completed',
                 'handover_amount' => $salesSummary->handover_amount !== null ? (float) $salesSummary->handover_amount : $cashInDrawer,

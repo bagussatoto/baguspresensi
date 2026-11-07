@@ -1552,4 +1552,53 @@ class ShiftStockAndSalesFlowTest extends TestCase
         $responseDesktop->assertDontSee('<select name="deposit_recipient"', false);
         $responseDesktop->assertSee('name="deposit_recipient" id="input-recipient" value="'.$expectedRecipient.'"', false);
     }
+
+    public function test_serah_terima_desktop_displays_simulation_bar_and_preset_buttons(): void
+    {
+        $this->clockInStaff();
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.serah-terima.desktop'));
+
+        $response->assertStatus(200);
+        $response->assertSee('MODE SIMULASI POS');
+        $response->assertSee('Shift 1 (07-15)');
+        $response->assertSee('Shift 2 (15-22)');
+        $response->assertSee('Shift 3 (17-24)');
+        $response->assertSee('Shift 4 (22-07 EOD)');
+        $response->assertSee('Kas Pas (Cocok)');
+        $response->assertSee('Minus -Rp 10.000');
+        $response->assertSee('Lebih +Rp 5.000');
+        $response->assertSee('Reset Simulasi');
+    }
+
+    public function test_serah_terima_reset_simulation_action_clears_handover_data(): void
+    {
+        $this->clockInStaff();
+
+        $summary = ShiftSalesSummary::create([
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift->id,
+            'work_date' => now()->toDateString(),
+            'total_fnb_sales' => 50000,
+            'total_internet_sales' => 100000,
+            'total_revenue' => 150000,
+            'deposited_amount' => 150000,
+            'handover_status' => 'completed',
+            'status' => 'closed',
+        ]);
+
+        $this->assertEquals('completed', $summary->handover_status);
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.serah-terima.desktop', ['action' => 'reset_handover', 'summary_id' => $summary->id]));
+
+        $response->assertRedirect(route('presensi2.serah-terima.desktop', ['summary_id' => $summary->id, 'view' => 'desktop']));
+
+        $summary->refresh();
+        $this->assertEquals('open', $summary->status);
+        $this->assertEquals('pending', $summary->handover_status);
+        $this->assertEquals('unsubmitted', $summary->deposit_status);
+    }
 }

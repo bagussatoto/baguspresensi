@@ -363,3 +363,30 @@ Sesuai arahan operasional:
 3. **Verifikasi:**
    - Menambahkan automated feature test `test_serah_terima_recipient_automatically_uses_current_logged_in_shift_and_employee_without_select_dropdown`.
    - Seluruh **38 feature tests** di [`ShiftStockAndSalesFlowTest.php`](file:///var/www/laravel_apps/bagus/tests/Feature/ShiftStockAndSalesFlowTest.php) **LULUS 100% (281 assertions)**.
+
+---
+
+## 21. Bilah Mode Simulasi & Pengujian Serah Terima Kas & Shift POS Desktop
+
+Berdasarkan persetujuan implementasi mode simulasi serah terima shift kasir:
+
+1. **Bilah Mode Simulasi Serah Terima Kas (Desktop & Mobile):**
+   - Ditambahkan bilah navigasi simulasi berwarna ungu gelap (`#1e1b4b`) di bawah header pada [`serah_terima_desktop.blade.php`](file:///var/www/laravel_apps/bagus/resources/views/presensi2/serah_terima_desktop.blade.php) dan [`serah_terima.blade.php`](file:///var/www/laravel_apps/bagus/resources/views/presensi2/serah_terima.blade.php).
+2. **Pemilih Shift Pengujian Cepat:**
+   - Tombol alih cepat untuk menguji skenario shift kapan saja tanpa harus menunggu jam riil:
+     - `Shift 1 (07-15 Pagi)`
+     - `Shift 2 (15-22 Siang)`
+     - `Shift 3 (17-24 Sore)`
+     - `Shift 4 (22-07 Malam EOD)`
+3. **Preset Skenario Kas Laci Instan (1-Klik):**
+   - 🟢 **Kas Pas (Cocok):** Mengisi fisik laci sama persis dengan target kas tunai sistem (Selisih Rp 0).
+   - 🔴 **Minus -Rp 10.000:** Mengurangi fisik kas laci Rp 10.000 untuk menguji peringatan selisih kasir dan mengisi kronologi catatan.
+   - 🔵 **Lebih +Rp 5.000:** Menambah fisik Rp 5.000 untuk menguji penanganan uang lebih.
+   - 🌙 **Modal Laci Rp 150.000 (Shift 4):** Menjalankan SOP penutup hari Shift 4 (modal Rp 150.000 ditinggal, sisa omset diserahkan).
+4. **Tombol "🔄 Reset Simulasi":**
+   - Menghapus riwayat penutupan serah terima pengujian dan mengembalikan status summary ke `open` & `pending` agar formulir kembali bersih untuk diuji ulang.
+5. **Verifikasi:**
+   - Menambahkan 2 automated feature tests:
+     - `test_serah_terima_desktop_displays_simulation_bar_and_preset_buttons` ➡️ **PASSED**
+     - `test_serah_terima_reset_simulation_action_clears_handover_data` ➡️ **PASSED**
+   - Seluruh **40 feature tests** di [`ShiftStockAndSalesFlowTest.php`](file:///var/www/laravel_apps/bagus/tests/Feature/ShiftStockAndSalesFlowTest.php) **LULUS 100% (297 assertions)**.

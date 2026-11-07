@@ -516,6 +516,58 @@
         </div>
     </header>
 
+    {{-- BILAH MODE SIMULASI & PENGUJIAN SHIFT KASIR (DESKTOP) --}}
+    <div style="background: linear-gradient(90deg, #1e1b4b, #31104b); border-bottom: 1px solid rgba(168, 85, 247, 0.4); padding: 8px 16px; color: #fff;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <span style="background: #7c3aed; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 800; letter-spacing: 0.5px;">🧪 MODE SIMULASI POS</span>
+                <span style="font-size: 12px; color: #e9d5ff;">Pilih Shift Pengujian:</span>
+                <div style="display: inline-flex; gap: 4px; flex-wrap: wrap;">
+                    @php
+                        $currShiftCode = $activeShift?->code ?? ('SHIFT-' . ($activeShift?->id ?? 1));
+                    @endphp
+                    <a href="{{ request()->fullUrlWithQuery(['shift' => 1]) }}" class="btn-nav-pill" style="padding: 3px 10px; font-size: 11px; {{ ($currShiftCode === 'SHIFT-1' || $activeShift?->id == 1) ? 'background: #10b981; color: #fff; font-weight: 800; border-color: #059669;' : 'background: rgba(255,255,255,0.08); color: #cbd5e1;' }}">
+                        Shift 1 (07-15)
+                    </a>
+                    <a href="{{ request()->fullUrlWithQuery(['shift' => 2]) }}" class="btn-nav-pill" style="padding: 3px 10px; font-size: 11px; {{ ($currShiftCode === 'SHIFT-2' || $activeShift?->id == 2) ? 'background: #0284c7; color: #fff; font-weight: 800; border-color: #0369a1;' : 'background: rgba(255,255,255,0.08); color: #cbd5e1;' }}">
+                        Shift 2 (15-22)
+                    </a>
+                    <a href="{{ request()->fullUrlWithQuery(['shift' => 3]) }}" class="btn-nav-pill" style="padding: 3px 10px; font-size: 11px; {{ ($currShiftCode === 'SHIFT-3' || $activeShift?->id == 3) ? 'background: #f59e0b; color: #fff; font-weight: 800; border-color: #d97706;' : 'background: rgba(255,255,255,0.08); color: #cbd5e1;' }}">
+                        Shift 3 (17-24)
+                    </a>
+                    <a href="{{ request()->fullUrlWithQuery(['shift' => 4]) }}" class="btn-nav-pill" style="padding: 3px 10px; font-size: 11px; {{ ($currShiftCode === 'SHIFT-4' || $activeShift?->id == 4) ? 'background: #ec4899; color: #fff; font-weight: 800; border-color: #db2777;' : 'background: rgba(255,255,255,0.08); color: #cbd5e1;' }}">
+                        Shift 4 (22-07 EOD)
+                    </a>
+                </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                <span style="font-size: 11.5px; color: #e2e8f0; font-weight: 600;">Skenario Kas Laci:</span>
+                <button type="button" onclick="applyHandoverPreset('match')" class="btn-nav-pill" style="background: rgba(16, 185, 129, 0.2); border-color: #10b981; color: #34d399; font-size: 11px; padding: 3px 8px; font-weight: 700;" title="Simulasikan uang kas fisik pas dengan catatan sistem (Selisih Rp 0)">
+                    🟢 Kas Pas (Cocok)
+                </button>
+                <button type="button" onclick="applyHandoverPreset('shortage')" class="btn-nav-pill" style="background: rgba(239, 68, 68, 0.2); border-color: #ef4444; color: #f87171; font-size: 11px; padding: 3px 8px; font-weight: 700;" title="Simulasikan kas laci kurang Rp 10.000">
+                    🔴 Minus -Rp 10.000
+                </button>
+                <button type="button" onclick="applyHandoverPreset('surplus')" class="btn-nav-pill" style="background: rgba(59, 130, 246, 0.2); border-color: #3b82f6; color: #60a5fa; font-size: 11px; padding: 3px 8px; font-weight: 700;" title="Simulasikan kas laci lebih Rp 5.000">
+                    🔵 Lebih +Rp 5.000
+                </button>
+                @if($isShift4)
+                <button type="button" onclick="applyHandoverPreset('shift4')" class="btn-nav-pill" style="background: rgba(236, 72, 153, 0.2); border-color: #ec4899; color: #f472b6; font-size: 11px; padding: 3px 8px; font-weight: 700;" title="SOP Shift 4: Modal laci Rp 150.000 ditinggal untuk Shift 1 besok pagi">
+                    🌙 Modal Laci Rp 150.000
+                </button>
+                @endif
+                <a href="{{ request()->fullUrlWithQuery(['action' => 'reset_handover']) }}" 
+                   onclick="return confirm('Reset simulasi serah terima shift ini? Status akan dikembalikan menjadi terbuka (belum serah terima) agar form bersih untuk dicoba lagi.')" 
+                   class="btn-nav-pill" 
+                   style="background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.3); color: #f1f5f9; font-size: 11px; padding: 3px 9px;" 
+                   title="Kembalikan form ke status awal sebelum serah terima">
+                    🔄 Reset Simulasi
+                </a>
+            </div>
+        </div>
+    </div>
+
     {{-- ALERT STATUS KUNCI BILLING & PRINT --}}
     @if(!$isBillingLocked || !$isPrintLocked)
         <div class="status-alert-bar warning">
@@ -1381,6 +1433,41 @@
                 retainedInput.value = amount;
                 updateHandoverDistribution();
             }
+        }
+
+        // Simulasi Skenario Kas Laci Instan
+        function applyHandoverPreset(presetType) {
+            var targetExpected = parseFloat("{{ (float) $expectedCash }}") || 0;
+            var isShift4 = {{ $isShift4 ? 'true' : 'false' }};
+            var defaultRetained = isShift4 ? 150000 : 100000;
+
+            var retained = defaultRetained;
+            var handover = Math.max(0, targetExpected - retained);
+            var note = '';
+
+            if (presetType === 'match') {
+                note = 'Simulasi: Uang fisik di laci pas dan cocok dengan target sistem (Selisih Rp 0).';
+            } else if (presetType === 'shortage') {
+                handover = Math.max(0, handover - 10000);
+                note = 'Simulasi: Terjadi selisih kurang kas fisik Rp 10.000 dari sistem (uang receh kembalian kurang).';
+            } else if (presetType === 'surplus') {
+                handover = handover + 5000;
+                note = 'Simulasi: Terjadi selisih lebih kas fisik Rp 5.000 di laci (tip dari pelanggan).';
+            } else if (presetType === 'shift4') {
+                retained = 150000;
+                handover = Math.max(0, targetExpected - retained);
+                note = 'Simulasi Shift 4 Penutup Hari: Modal laci Rp 150.000 ditinggal untuk Shift 1 besok pagi.';
+            }
+
+            var handoverInput = document.getElementById('input-handover-amount');
+            var retainedInput = document.getElementById('input-retained-cash');
+            var notesInput = document.querySelector('input[name="deposit_notes"]');
+
+            if (handoverInput) handoverInput.value = handover;
+            if (retainedInput) retainedInput.value = retained;
+            if (notesInput) notesInput.value = note;
+
+            updateHandoverDistribution();
         }
 
         // 5. Tabs Switching
