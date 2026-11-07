@@ -110,6 +110,7 @@ Route::prefix('presensi2')->name('presensi2.')->group(function () {
     Route::get('/penjualan', [AttendanceWebV2Controller::class, 'penjualanIndex'])->name('penjualan');
     Route::post('/penjualan/transaksi', [AttendanceWebV2Controller::class, 'penjualanStoreTransaction'])->name('penjualan.transaksi');
     Route::match(['get', 'post'], '/penjualan/{sale}/batal', [AttendanceWebV2Controller::class, 'penjualanCancelTransaction'])->name('penjualan.batal');
+    Route::match(['get', 'post'], '/penjualan/transaksi/{sale}/cancel', [AttendanceWebV2Controller::class, 'penjualanCancelTransaction'])->name('penjualan.transaksi.cancel');
     Route::post('/penjualan/permintaan-stok', [AttendanceWebV2Controller::class, 'penjualanStoreStockRequest'])->name('penjualan.permintaan-stok');
     Route::post('/penjualan/kunci-billing', [AttendanceWebV2Controller::class, 'penjualanKunciBilling'])->name('penjualan.kunci-billing');
     Route::post('/penjualan/penyesuaian-billing', [AttendanceWebV2Controller::class, 'penjualanPenyesuaianBilling'])->name('penjualan.penyesuaian-billing');

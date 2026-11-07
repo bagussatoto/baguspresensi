@@ -514,6 +514,24 @@ Berdasarkan perbaikan alur pembatalan transaksi POS:
    - Seluruh **42 tests (308 assertions)** LULUS 100%.
    - Diformat dengan Laravel Pint.
 
+---
+
+## 29. Perbaikan Error Route Pembatalan Transaksi POS (`presensi2/penjualan/transaksi/{sale}/cancel`)
+
+Berdasarkan laporan error `The route presensi2/penjualan/transaksi/78/cancel could not be found`:
+1. **Analisis Penyebab:**
+   - Pemanggilan fetch JavaScript sebelumnya mengarah ke URL `/presensi2/penjualan/transaksi/{id}/cancel`, sedangkan di router terdaftar sebagai `presensi2/penjualan/{sale}/batal`.
+2. **Solusi & Perbaikan:**
+   - Di [`routes/web.php`](file:///var/www/laravel_apps/bagus/routes/web.php), didaftarkan alias route:
+     `Route::match(['get', 'post'], '/penjualan/transaksi/{sale}/cancel', [AttendanceWebV2Controller::class, 'penjualanCancelTransaction'])->name('penjualan.transaksi.cancel');`
+   - Di [`pos_desktop.blade.php`](file:///var/www/laravel_apps/bagus/resources/views/presensi2/pos_desktop.blade.php), URL fetch diganti dengan named route helper resmi:
+     `route('presensi2.penjualan.batal', ['sale' => ':saleId'])`.
+3. **Verifikasi:**
+   - Route list terverifikasi dengan `php artisan route:list --name=penjualan`.
+   - Seluruh 42 tests di `ShiftStockAndSalesFlowTest` LULUS 100%.
+   - Kode diformat dengan Laravel Pint.
+
+
 
 
 

@@ -1920,7 +1920,8 @@
             btn.innerHTML = '<span>⏳</span> Membatalkan...';
 
             try {
-                const response = await fetch(`{{ url('/presensi2/penjualan/transaksi') }}/${saleId}/cancel`, {
+                const cancelUrl = '{{ route("presensi2.penjualan.batal", ["sale" => ":saleId"]) }}'.replace(':saleId', saleId);
+                const response = await fetch(cancelUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
