@@ -816,13 +816,16 @@
 
             </div>
 
-            {{-- FOOTER KERANJANG (TOMBOL CLEAR & SIMPAN ORDER PENJUALAN) --}}
+            {{-- FOOTER KERANJANG (TOMBOL CLEAR, SIMPAN ORDER PENJUALAN LANGSUNG, & CETAK STRUK TERAKHIR OPSIONAL) --}}
             <div class="cart-footer-bar">
-                <button type="button" class="btn-cart-clear" onclick="clearCart()">
+                <button type="button" class="btn-cart-clear" onclick="clearCart()" title="Bersihkan keranjang">
                     <span>🔄</span> clear
                 </button>
-                <button type="button" id="btn-save-pos-order" class="btn-cart-submit" onclick="submitPosOrder()">
+                <button type="button" id="btn-save-pos-order" class="btn-cart-submit" onclick="submitPosOrder()" title="Simpan pesanan langsung tanpa harus cetak struk">
                     Simpan Order Penjualan
+                </button>
+                <button type="button" id="btn-print-last-receipt" class="btn-cart-clear" style="display: none; background: #0284c7; border: 1px solid #0369a1; color: #fff; width: auto; padding: 0 12px; font-weight: 700;" onclick="printLastReceipt()" title="Cetak struk pesanan terakhir yang baru saja disimpan">
+                    <span>🖨️</span> Struk
                 </button>
             </div>
 
@@ -909,6 +912,34 @@
             </table>
         </div>
     </section>
+
+    {{-- TOAST NOTIFIKASI TRANSAKSI BERHASIL DISIMPAN (OPSI 1: LANGSUNG SIMPAN TANPA WAJIB PRINT) --}}
+    <div id="pos-success-toast" style="display: none; position: fixed; top: 75px; right: 24px; z-index: 9999; background: #0f172a; color: #ffffff; border: 1.5px solid #10b981; border-radius: 12px; padding: 14px 18px; box-shadow: 0 10px 25px rgba(0,0,0,0.4); max-width: 380px; width: calc(100% - 48px);">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 22px;">✅</span>
+                <div>
+                    <strong style="font-size: 14px; color: #34d399; display: block;">Pesanan Berhasil Disimpan!</strong>
+                    <span style="font-size: 11.5px; color: #94a3b8;" id="toast-invoice-num">Invoice: -</span>
+                </div>
+            </div>
+            <button type="button" onclick="hideSuccessToast()" style="background: transparent; border: none; color: #94a3b8; font-size: 18px; cursor: pointer; line-height: 1;">✕</button>
+        </div>
+        <div style="margin-top: 10px; padding: 8px 10px; background: rgba(255,255,255,0.06); border-radius: 6px; font-size: 12.5px; display: flex; justify-content: space-between; align-items: center;">
+            <span>Total: <strong id="toast-total" style="color: #f8fafc;">Rp 0</strong></span>
+            <span style="background: #15803d; color: #fff; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 12px;" id="toast-change-wrap">
+                Kembalian: <span id="toast-change">Rp 0</span>
+            </span>
+        </div>
+        <div style="margin-top: 10px; display: flex; gap: 8px; justify-content: flex-end;">
+            <button type="button" onclick="printLastReceipt()" class="btn-nav-pill" style="background: #0284c7; color: #fff; border-color: #0369a1; font-size: 12px; font-weight: 700; padding: 5px 12px;">
+                🖨️ Cetak Struk
+            </button>
+            <button type="button" onclick="hideSuccessToast()" class="btn-nav-pill" style="background: rgba(255,255,255,0.1); color: #e2e8f0; border-color: rgba(255,255,255,0.2); font-size: 12px; padding: 5px 12px;">
+                Tutup
+            </button>
+        </div>
+    </div>
 
     {{-- MODAL 1: PREVIEW & CETAK STRUK THERMAL --}}
     <div id="modal-receipt" class="pos-modal-overlay">
@@ -1402,6 +1433,48 @@
             }
         }
 
+        let lastSalePayload = null;
+        let lastCashAmount = 0;
+        let toastTimeout = null;
+
+        function showSuccessToast(sale, cashReceived) {
+            const toast = document.getElementById('pos-success-toast');
+            if (!toast) return;
+
+            document.getElementById('toast-invoice-num').innerText = 'Invoice: ' + (sale.invoice_number || '-');
+            const total = Number(sale.total_fnb || 0);
+            document.getElementById('toast-total').innerText = 'Rp ' + total.toLocaleString('id-ID');
+
+            const cashVal = cashReceived || total;
+            const changeVal = Math.max(0, cashVal - total);
+            document.getElementById('toast-change').innerText = 'Rp ' + changeVal.toLocaleString('id-ID');
+
+            const btnLastPrint = document.getElementById('btn-print-last-receipt');
+            if (btnLastPrint) {
+                btnLastPrint.style.display = 'inline-flex';
+            }
+
+            toast.style.display = 'block';
+
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                hideSuccessToast();
+            }, 8000);
+        }
+
+        function hideSuccessToast() {
+            const toast = document.getElementById('pos-success-toast');
+            if (toast) toast.style.display = 'none';
+        }
+
+        function printLastReceipt() {
+            if (lastSalePayload) {
+                showReceiptModal(lastSalePayload, lastCashAmount);
+            } else {
+                alert('Belum ada transaksi terakhir yang tercatat.');
+            }
+        }
+
         // 6. SIMPAN ORDER PENJUALAN
         async function submitPosOrder() {
             const items = Object.values(posCart);
@@ -1448,8 +1521,9 @@
                 const data = await response.json();
                 if (response.ok && data.success) {
                     lastSalePayload = data.sale;
-                    showReceiptModal(data.sale, cashAmount);
+                    lastCashAmount = cashAmount;
                     clearCart();
+                    showSuccessToast(data.sale, cashAmount);
                 } else {
                     alert('Gagal menyimpan pesanan: ' + (data.message || 'Terjadi kesalahan sistem'));
                 }
@@ -1498,9 +1572,6 @@
         function closeReceiptModal() {
             const modal = document.getElementById('modal-receipt');
             if (modal) modal.style.display = 'none';
-            if (lastSalePayload) {
-                window.location.reload();
-            }
         }
 
         // TOGGLE & RUN MODE SIMULASI POS

@@ -415,3 +415,17 @@ Berdasarkan persetujuan implementasi mode simulasi serah terima shift kasir:
    - **Riwayat Estafet Kasir (14)**: Tersimpan nyata di tabel `shift_sales_summaries` (`handover_status = 'completed'`).
    - **Audit Sisa Stok Fisik**: Tersimpan nyata di tabel `shift_handover_checklists` (`status = 'completed'`, JSON `drink_items` & `food_items`).
    - **Rincian Penjualan POS (1 Menu)**: Tersimpan nyata di tabel `cafe_sales` & `cafe_sale_items` (AQUA 600ML Rp 4.000).
+
+---
+
+## 23. Optimasi Simpan Order POS Desktop Langsung Selesai (Tanpa Paksaan Print Struk)
+
+Berdasarkan kebutuhan kecepatan operasional kasir:
+1. **Simpan Langsung Selesai (Opsi 1):**
+   - Mengubah alur submit tombol **"Simpan Order Penjualan"** di [`pos_desktop.blade.php`](file:///var/www/laravel_apps/bagus/resources/views/presensi2/pos_desktop.blade.php) sehingga transaksi langsung tersimpan ke database Navicat dan keranjang belanja dibersihkan seketika tanpa membuka pop-up pratinjau struk print.
+2. **Toast Notifikasi Transaksi Interaktif:**
+   - Menampilkan banner toast sukses di pojok atas yang memuat: Nomor Invoice, Total Belanja, dan Nominal Kembalian pelanggan.
+   - Menyediakan tombol **`🖨️ Cetak Struk`** opsional pada toast dan tombol **`🖨️ Struk`** di bilah keranjang belanja jika sewaktu-waktu pembeli meminta struk fisik.
+3. **Verifikasi & Testing:**
+   - Menambahkan unit test `test_pos_desktop_order_saves_directly_without_forced_modal_print`.
+   - Seluruh **41 feature tests** di [`ShiftStockAndSalesFlowTest.php`](file:///var/www/laravel_apps/bagus/tests/Feature/ShiftStockAndSalesFlowTest.php) **LULUS 100% (304 assertions)**.

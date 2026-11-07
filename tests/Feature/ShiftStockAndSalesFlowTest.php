@@ -1601,4 +1601,36 @@ class ShiftStockAndSalesFlowTest extends TestCase
         $this->assertEquals('pending', $summary->handover_status);
         $this->assertEquals('unsubmitted', $summary->deposit_status);
     }
+
+    public function test_pos_desktop_order_saves_directly_without_forced_modal_print(): void
+    {
+        $this->clockInStaff();
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('pos'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Simpan Order Penjualan');
+        $response->assertSee('pos-success-toast');
+        $response->assertSee('btn-print-last-receipt');
+
+        // Lakukan submit transaksi POS langsung
+        $postResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.penjualan.transaksi'), [
+                'cart_items' => [
+                    ['id' => $this->variantKopi->id, 'name' => 'Kopi Good Day', 'qty' => 1, 'price' => 5000],
+                ],
+                'customer_name' => 'Pelanggan Langsung',
+                'payment_method' => 'cash',
+                'cash_received' => 10000,
+            ]);
+
+        $postResponse->assertStatus(200);
+        $postResponse->assertJson(['success' => true]);
+        $this->assertDatabaseHas('cafe_sale_items', [
+            'item_name' => 'Es Kopi Susu Aren Dingin',
+            'qty' => 1,
+            'unit_price' => 12000,
+        ]);
+    }
 }
