@@ -3651,7 +3651,8 @@ class AttendanceWebV2Controller extends Controller
             }
 
             $netAmount = max(0.0, $totalGross - $discountAmount);
-            $paymentMethod = (string) $request->input('payment_method', 'cash');
+            $rawMethod = strtolower((string) $request->input('payment_method', 'cash'));
+            $paymentMethod = in_array($rawMethod, ['cash', 'qris'], true) ? $rawMethod : 'cash';
 
             $customerId = $request->filled('customer_id') ? (int) $request->input('customer_id') : null;
             $customer = $customerId ? Customer::find($customerId) : null;
@@ -3790,7 +3791,8 @@ class AttendanceWebV2Controller extends Controller
                 $stationId = $request->input('pc_station_id');
                 $station = $stationId ? PcStation::find($stationId) : null;
                 $hours = (int) $request->input('hours', 1);
-                $paymentMethod = (string) $request->input('payment_method', 'cash');
+                $rawBillingMethod = strtolower((string) $request->input('payment_method', 'cash'));
+                $paymentMethod = in_array($rawBillingMethod, ['cash', 'qris'], true) ? $rawBillingMethod : 'cash';
 
                 $customerId = $request->filled('customer_id') ? (int) $request->input('customer_id') : null;
                 $customer = $customerId ? Customer::find($customerId) : null;
@@ -6139,9 +6141,21 @@ BAT;
             $lockedPrintAmount = max($autoPrintAmount, $realAmount);
         }
 
+        $calculatedNonCash = (float) CafeSale::whereDate('created_at', $workDate->toDateString())
+            ->where('payment_status', '!=', 'cancelled')
+            ->where('payment_method', '!=', 'cash')
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->get()
+            ->sum(fn ($s) => (float) ($s->net_amount > 0 || $s->discount_amount > 0 ? $s->net_amount : ($s->total_fnb + $s->total_billing)));
+
+        $nonCashAmount = ($salesSummary && $salesSummary->non_cash_amount > 0)
+            ? (float) $salesSummary->non_cash_amount
+            : $calculatedNonCash;
+
         $totalRevenue = (float) ($salesSummary?->total_revenue ?: ($lockedBillingAmount + $lockedPrintAmount + $totalFnbSales));
         $openingCash = 100000.0;
-        $systemExpectedCash = (float) ($salesSummary?->system_expected_cash ?: ($totalRevenue + $openingCash));
+        // Pada rekap dan serah terima, murni kas tunai (CASH) fisik di laci (Non-cash/QRIS dikecualikan dari fisik kas)
+        $systemExpectedCash = (float) ($salesSummary?->system_expected_cash ?: max(0.0, ($totalRevenue - $nonCashAmount) + $openingCash));
         $blindCashCount = (float) ($salesSummary?->blind_cash_count ?? $cashInDrawer);
         $cashDifference = (float) ($salesSummary?->cash_difference ?? ($blindCashCount - $systemExpectedCash));
         $cashDenominations = $salesSummary?->cash_denominations ?? [];
@@ -6203,6 +6217,7 @@ BAT;
             'lockedPrintAmount' => $lockedPrintAmount,
             'totalFnbSales' => $totalFnbSales,
             'totalRevenue' => $totalRevenue,
+            'nonCashAmount' => $nonCashAmount,
             'openingCash' => $openingCash,
             'systemExpectedCash' => $systemExpectedCash,
             'blindCashCount' => $blindCashCount,

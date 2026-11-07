@@ -482,7 +482,7 @@
         $retainedDrawerVal = (float) ($salesSummary?->retained_drawer_cash ?? ($isShift4 ? 150000 : 100000));
         $isAlreadyDeposited = $salesSummary?->hasBeenDeposited() ?? false;
         $defaultDepositRecipient = $salesSummary?->handoverRecipientName() ?: ($nextShiftLabel ?? ($isShift4 ? 'Kasir Shift 1 (Pagi)' : 'Kasir Shift Selanjutnya'));
-        $expectedCash = (float) ($systemExpectedCash ?? ($totalRevenue + 100000));
+        $expectedCash = (float) ($systemExpectedCash ?? max(0.0, ($totalRevenue - ($nonCashAmount ?? 0)) + 100000));
         $diffVal = $handoverAmountVal + $retainedDrawerVal - $expectedCash;
     @endphp
 
@@ -606,10 +606,16 @@
                         <span class="stat-label"><span>☕</span> Penjualan F&B / POS</span>
                         <span class="stat-value" style="color: #059669;">Rp {{ number_format($totalFnbSales, 0, ',', '.') }}</span>
                     </div>
+                    @if(($nonCashAmount ?? 0) > 0)
+                    <div class="stat-row" style="background: #fdf2f8; padding: 6px 10px; border-radius: 4px; margin: 4px 0;">
+                        <span class="stat-label" style="color: #9d174d; font-size: 11.5px;"><span>📱</span> Non-Tunai / QRIS (Masuk Rekening)</span>
+                        <span class="stat-value" style="color: #be185d; font-weight: 700;">- Rp {{ number_format($nonCashAmount, 0, ',', '.') }}</span>
+                    </div>
+                    @endif
                     <div class="stat-row" style="background: #f8fafc; padding: 10px; margin: 6px -14px -6px -14px; border-top: 2px solid #e2e8f0;">
                         <div>
-                            <strong style="color: #1e293b; font-size: 12.5px; display: block;">Total Target Kas Sistem</strong>
-                            <small style="color: #64748b;">Modal Awal + Omset Shift</small>
+                            <strong style="color: #1e293b; font-size: 12.5px; display: block;">Target Fisik Kas Tunai (Laci)</strong>
+                            <small style="color: #64748b;">Modal Awal + Omset Tunai (Cash Only)</small>
                         </div>
                         <span class="stat-value" style="font-size: 16px; color: #0284c7;" id="disp-expected-cash">
                             Rp {{ number_format($expectedCash, 0, ',', '.') }}
@@ -642,7 +648,7 @@
         <section class="st-col-mid">
             <div class="panel-box">
                 <div class="panel-box-header panel-box-header-green">
-                    <span>💵 Hitung Fisik Kas Laci (Denominasi Pecahan)</span>
+                    <span>💵 Hitung Fisik Kas Laci (Tunai / Cash Only)</span>
                     <span style="font-size: 11px; font-weight: 600; color: #3c763d;">Kalkulator Laci Kasir</span>
                 </div>
                 <div class="panel-box-body" style="padding: 10px 14px;">
@@ -706,7 +712,7 @@
                             </span>
                         </div>
                         <div class="stat-row">
-                            <span class="stat-label">Target Kas Sistem</span>
+                            <span class="stat-label">Target Kas Tunai (Cash Only)</span>
                             <span class="stat-value" style="color: #64748b;">
                                 Rp {{ number_format($expectedCash, 0, ',', '.') }}
                             </span>
@@ -769,13 +775,13 @@
 
                         {{-- TOTAL FISIK KAS LACI --}}
                         <div class="form-group">
-                            <label class="form-label">Total Uang Fisik di Laci (Rp) *</label>
+                            <label class="form-label">Total Uang Fisik di Laci (Cash Only) (Rp) *</label>
                             <input type="number" id="input-total-physical" required min="0" step="100"
                                    class="form-control form-control-money"
                                    style="background: #f8fafc; border-color: #94a3b8; color: #0f172a;"
                                    value="{{ (int) ($handoverAmountVal + $retainedDrawerVal) }}"
                                    oninput="updateHandoverDistribution()">
-                            <small style="color: #64748b; font-size: 11px;">Total seluruh uang di laci (modal + hasil shift)</small>
+                            <small style="color: #64748b; font-size: 11px;">Murni uang cash fisik di laci kasir (QRIS tidak dihitung karena langsung masuk rekening)</small>
                         </div>
 
                         {{-- MODAL LACI DITINGGAL --}}
@@ -802,12 +808,12 @@
 
                         {{-- KAS BERSIH DISERAHKAN (SIAP SETOR) --}}
                         <div class="form-group">
-                            <label class="form-label" style="color: #008d4c;">Uang Bersih Diserahterimakan (Rp) *</label>
+                            <label class="form-label" style="color: #008d4c;">Uang Bersih Tunai Diserahterimakan (Cash Only) (Rp) *</label>
                             <input type="number" name="deposited_amount" id="input-handover-amount" required min="0" step="100"
                                    class="form-control form-control-money"
                                    style="border-color: #00a65a; background: #f0fdf4; color: #008d4c; font-size: 16px;"
                                    value="{{ (int) $handoverAmountVal }}">
-                            <small style="color: #008d4c; font-size: 11px;">Nominal yang diserahkan ke kasir berikutnya / siap setor</small>
+                            <small style="color: #008d4c; font-size: 11px;">Nominal tunai yang diserahkan ke kasir berikutnya / siap disetor</small>
                         </div>
 
                         {{-- METODE PENYETORAN KAS --}}

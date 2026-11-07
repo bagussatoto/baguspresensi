@@ -1475,4 +1475,55 @@ class ShiftStockAndSalesFlowTest extends TestCase
         $this->assertEquals(10, $stock->fresh()->qty_on_hand);
         $this->assertDatabaseMissing('cafe_sales', ['customer_name' => 'Tester Simulasi']);
     }
+
+    public function test_pos_desktop_only_offers_cash_and_qris_options(): void
+    {
+        $this->clockInStaff();
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('pos'));
+
+        $response->assertStatus(200);
+        $response->assertSee('<option value="cash">💵 Tunai (Cash)</option>', false);
+        $response->assertSee('<option value="qris">📱 QRIS / E-Wallet</option>', false);
+        $response->assertDontSee('<option value="debit">', false);
+    }
+
+    public function test_serah_terima_calculates_cash_only_excluding_qris_sales(): void
+    {
+        $this->clockInStaff();
+
+        // 1. Transaksi Tunai Rp 10.000
+        $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.penjualan.transaksi'), [
+                'cart_items' => [
+                    ['id' => $this->variantKopi->id, 'name' => 'Kopi Good Day', 'qty' => 2, 'price' => 5000],
+                ],
+                'customer_name' => 'Pembeli Tunai',
+                'payment_method' => 'cash',
+                'cash_received' => 10000,
+            ]);
+
+        // 2. Transaksi QRIS Rp 15.000 (Masuk rekening, tidak ada fisik uangnya di laci)
+        $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.penjualan.transaksi'), [
+                'cart_items' => [
+                    ['id' => $this->variantKopi->id, 'name' => 'Kopi Good Day', 'qty' => 3, 'price' => 5000],
+                ],
+                'customer_name' => 'Pembeli QRIS',
+                'payment_method' => 'qris',
+                'cash_received' => 15000,
+            ]);
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.serah-terima.desktop'));
+
+        $response->assertStatus(200);
+        $this->assertEquals(36000, $response->viewData('nonCashAmount'));
+        // Modal awal 100.000 + Tunai 24.000 = Target Cash 124.000 (QRIS 36.000 dikecualikan dari fisik kas laci)
+        $response->assertSee('Non-Tunai / QRIS (Masuk Rekening)', false);
+        $response->assertSee('- Rp 36.000', false);
+        $response->assertSee('Target Fisik Kas Tunai (Laci)', false);
+        $response->assertSee('Total Uang Fisik di Laci (Cash Only)', false);
+    }
 }

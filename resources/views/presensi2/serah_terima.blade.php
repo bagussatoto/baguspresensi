@@ -625,7 +625,7 @@
                     <span>📝</span> Formulir Serah Terima Kasir Shift Aktif
                 </h3>
                 <span style="font-size: 11.5px; color: var(--text-muted);">
-                    Hitung fisik uang di laci dan cantumkan nama kasir shift selanjutnya sebelum mengakhiri shift.
+                    Hitung fisik uang tunai di laci (Cash Only, transaksi QRIS tidak dihitung karena langsung ke rekening bank) dan cantumkan nama kasir shift selanjutnya.
                 </span>
             </div>
         </div>
@@ -648,7 +648,7 @@
             <input type="hidden" name="action_type" value="handover">
 
             <div>
-                <label style="display: block; font-size: 11.5px; color: #cbd5e1; margin-bottom: 5px; font-weight: 600;">Nominal Kas Diserahkan (Rp) *</label>
+                <label style="display: block; font-size: 11.5px; color: #cbd5e1; margin-bottom: 5px; font-weight: 600;">Nominal Kas Tunai Diserahkan (Cash Only) (Rp) *</label>
                 <input type="number" name="deposited_amount" required min="0" step="100"
                        value="{{ (int) $handoverAmountVal }}"
                        style="width: 100%; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(16, 185, 129, 0.5); border-radius: 8px; padding: 10px 12px; color: #34d399; font-weight: 700; font-size: 13.5px; font-family: monospace; outline: none;">

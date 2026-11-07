@@ -295,3 +295,31 @@ Menjawab kebutuhan pengujian alur penjualan POS tanpa merusak data penjualan asl
 3. **Verifikasi Otomatis:**
    - Menambahkan 2 unit test baru di [`ShiftStockAndSalesFlowTest.php`](file:///var/www/laravel_apps/bagus/tests/Feature/ShiftStockAndSalesFlowTest.php).
    - Seluruh 35 automated tests **LULUS 100% (263 assertions)**.
+
+
+---
+
+## 18. Pembatasan 2 Opsi Pembayaran POS (Cash & QRIS) dan Penegasan Serah Terima Murni Uang Tunai (Cash Only)
+
+Berdasarkan instruksi operasional kasir:
+
+1. **Pembatasan 2 Opsi Pembayaran di Layar Kasir POS:**
+   - Menghapus opsi *Transfer Bank/Debit* dari dropdown pembayaran di [`pos_desktop.blade.php`](file:///var/www/laravel_apps/bagus/resources/views/presensi2/pos_desktop.blade.php).
+   - Kasir POS kini hanya memiliki 2 opsi resmi:
+     1. 💵 **Tunai (Cash)**
+     2. 📱 **QRIS / E-Wallet**
+   - Di backend (`penjualanStoreTransaction`), input `payment_method` divalidasi ketat sehingga hanya menerima `cash` atau `qris`.
+
+2. **Rekap & Serah Terima Shift Murni Berupa Uang Tunai Fisik (Cash Only):**
+   - Transaksi QRIS otomatis masuk langsung ke rekening bank/merchant pusat (tidak ada wujud fisik lembaran uang di laci).
+   - Pada perhitungan target kas sistem di [`AttendanceWebV2Controller.php`](file:///var/www/laravel_apps/bagus/app/Http/Controllers/AttendanceWebV2Controller.php) (`serahTerimaIndex`), seluruh penjualan non-tunai (QRIS) otomatis dipotongkan:
+     $$\text{Target Kas Fisik Laci (Cash Only)} = (\text{Total Omset Shift} - \text{Non-Cash / QRIS}) + \text{Modal Awal Laci}$$
+   - Pada antarmuka serah terima ([`serah_terima_desktop.blade.php`](file:///var/www/laravel_apps/bagus/resources/views/presensi2/serah_terima_desktop.blade.php) & [`serah_terima.blade.php`](file:///var/www/laravel_apps/bagus/resources/views/presensi2/serah_terima.blade.php)):
+     - Menampilkan baris pemisah omset QRIS: `📱 Non-Tunai / QRIS (Masuk Rekening): -Rp X`.
+     - Memberikan penegasan label bahwa perhitungan lembaran uang, target kas sistem, dan nominal serah terima adalah **murni uang fisik Cash di laci**. Kasir tidak lagi mengalami tuduhan selisih minus akibat uang QRIS.
+
+3. **Verifikasi & Pengujian:**
+   - Menambahkan 2 feature tests baru di [`ShiftStockAndSalesFlowTest.php`](file:///var/www/laravel_apps/bagus/tests/Feature/ShiftStockAndSalesFlowTest.php):
+     - `test_pos_desktop_only_offers_cash_and_qris_options` ➡️ **PASSED**
+     - `test_serah_terima_calculates_cash_only_excluding_qris_sales` ➡️ **PASSED**
+   - Total **37 unit tests** lulus 100% (**273 assertions**) dan lulus formatting **Laravel Pint**.

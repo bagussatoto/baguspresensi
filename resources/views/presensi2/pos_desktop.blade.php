@@ -786,7 +786,6 @@
                                 <select id="cart-payment-select" onchange="onPaymentMethodChanged(this.value)" style="width: 100%; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 3px; font-size: 12px; font-weight: 600;">
                                     <option value="cash">💵 Tunai (Cash)</option>
                                     <option value="qris">📱 QRIS / E-Wallet</option>
-                                    <option value="debit">💳 Transfer Bank / Debit</option>
                                 </select>
                             </div>
                         </div>
