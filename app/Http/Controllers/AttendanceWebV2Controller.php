@@ -3072,23 +3072,64 @@ class AttendanceWebV2Controller extends Controller
     public function posDesktopLogin(Request $request): RedirectResponse
     {
         $request->validate([
-            'employee_id' => 'required|exists:employees,id',
+            'employee_name' => 'nullable|string',
+            'employee_id' => 'nullable|exists:employees,id',
             'credential' => 'required|string|min:4',
         ], [
-            'employee_id.required' => 'Pilih nama kasir yang bertugas.',
             'credential.required' => 'Password kasir wajib diisi.',
             'credential.min' => 'Password minimal 4 karakter.',
         ]);
 
-        $employee = Employee::where('is_active', true)->find($request->input('employee_id'));
+        $employee = null;
+        $identifier = trim((string) ($request->input('employee_name') ?: $request->input('employee_code') ?: ''));
+
+        if ($request->filled('employee_id')) {
+            $employee = Employee::where('is_active', true)->find($request->input('employee_id'));
+        }
+
+        if (! $employee && $identifier !== '') {
+            // A. Pencocokan langsung nama karyawan (case-insensitive)
+            $employee = Employee::where('is_active', true)
+                ->whereRaw('LOWER(name) = ?', [mb_strtolower($identifier)])
+                ->first();
+
+            // B. Pencocokan berdasarkan kode/NIK, username, atau email
+            if (! $employee) {
+                $employee = Employee::where('is_active', true)
+                    ->where(function ($q) use ($identifier) {
+                        $q->where('code', $identifier)
+                            ->orWhere('username', $identifier)
+                            ->orWhere('email', $identifier);
+                    })
+                    ->first();
+            }
+
+            // C. Pencocokan LIKE nama
+            if (! $employee) {
+                $matchingEmployees = Employee::where('is_active', true)
+                    ->where('name', 'LIKE', '%'.$identifier.'%')
+                    ->get();
+
+                if ($matchingEmployees->count() === 1) {
+                    $employee = $matchingEmployees->first();
+                } elseif ($matchingEmployees->count() > 1) {
+                    return redirect()->route('pos.login')
+                        ->withInput()
+                        ->withErrors(['employee_name' => 'Ditemukan lebih dari 1 karyawan dengan nama tersebut. Mohon ketikkan nama lengkap Anda secara spesifik.']);
+                }
+            }
+        }
+
         if (! $employee) {
-            return redirect()->route('pos.login')->withErrors(['employee_id' => 'Karyawan tidak ditemukan atau tidak aktif.']);
+            return redirect()->route('pos.login')
+                ->withInput()
+                ->withErrors(['employee_name' => 'Kasir tidak ditemukan. Mohon periksa kembali penulisan nama atau NIK kasir.']);
         }
 
         $credential = (string) $request->input('credential');
         if (! $this->verifyEmployeeCredential($employee, $credential)) {
             return redirect()->route('pos.login')
-                ->withInput(['employee_id' => $employee->id])
+                ->withInput()
                 ->withErrors(['credential' => 'Password yang Anda masukkan salah.']);
         }
 

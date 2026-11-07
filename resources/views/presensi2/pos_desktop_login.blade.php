@@ -298,17 +298,22 @@
                 <form action="{{ route('pos.login.post') }}" method="POST" id="form-pos-login">
                     @csrf
 
-                    {{-- PILIH KASIR --}}
+                    {{-- NAMA KASIR BERTUGAS (INPUT TEKS BIASA) --}}
                     <div class="form-group">
-                        <label class="form-label" for="employee_id">Nama Kasir Bertugas *</label>
-                        <select name="employee_id" id="employee_id" class="form-select" required autofocus>
-                            <option value="">-- Pilih Nama Kasir --</option>
+                        <label class="form-label" for="employee_name">Nama Kasir Bertugas *</label>
+                        <input type="text" name="employee_name" id="employee_name" class="form-input"
+                               list="cashier-datalist"
+                               placeholder="Ketik nama lengkap atau NIK kasir..."
+                               value="{{ old('employee_name') }}"
+                               required autofocus autocomplete="username">
+                        <datalist id="cashier-datalist">
                             @foreach($employees as $emp)
-                                <option value="{{ $emp->id }}" {{ old('employee_id') == $emp->id ? 'selected' : '' }}>
-                                    {{ $emp->name }} ({{ $emp->code ?? 'OP' }}) — {{ $emp->branch->name ?? 'MAYA 1' }}
-                                </option>
+                                <option value="{{ $emp->name }}">{{ $emp->code ?? 'OP' }} — {{ $emp->branch->name ?? 'MAYA 1' }}</option>
                             @endforeach
-                        </select>
+                        </datalist>
+                        <small style="color: #64748b; font-size: 11px; margin-top: 4px; display: block;">
+                            Contoh: Ketik nama Anda (misal: Bagus Satoto) atau NIK kasir.
+                        </small>
                     </div>
 
                     {{-- PASSWORD KASIR (DENGAN TOGGLE SHOW/HIDE) --}}
