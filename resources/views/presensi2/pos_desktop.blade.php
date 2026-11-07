@@ -822,7 +822,7 @@
     {{-- BOTTOM ACCORDION BAR: HISTORY PENJUALAN POS --}}
     <section class="pos-bottom-container">
         <div class="history-bar-header" onclick="toggleHistoryAccordion()">
-            <span>History penjualan pos</span>
+            <span>History penjualan pos (<span id="history-sales-count">{{ count($fnbSales) }}</span>)</span>
             <span id="history-toggle-icon" style="font-size: 16px; font-weight: bold;">+</span>
         </div>
         
@@ -840,7 +840,7 @@
                         <th style="padding: 7px 10px; text-align: center;">Aksi</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="pos-history-tbody">
                     @forelse($fnbSales as $sale)
                         @php
                             $isCancelled = $sale->payment_status === 'cancelled';
@@ -888,7 +888,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr>
+                        <tr id="history-empty-row">
                             <td colspan="8" style="padding: 20px; text-align: center; color: #94a3b8;">
                                 Belum ada transaksi penjualan pada shift ini.
                             </td>
@@ -1512,6 +1512,7 @@
                     lastCashAmount = cashAmount;
                     clearCart();
                     showSuccessToast(data.sale, cashAmount);
+                    prependSaleToHistoryTable(data.sale, items, total, paymentMethod, customerName);
                 } else {
                     alert('Gagal menyimpan pesanan: ' + (data.message || 'Terjadi kesalahan sistem'));
                 }
@@ -1521,6 +1522,92 @@
             } finally {
                 btn.disabled = false;
                 btn.innerText = 'Simpan Order Penjualan';
+            }
+        }
+
+        // 6b. REALTIME PREPEND ORDER BARU KE TABEL HISTORY PENJUALAN POS (0 DETIK SINKRON)
+        function prependSaleToHistoryTable(sale, items, totalAmount, paymentMethod, customerName) {
+            const tbody = document.getElementById('pos-history-tbody');
+            if (!tbody) return;
+
+            const emptyRow = document.getElementById('history-empty-row');
+            if (emptyRow) emptyRow.remove();
+
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const mins = String(now.getMinutes()).padStart(2, '0');
+            const timeStr = `${hours}:${mins}`;
+
+            const invoiceNum = sale?.invoice_number || 'INV-POS';
+            const totalNum = Number(totalAmount || sale?.total_fnb || 0);
+            const methodStr = (paymentMethod || sale?.payment_method || 'CASH').toUpperCase();
+            const custStr = customerName || sale?.customer_name || 'Pelanggan Umum';
+
+            let itemsHtml = '';
+            const saleItems = (sale?.items && sale.items.length > 0) ? sale.items : items;
+            if (saleItems && saleItems.length > 0) {
+                saleItems.forEach(it => {
+                    const itName = it.item_name || it.name || 'Produk';
+                    const itQty = it.qty || 1;
+                    itemsHtml += `<div>${itQty}x ${itName}</div>`;
+                });
+            } else {
+                itemsHtml = '<div>1 Item Pesanan</div>';
+            }
+
+            const tr = document.createElement('tr');
+            tr.id = `history-row-${sale?.id || invoiceNum}`;
+            tr.style.borderBottom = '1px solid #f1f5f9';
+            tr.style.background = '#dcfce7';
+            tr.style.transition = 'background 2.5s ease';
+
+            tr.innerHTML = `
+                <td style="padding: 8px 10px; color: #64748b;">${timeStr}</td>
+                <td style="padding: 8px 10px; font-family: monospace; font-weight: bold; color: #0284c7;">
+                    <span>${invoiceNum}</span>
+                </td>
+                <td style="padding: 8px 10px;">${itemsHtml}</td>
+                <td style="padding: 8px 10px;">${custStr}</td>
+                <td style="padding: 8px 10px; text-align: right; font-weight: 700; color: #059669;">
+                    Rp ${totalNum.toLocaleString('id-ID')}
+                </td>
+                <td style="padding: 8px 10px; text-align: center;">
+                    <span style="background: #e2e8f0; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px;">
+                        ${methodStr}
+                    </span>
+                </td>
+                <td style="padding: 8px 10px; text-align: center;">
+                    <span style="background: #dcfce7; color: #15803d; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px;">LUNAS</span>
+                </td>
+                <td style="padding: 8px 10px; text-align: center;">
+                    <button type="button" class="btn-reprint-sale" style="padding: 3px 8px; font-size: 11px; background: #e0f2fe; border: 1px solid #bae6fd; color: #0369a1; border-radius: 3px; cursor: pointer;">
+                        🖨️ Cetak
+                    </button>
+                    <button type="button" class="btn-cancel-sale" style="padding: 3px 8px; font-size: 11px; background: #fee2e2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 3px; cursor: pointer; margin-left: 4px;">
+                        ✕ Batal
+                    </button>
+                </td>
+            `;
+
+            const btnReprint = tr.querySelector('.btn-reprint-sale');
+            if (btnReprint) {
+                btnReprint.onclick = () => reprintFromHistory(sale);
+            }
+            const btnCancel = tr.querySelector('.btn-cancel-sale');
+            if (btnCancel) {
+                btnCancel.onclick = () => promptCancelSale(sale.id, invoiceNum);
+            }
+
+            tbody.insertBefore(tr, tbody.firstChild);
+
+            setTimeout(() => {
+                tr.style.background = 'transparent';
+            }, 2500);
+
+            const countElem = document.getElementById('history-sales-count');
+            if (countElem) {
+                let currentCount = parseInt(countElem.innerText) || 0;
+                countElem.innerText = currentCount + 1;
             }
         }
 
