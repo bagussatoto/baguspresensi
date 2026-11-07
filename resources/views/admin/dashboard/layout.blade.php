@@ -846,6 +846,18 @@
         </div>
 
         <div class="sidebar-nav-container">
+            <div class="nav-category-header">PUSAT ERP TERPADU</div>
+            <ul class="sidebar-menu sidebar-nav-list" style="margin-bottom: 12px;">
+                <li>
+                    <a href="{{ route('admin.erp') }}" class="nav-link-item {{ request()->routeIs('admin.erp*') ? 'active' : '' }}" style="{{ request()->routeIs('admin.erp*') ? 'background: linear-gradient(90deg, rgba(56, 189, 248, 0.25), rgba(56, 189, 248, 0.05)); border-left: 3px solid #38bdf8;' : '' }}">
+                        <span class="nav-item-left">
+                            <span>🏛️</span> <span style="font-weight: 700; color: #38bdf8;">Pusat Kendali ERP</span>
+                        </span>
+                        <span class="badge-status badge-emerald" style="font-size: 9px; padding: 2px 6px;">SEMUA FITUR</span>
+                    </a>
+                </li>
+            </ul>
+
             <div class="nav-category-header">MENU UTAMA DASHBOARD</div>
             <ul class="sidebar-menu sidebar-nav-list">
 
@@ -948,6 +960,16 @@
 
             <div class="nav-category-header" style="margin-top: 16px;">PINTASAN SISTEM</div>
             <ul class="sidebar-nav-list">
+                <li>
+                    <a href="{{ route('admin.coa') }}" class="nav-link-item {{ request()->routeIs('admin.coa*') ? 'active' : '' }}">
+                        <span class="nav-item-left"><span>🏛️</span> <span>Bagan Akun (COA)</span></span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ route('admin.produk') }}" class="nav-link-item {{ request()->routeIs('admin.produk*') ? 'active' : '' }}">
+                        <span class="nav-item-left"><span>🏷️</span> <span>Katalog Produk & SKU</span></span>
+                    </a>
+                </li>
                 <li>
                     <a href="{{ route('presensi2.index') }}" target="_blank" class="nav-link-item">
                         <span class="nav-item-left"><span>📱</span> <span>Portal Presensi v2</span></span>

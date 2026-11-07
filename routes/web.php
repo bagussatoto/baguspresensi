@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\AdminChartOfAccountController;
 use App\Http\Controllers\Admin\AdminCustomerController;
 use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminEmployeeController;
+use App\Http\Controllers\Admin\AdminErpHubController;
 use App\Http\Controllers\Admin\AdminPricelistController;
 use App\Http\Controllers\Admin\AdminProductController;
 use App\Http\Controllers\Admin\AdminSaleController;
@@ -32,6 +33,12 @@ Route::get('/bagus', function () {
 });
 Route::get('/bagus/admin', function () {
     return redirect()->route('admin.index');
+});
+Route::get('/bagus/admin/ERP', function () {
+    return redirect()->route('admin.erp');
+});
+Route::get('/bagus/admin/erp', function () {
+    return redirect()->route('admin.erp');
 });
 Route::get('/bagus/admin/data', function () {
     return redirect()->route('admin.data');
@@ -229,6 +236,8 @@ Route::post('/presensi/ambil-stok', [AttendanceWebV2Controller::class, 'ambilSto
 // Admin ERP Maya Graha Kencana
 Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function () {
     Route::get('/', [AdminDashboardController::class, 'index'])->name('admin.index');
+    Route::get('/ERP', [AdminErpHubController::class, 'index'])->name('admin.erp');
+    Route::get('/erp', [AdminErpHubController::class, 'index'])->name('admin.erp.alias');
     Route::get('/data', [AdminDashboardController::class, 'dataIndex'])->name('admin.data');
     Route::get('/distribusi', [AdminDashboardController::class, 'distribusiIndex'])->name('admin.distribusi');
     Route::post('/distribusi/kirim', [AdminDashboardController::class, 'storeTransfer'])->name('admin.distribusi.kirim');

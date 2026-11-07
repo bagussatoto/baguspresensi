@@ -571,6 +571,37 @@ Menindaklanjuti persetujuan pengguna untuk membuat sistem Chart of Accounts (COA
    - Dibuat feature test [`AdminChartOfAccountTest.php`](file:///var/www/laravel_apps/bagus/tests/Feature/AdminChartOfAccountTest.php) menguji seluruh siklus CRUD COA (7 tests, 22 assertions) LULUS 100%.
    - Diformat dengan Laravel Pint.
 
+---
+
+## 32. Implementasi Pusat Kendali ERP Terpadu (Unified ERP Hub) `/admin/ERP`
+
+Menjawab permintaan pengguna untuk mengonsolidasi seluruh modul ERP yang pernah dibuat ke dalam satu link pusat terpadu: **`http://192.168.5.10:8086/bagus/admin/ERP`**:
+1. **Konsep & Arsitektur Unified ERP Hub:**
+   - Menghilangkan friksi pengguna yang sebelumnya harus mengingat banyak link terpisah.
+   - Mengelompokkan **26 modul & sub-fitur ERP** ke dalam **6 Pilar Utama Bisnis MGK**:
+     - **Pilar 1 - Master Data & Katalog:** Produk/SKU, Kategori, Brand, Supplier Vendor, Konsumen Member, Daftar Harga Tiering.
+     - **Pilar 2 - POS & Penjualan Ritel:** POS Desktop Kasir, Audit Penjualan, Penyesuaian Billing & Print, Checklist Opname Kasir.
+     - **Pilar 3 - Gudang & Distribusi:** Ketersediaan Stok Real-Time, Stok Limit/Ledger Fisik, Penerimaan Distribusi Antar-Gudang.
+     - **Pilar 4 - SDM & Presensi (HRM):** Portal Presensi v2, Manajemen Karyawan, Roster Shift, Verifikasi Pendaftaran Staf, Otorisasi Reset PIN/Password, Buka Blokir Login, Review Hak Akses ISO 27001, Rekapitulasi Presensi & Audit Log CSV.
+     - **Pilar 5 - Keuangan & Akuntansi:** Bagan Akun (Chart of Accounts / COA) 6 Kategori SAK, Laporan Keuangan Z-Report.
+     - **Pilar 6 - Keamanan & Audit Trail (GRC):** Immutable Audit Logs, Matriks Role-Based Access Control (RBAC 2-Lapis).
+2. **Backend Controller ([`AdminErpHubController.php`](file:///var/www/laravel_apps/bagus/app/Http/Controllers/Admin/AdminErpHubController.php)):**
+   - Mengumpulkan data agregat real-time: Total SKU Aktif, Jumlah Staf & Kehadiran Hari Ini, Total Transaksi & Omset Penjualan Hari Ini, Total Kuantitas Stok Fisik, Akun COA Terdaftar, dan Total Antrean Approval Pending.
+   - Mendukung JSON API endpoint untuk integrasi masa depan.
+3. **Frontend UI & Interaktivitas ([`index.blade.php`](file:///var/www/laravel_apps/bagus/resources/views/admin/erp/index.blade.php)):**
+   - Header Hero Banner dengan tombol aksi cepat (Quick Actions).
+   - Metrik Vital Real-Time (6 Kartu Status).
+   - **Live Search & Filter Pills Interaktif:** Pengguna dapat mengetik kata kunci apa saja (contoh: "kasir", "coa", "stok", "supplier") dan modul langsung tersaring secara instan tanpa perlu reload halaman.
+   - Direct launcher (Buka di jendela saat ini) dan tab baru (External link).
+   - Panduan alur operasional kerja harian dari buka kasir hingga tutup shift dan buku besar.
+4. **Navigasi Global Sidebar ([`layout.blade.php`](file:///var/www/laravel_apps/bagus/resources/views/admin/dashboard/layout.blade.php)):**
+   - Ditempatkan menu mencolok paling atas: **"🏛️ Pusat Kendali ERP"** dengan badge `SEMUA FITUR`.
+   - Menambahkan tautan langsung ke COA dan Katalog Produk pada menu pintasan.
+5. **Testing & QA ([`AdminErpHubTest.php`](file:///var/www/laravel_apps/bagus/tests/Feature/AdminErpHubTest.php)):**
+   - Pengujian render halaman, format JSON metrik, dan variasi case-insensitive route (`/admin/ERP` dan `/admin/erp`) LULUS 100% (3 tests, 27 assertions).
+   - Diformat dengan Laravel Pint.
+
+
 
 
 
