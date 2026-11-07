@@ -1433,7 +1433,6 @@
             }
         }
 
-        let lastSalePayload = null;
         let lastCashAmount = 0;
         let toastTimeout = null;
 
