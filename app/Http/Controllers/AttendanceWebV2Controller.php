@@ -3053,6 +3053,16 @@ class AttendanceWebV2Controller extends Controller
 
         $now = Carbon::now();
         $activeShift = $this->shiftResolverService->resolveShift(null, $now);
+        $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
+
+        // Ambil kasir yang saat ini sedang aktif berdinas di outlet (ISO 27001 Audit)
+        $activeOnDutyCashier = AttendanceRecord::with(['employee', 'shift'])
+            ->whereNull('clock_out_at')
+            ->whereNotNull('clock_in_at')
+            ->where('status', 'present')
+            ->whereDate('work_date', $workDate->toDateString())
+            ->latest('id')
+            ->first();
 
         $employees = Employee::with('branch')
             ->where('is_active', true)
@@ -3062,6 +3072,7 @@ class AttendanceWebV2Controller extends Controller
         return view('presensi2.pos_desktop_login', [
             'employees' => $employees,
             'activeShift' => $activeShift,
+            'activeOnDutyCashier' => $activeOnDutyCashier,
             'now' => $now,
         ]);
     }
@@ -3133,13 +3144,46 @@ class AttendanceWebV2Controller extends Controller
                 ->withErrors(['credential' => 'Password yang Anda masukkan salah.']);
         }
 
+        // Keamanan ISO 27001 & Segregation of Duties: Penguncian Kasir Tunggal Aktif
+        $now = Carbon::now();
+        $activeShift = $this->shiftResolverService->resolveShift(null, $now);
+        $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
+        $branchId = $employee->branch_id;
+
+        $isPrivileged = in_array((string) ($employee->role?->value ?? $employee->role), ['admin', 'superadmin', 'supervisor', 'otorisator', 'manager'], true);
+
+        if (! $isPrivileged) {
+            $activeOtherCashier = AttendanceRecord::with(['employee', 'shift'])
+                ->where('employee_id', '!=', $employee->id)
+                ->whereNull('clock_out_at')
+                ->whereNotNull('clock_in_at')
+                ->where('status', 'present')
+                ->when($branchId, function ($q) use ($branchId) {
+                    $q->whereHas('employee', fn ($sq) => $sq->where('branch_id', $branchId));
+                })
+                ->whereDate('work_date', $workDate->toDateString())
+                ->latest('id')
+                ->first();
+
+            if ($activeOtherCashier) {
+                $otherName = $activeOtherCashier->employee?->name ?? 'Kasir Bertugas Sebelumnya';
+                $otherShift = $activeOtherCashier->shift?->name ?? ('Shift '.($activeOtherCashier->shift_id ?? '1'));
+                $otherClockIn = $activeOtherCashier->clock_in_at?->format('H:i') ?? '-';
+
+                return redirect()->route('pos.login')
+                    ->withInput(['employee_name' => $employee->name])
+                    ->with('active_guard_error', true)
+                    ->with('active_guard_name', $otherName)
+                    ->withErrors([
+                        'employee_name' => "Peringatan Keamanan ISO 27001 (Audit Trail): Kasir {$otherName} saat ini masih aktif berdinas di {$otherShift} (masuk jam {$otherClockIn}) dan belum melakukan Tutup Shift / Serah Terima Kas laci. Kasir {$otherName} wajib menyelesaikan Serah Terima Kasir terlebih dahulu sebelum kasir baru masuk.",
+                    ]);
+            }
+        }
+
         session(['presensi2_employee_id' => $employee->id]);
         $employee->update(['last_login_at' => now()]);
 
         // Otomatis lakukan Presensi Masuk (Clock In) untuk kasir POS jika belum clock in
-        $now = Carbon::now();
-        $activeShift = $this->shiftResolverService->resolveShift(null, $now);
-        $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
 
         $attendanceToday = AttendanceRecord::where('employee_id', $employee->id)
             ->whereNull('clock_out_at')

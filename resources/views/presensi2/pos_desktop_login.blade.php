@@ -284,9 +284,34 @@
             </div>
 
             <div class="login-card-body">
+                @if(isset($activeOnDutyCashier) && $activeOnDutyCashier && $activeOnDutyCashier->employee)
+                    <div style="background: #fef3c7; border: 1px solid #fde68a; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: #92400e; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                        <div>
+                            <span style="font-weight: 700;">👤 Kasir Sedang Dinas:</span>
+                            <strong>{{ $activeOnDutyCashier->employee->name }}</strong>
+                            <span style="color: #b45309;">(Shift {{ $activeOnDutyCashier->shift?->name ?? ($activeOnDutyCashier->shift_id ?? '1') }} &bull; Masuk {{ $activeOnDutyCashier->clock_in_at?->format('H:i') ?? '-' }})</span>
+                        </div>
+                        <a href="{{ route('presensi2.serah-terima') }}" style="color: #b45309; text-decoration: underline; font-weight: 700; font-size: 11.5px;">
+                            Serah Terima Shift &rarr;
+                        </a>
+                    </div>
+                @endif
+
                 @if(isset($errors) && $errors->any())
                     <div class="alert-error">
-                        ✕ {{ $errors->first() }}
+                        @if(session('active_guard_error'))
+                            <div style="font-weight: 800; font-size: 12.5px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; color: #991b1b;">
+                                <span>🛡️</span> KEAMANAN ISO 27001 — PENGUNCIAN KASIR AKTIF
+                            </div>
+                            <div style="line-height: 1.45;">{{ $errors->first() }}</div>
+                            <div style="margin-top: 10px; border-top: 1px dashed rgba(153, 27, 27, 0.3); padding-top: 8px; display: flex; justify-content: flex-end;">
+                                <a href="{{ route('presensi2.serah-terima') }}" style="display: inline-flex; align-items: center; gap: 6px; background: #991b1b; color: #ffffff; padding: 6px 12px; border-radius: 4px; font-size: 11.5px; text-decoration: none; font-weight: 700;">
+                                    <span>🤝</span> Buka Layar Serah Terima Kasir
+                                </a>
+                            </div>
+                        @else
+                            ✕ {{ $errors->first() }}
+                        @endif
                     </div>
                 @endif
                 @if(session('success'))
