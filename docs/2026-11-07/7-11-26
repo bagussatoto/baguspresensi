@@ -1,0 +1,28 @@
+pada stok ditambhakan erd nya
+
+cek list serah terima pada shif sebelumnya 
+lalu jumlah sif setelmen hari. 							selesai
+closing stagmament 
+
+di akhir hari setor / stelmen harian					
+
+
+akunting
+
+data transaksi 
+pvot 
+
+master data
+
+
+
+------
+
+1. penjualan shif sebelumya harus bisa dibaca dan lihat
+2. saat rekap , penjualan harus dikunci
+
+3. nilai baruu pada audit trail jangan berformat json 
+gunakan bahasa baku 
+kalau indonesia pakai indonesia 
+kalau english pakai english 
+
