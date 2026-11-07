@@ -4,6 +4,20 @@
 
 @push('styles')
 <style>
+.hour-checkbox-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1.5px solid rgba(255, 255, 255, 0.12);
+    color: #94a3b8;
+}
+.hour-checkbox-card.active {
+    background: rgba(244, 63, 94, 0.22);
+    border-color: #f43f5e;
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(244, 63, 94, 0.3);
+}
+.hour-checkbox-card:hover {
+    border-color: rgba(244, 63, 94, 0.6);
+}
 .btn-chip-hours {
     padding: 6px 11px;
     font-size: 11.5px;
@@ -334,42 +348,47 @@
                 </a>
             </div>
 
-            {{-- OPSI PRESENSI PULANG / SELESAI DINAS DENGAN INPUT DURASI JAM MANUAL --}}
+            {{-- OPSI PRESENSI PULANG / SELESAI DINAS DENGAN CHECKBOX MEMANJANG (MAKSIMAL 6 JAM) --}}
             <div style="padding-top: 16px; border-top: 1px dashed rgba(255, 255, 255, 0.15); text-align: left;">
                 
-                {{-- KARTU INPUT TEXTBOX DURASI JAM KERJA --}}
-                <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(244, 63, 94, 0.35); border-radius: 14px; padding: 14px 16px; margin-bottom: 14px;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                        <label for="duration_hours_input" style="font-size: 13px; font-weight: 700; color: #fda4af; display: flex; align-items: center; gap: 6px;">
-                            <span>⏱️</span> Durasi Jam Kerja:
+                {{-- KARTU CHECKBOX MEMANJANG: DURASI JAM KERJA --}}
+                <div style="background: rgba(15, 23, 42, 0.85); border: 1.5px solid rgba(244, 63, 94, 0.4); border-radius: 16px; padding: 16px 18px; margin-bottom: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                        <label style="font-size: 13.5px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 18px;">⏱️</span> Durasi Jam Kerja (Maksimal 6 Jam):
                         </label>
-                        <span style="font-size: 11px; color: #94a3b8; background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 6px;">
-                            Pilihan manual per 1 Jam
-                        </span>
-                    </div>
-
-                    {{-- TEXTBOX KELIPATAN 1 JAM & TOMBOL +/- --}}
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <button type="button" onclick="adjustDurationHours(-1)" title="Kurangi 1 Jam" style="width: 44px; height: 44px; border-radius: 10px; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.4); color: #fda4af; font-size: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
-                            −
-                        </button>
-                        <div style="flex: 1; position: relative;">
-                            <input type="number" id="duration_hours_input" name="duration_hours" min="1" max="24" step="1" value="8" oninput="onDurationHoursChange()" style="width: 100%; height: 44px; background: rgba(10, 14, 26, 0.9); border: 1.5px solid rgba(244, 63, 94, 0.4); border-radius: 10px; color: #fff; font-size: 18px; font-weight: 800; text-align: center; font-family: monospace; outline: none; padding-right: 48px;">
-                            <span style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 13px; color: #94a3b8; font-weight: 700; pointer-events: none;">Jam</span>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 12px; color: #94a3b8;">Total:</span>
+                            <div id="duration-badge-display" style="background: linear-gradient(135deg, #f43f5e, #e11d48); color: #fff; font-size: 15px; font-weight: 800; padding: 3px 14px; border-radius: 20px; font-family: monospace; letter-spacing: 0.5px; box-shadow: 0 2px 8px rgba(244, 63, 94, 0.4);">
+                                <span id="total-duration-hours-text">6</span> Jam
+                            </div>
                         </div>
-                        <button type="button" onclick="adjustDurationHours(1)" title="Tambah 1 Jam" style="width: 44px; height: 44px; border-radius: 10px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #6ee7b7; font-size: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
-                            +
-                        </button>
                     </div>
 
-                    {{-- PRESET CHIPS PILIHAN CEPAT PER 1 JAM --}}
-                    <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px;">
-                        <button type="button" class="btn-chip-hours" onclick="setDurationHours(1)">1 Jam</button>
-                        <button type="button" class="btn-chip-hours" onclick="setDurationHours(2)">2 Jam</button>
-                        <button type="button" class="btn-chip-hours" onclick="setDurationHours(4)">4 Jam</button>
-                        <button type="button" class="btn-chip-hours" onclick="setDurationHours(6)">6 Jam</button>
-                        <button type="button" class="btn-chip-hours active" onclick="setDurationHours(8)">8 Jam (Shift)</button>
-                        <button type="button" class="btn-chip-hours" onclick="setDurationHours(12)">12 Jam</button>
+                    {{-- 6 KOTAK CHECKBOX MEMANJANG (1 JAM PER KOTAK) --}}
+                    <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 12px;">
+                        @for($h = 1; $h <= 6; $h++)
+                            <div class="hour-checkbox-card active" id="hour-card-{{ $h }}" onclick="toggleHourCard({{ $h }})" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 4px; border-radius: 10px; cursor: pointer; user-select: none; transition: all 0.2s ease;">
+                                <input type="checkbox" name="hour_slot[]" value="1" id="hour-cb-{{ $h }}" checked style="width: 17px; height: 17px; accent-color: #f43f5e; cursor: pointer; pointer-events: none;">
+                                <span style="font-size: 11.5px; font-weight: 700; margin-top: 5px; font-family: monospace;">1 Jam</span>
+                                <span style="font-size: 9px; opacity: 0.7; margin-top: 1px;">Ke-{{ $h }}</span>
+                            </div>
+                        @endfor
+                    </div>
+
+                    {{-- INPUT TEXTBOX SINKRONISASI & PRESET CEPAT --}}
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 10px; border-top: 1px dashed rgba(255, 255, 255, 0.1); flex-wrap: wrap; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 11.5px; color: #94a3b8;">Input Textbox:</span>
+                            <input type="number" id="duration_hours_input" name="duration_hours" min="1" max="6" step="1" value="6" oninput="onDurationHoursChange()" style="width: 75px; height: 32px; background: rgba(10, 14, 26, 0.9); border: 1.5px solid rgba(244, 63, 94, 0.5); border-radius: 8px; color: #fff; font-size: 14px; font-weight: 800; text-align: center; font-family: monospace; outline: none;">
+                            <span style="font-size: 12px; font-weight: 700; color: #cbd5e1;">Jam</span>
+                        </div>
+                        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                            <button type="button" class="btn-chip-hours" onclick="setSlotHours(1)">1 Jam</button>
+                            <button type="button" class="btn-chip-hours" onclick="setSlotHours(2)">2 Jam</button>
+                            <button type="button" class="btn-chip-hours" onclick="setSlotHours(4)">4 Jam</button>
+                            <button type="button" class="btn-chip-hours active" onclick="setSlotHours(6)">6 Jam (Penuh)</button>
+                        </div>
                     </div>
                 </div>
 
@@ -728,20 +747,43 @@
         }
     }
 
-    function adjustDurationHours(delta) {
-        const input = document.getElementById('duration_hours_input');
-        if (!input) return;
-        let val = parseInt(input.value) || 8;
-        val = Math.max(1, Math.min(24, val + delta));
-        input.value = val;
-        updateChipSelection(val);
+    function toggleHourCard(slotIndex) {
+        let currentTotal = 0;
+        for (let i = 1; i <= 6; i++) {
+            if (document.getElementById(`hour-cb-${i}`)?.checked) currentTotal++;
+        }
+
+        let targetTotal = slotIndex;
+        if (slotIndex === currentTotal) {
+            targetTotal = Math.max(1, currentTotal - 1);
+        }
+
+        setSlotHours(targetTotal);
     }
 
-    function setDurationHours(hours) {
+    function setSlotHours(totalHours) {
+        totalHours = Math.max(1, Math.min(6, parseInt(totalHours) || 1));
+        for (let i = 1; i <= 6; i++) {
+            const card = document.getElementById(`hour-card-${i}`);
+            const cb = document.getElementById(`hour-cb-${i}`);
+            if (!card || !cb) continue;
+
+            if (i <= totalHours) {
+                cb.checked = true;
+                card.classList.add('active');
+            } else {
+                cb.checked = false;
+                card.classList.remove('active');
+            }
+        }
+
         const input = document.getElementById('duration_hours_input');
-        if (!input) return;
-        input.value = hours;
-        updateChipSelection(hours);
+        if (input) input.value = totalHours;
+
+        const badgeText = document.getElementById('total-duration-hours-text');
+        if (badgeText) badgeText.innerText = totalHours;
+
+        updateChipSelection(totalHours);
     }
 
     function onDurationHoursChange() {
@@ -749,9 +791,8 @@
         if (!input) return;
         let val = parseInt(input.value) || 1;
         if (val < 1) val = 1;
-        if (val > 24) val = 24;
-        input.value = val;
-        updateChipSelection(val);
+        if (val > 6) val = 6;
+        setSlotHours(val);
     }
 
     function updateChipSelection(val) {

@@ -463,4 +463,20 @@ Berdasarkan permintaan user agar kasir dapat memilih durasi jam kerja secara man
    - Feature test [`AttendanceWebV2PortalTest::test_employee_can_clock_out_with_manual_duration_hours`](file:///var/www/laravel_apps/bagus/tests/Feature/AttendanceWebV2PortalTest.php) LULUS (100%).
    - Diformat dengan Laravel Pint (`vendor/bin/pint --dirty --format agent`).
 
+---
+
+## 26. Checkbox Slot Memanjang Durasi Kerja Maksimal 6 Jam (Presensi Pulang)
+
+Berdasarkan permintaan spesifikasi durasi shift maksimal 6 jam dengan interaksi slot checkbox:
+1. **Model Checkbox Memanjang (6 Slot 1 Jam):**
+   - Menata 6 kotak checkbox visual horizontal bertuliskan `1 Jam` (Ke-1 s/d Ke-6) di panel Check-Out [`scan.blade.php`](file:///var/www/laravel_apps/bagus/resources/views/presensi2/scan.blade.php).
+   - Pengguna cukup mencentang atau mengklik slot jam tertentu (misal slot ke-4), maka otomatis 4 slot tercentang dan menghasilkan total **4 Jam**.
+   - Dilengkapi badge display total jam interaktif serta input textbox angka yang selalu sinkron 2 arah.
+2. **Preset Cepat:**
+   - Disediakan tombol jalan pintas cepat: `[ 1 Jam ]` `[ 2 Jam ]` `[ 4 Jam ]` `[ 6 Jam (Penuh) ]`.
+3. **Verifikasi:**
+   - Pengujian `test_employee_can_clock_out_with_manual_duration_hours` dan `ShiftStockAndSalesFlowTest` seluruhnya LULUS 100%.
+   - Diformat dengan Laravel Pint.
+
+
 
