@@ -11,6 +11,7 @@ use App\Domains\Employee\Models\Shift;
 use App\Domains\Leave\Models\LeaveRequest;
 use App\Http\Controllers\Controller;
 use App\Models\PrinterPrintJob;
+use App\Models\ShiftHandoverChecklist;
 use App\Models\ShiftSalesSummary;
 use App\Models\ShiftStockRequest;
 use Carbon\Carbon;
@@ -76,6 +77,9 @@ class AdminDashboardController extends Controller
                 ->orWhere('print_adjustment_status', 'pending_approval');
         })->count();
 
+        $stockAuditSummary = $this->getStockAuditReportsData();
+        $zReportData = $this->getDailyZReportData($today);
+
         return view('admin.dashboard.index', compact(
             'profileData',
             'shifts',
@@ -88,7 +92,9 @@ class AdminDashboardController extends Controller
             'reportSummary',
             'profitAnalytics',
             'recentPosSales',
-            'billingPendingCount'
+            'billingPendingCount',
+            'stockAuditSummary',
+            'zReportData'
         ));
     }
 
@@ -247,13 +253,17 @@ class AdminDashboardController extends Controller
 
         $stockTransfersCount = DB::table('stock_transfer_dispatches')->where('status', '!=', 'received')->count();
         $stockStatsTotalSku = $stockStats['total_sku'];
+        $stockAuditSummary = $this->getStockAuditReportsData();
+        $zReportData = $this->getDailyZReportData(Carbon::today());
 
         return view('admin.dashboard.stok', compact(
             'profileData',
             'stockInventories',
             'stockStats',
             'stockTransfersCount',
-            'stockStatsTotalSku'
+            'stockStatsTotalSku',
+            'stockAuditSummary',
+            'zReportData'
         ));
     }
 
@@ -1040,6 +1050,231 @@ class AdminDashboardController extends Controller
             'safe_stock' => StockInventory::whereColumn('qty_on_hand', '>', 'safety_stock')->count(),
             'low_stock' => StockInventory::whereColumn('qty_on_hand', '<=', 'safety_stock')->where('qty_on_hand', '>', 0)->count(),
             'out_of_stock' => StockInventory::where('qty_on_hand', '<=', 0)->count(),
+        ];
+    }
+
+    /**
+     * Ambil data Laporan Audit Serah Terima Shift & Selisih Stok Fisik.
+     * Menggabungkan operator penyerah (shift lalu) vs penerima (shift ini) serta selisih stok riil.
+     */
+    private function getStockAuditReportsData(): array
+    {
+        $checklists = ShiftHandoverChecklist::with(['employee', 'branch', 'shift'])
+            ->orderByDesc('check_date')
+            ->orderByDesc('id')
+            ->limit(15)
+            ->get();
+
+        $reports = [];
+        $totalDiscrepancyToday = 0;
+
+        foreach ($checklists as $ch) {
+            $discrepancies = [];
+
+            // 1. Cek Selisih Minuman
+            if (is_array($ch->drink_items)) {
+                foreach ($ch->drink_items as $item) {
+                    $sys = isset($item['system_stock']) ? (int) $item['system_stock'] : (isset($item['sebelumnya']) ? (int) $item['sebelumnya'] : 0);
+                    $phys = isset($item['physical_stock']) ? (int) $item['physical_stock'] : $sys;
+                    $diff = isset($item['discrepancy']) ? (int) $item['discrepancy'] : ($phys - $sys);
+
+                    if ($diff !== 0) {
+                        $discrepancies[] = [
+                            'category' => 'Minuman',
+                            'name' => $item['name'] ?? 'Minuman',
+                            'system_qty' => $sys,
+                            'physical_qty' => $phys,
+                            'diff' => $diff,
+                            'unit' => $item['unit'] ?? 'pcs',
+                        ];
+                    }
+                }
+            }
+
+            // 2. Cek Selisih Makanan
+            if (is_array($ch->food_items)) {
+                foreach ($ch->food_items as $item) {
+                    $sys = isset($item['system_stock']) ? (int) $item['system_stock'] : (isset($item['sebelumnya']) ? (int) $item['sebelumnya'] : 0);
+                    $phys = isset($item['physical_stock']) ? (int) $item['physical_stock'] : $sys;
+                    $diff = isset($item['discrepancy']) ? (int) $item['discrepancy'] : ($phys - $sys);
+
+                    if ($diff !== 0) {
+                        $discrepancies[] = [
+                            'category' => 'Makanan',
+                            'name' => $item['name'] ?? 'Makanan',
+                            'system_qty' => $sys,
+                            'physical_qty' => $phys,
+                            'diff' => $diff,
+                            'unit' => $item['unit'] ?? 'pcs',
+                        ];
+                    }
+                }
+            }
+
+            $bDetails = is_array($ch->billing_details) ? $ch->billing_details : [];
+            $cashDiff = isset($bDetails['cash_difference']) ? (float) $bDetails['cash_difference'] : 0.0;
+            $prevOperator = $bDetails['prev_operator'] ?? 'Shift Sebelumnya';
+            $prevShiftName = $bDetails['prev_shift_name'] ?? 'Shift Sebelumnya';
+
+            $hasHwIssue = ($ch->hardware_status ?? 'normal') !== 'normal';
+            $hasDisc = count($discrepancies) > 0 || $cashDiff != 0 || $hasHwIssue;
+            $isToday = $ch->check_date && $ch->check_date->isToday();
+            if ($isToday) {
+                $totalDiscrepancyToday += count($discrepancies) + ($cashDiff != 0 ? 1 : 0) + ($hasHwIssue ? 1 : 0);
+            }
+
+            $reports[] = [
+                'id' => $ch->id,
+                'check_date_formatted' => $ch->check_date ? $ch->check_date->translatedFormat('d M Y') : '-',
+                'completed_at_formatted' => $ch->completed_at ? $ch->completed_at->format('H:i') : ($ch->created_at ? $ch->created_at->format('H:i') : '-'),
+                'branch_name' => $ch->branch->name ?? 'Cabang',
+                'shift_name' => $ch->shift->name ?? ($ch->shift->code ?? 'Shift'),
+                'recipient_cashier' => $ch->employee->name ?? 'Kasir Penerima',
+                'prev_operator' => $prevOperator,
+                'prev_shift_name' => $prevShiftName,
+                'discrepancies' => $discrepancies,
+                'discrepancy_count' => count($discrepancies),
+                'cash_diff' => $cashDiff,
+                'actual_cash' => (float) $ch->billing_shift_income,
+                'expected_cash' => (float) ($bDetails['expected_cash'] ?? $ch->billing_shift_income),
+                'drink_notes' => $ch->drink_notes,
+                'food_notes' => $ch->food_notes,
+                'cash_notes' => $bDetails['cash_notes'] ?? null,
+                'hardware_status' => $ch->hardware_status ?? 'normal',
+                'hardware_notes' => $ch->hardware_notes,
+                'status' => $ch->status,
+                'has_discrepancy' => $hasDisc,
+                'has_hw_issue' => $hasHwIssue,
+            ];
+        }
+
+        return [
+            'reports' => $reports,
+            'total_discrepancy_today' => $totalDiscrepancyToday,
+            'total_audited_checklists' => count($reports),
+        ];
+    }
+
+    /**
+     * Hitung Rekonsiliasi & Settlement Harian 24 Jam (Z-Report Harian)
+     * Menggabungkan 4 shift operasional MGK, omset billing, F&B, print, setoran kas, modal laci, dan status audit fisik/hardware.
+     */
+    private function getDailyZReportData(?Carbon $date = null, ?int $branchId = null): array
+    {
+        $targetDate = $date ? $date->copy()->startOfDay() : Carbon::today();
+        $shifts = Shift::where('is_active', true)->orderBy('start_time')->get();
+
+        $shiftSummaries = ShiftSalesSummary::with(['employee', 'shift'])
+            ->whereDate('work_date', $targetDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->get();
+
+        $checklists = ShiftHandoverChecklist::with(['employee', 'shift'])
+            ->whereDate('check_date', $targetDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->get();
+
+        $shiftReports = [];
+        $grandTotalBilling = 0;
+        $grandTotalFnb = 0;
+        $grandTotalPrint = 0;
+        $grandTotalRevenue = 0;
+        $grandTotalDeposited = 0;
+        $grandTotalRetained = 0;
+        $grandTotalCashDifference = 0;
+        $totalDiscrepancyItems = 0;
+        $totalHardwareIssues = 0;
+
+        foreach ($shifts as $shift) {
+            $summary = $shiftSummaries->first(function ($s) use ($shift) {
+                return (int) $s->shift_id === (int) $shift->id ||
+                    str_contains(strtoupper((string) $shift->name), strtoupper((string) ($s->shift?->name ?? ''))) ||
+                    str_contains(strtoupper((string) $shift->code), strtoupper((string) ($s->shift?->code ?? '')));
+            });
+
+            $chk = $checklists->first(function ($c) use ($shift) {
+                return (int) $c->shift_id === (int) $shift->id ||
+                    str_contains(strtoupper((string) $shift->name), strtoupper((string) ($c->shift?->name ?? '')));
+            });
+
+            $fnb = (float) ($summary?->total_fnb_sales ?? 0);
+            $billing = (float) ($summary?->locked_billing_amount ?: ($summary?->total_internet_sales ?? 0));
+            $print = (float) ($summary?->locked_print_amount ?? 0);
+            $totalRev = (float) ($summary?->total_revenue ?: ($fnb + $billing + $print));
+            $deposited = (float) ($summary?->deposited_amount ?? $summary?->handover_amount ?? 0);
+            $retained = (float) ($summary?->retained_drawer_cash ?? 0);
+            $cashDiff = (float) ($summary?->cash_difference ?? 0);
+
+            $hwStatus = $chk?->hardware_status ?? 'normal';
+            $hasHwIssue = in_array($hwStatus, ['warning', 'issue', 'maintenance'], true);
+            if ($hasHwIssue) {
+                $totalHardwareIssues++;
+            }
+
+            $discrepancyCount = 0;
+            if ($chk) {
+                foreach (['drink_items', 'food_items', 'paper_items'] as $itemKey) {
+                    if (is_array($chk->$itemKey)) {
+                        foreach ($chk->$itemKey as $it) {
+                            $sys = isset($it['system_stock']) ? (int) $it['system_stock'] : (isset($it['sebelumnya']) ? (int) $it['sebelumnya'] : 0);
+                            $phys = isset($it['physical_stock']) ? (int) $it['physical_stock'] : $sys;
+                            if (($phys - $sys) !== 0) {
+                                $discrepancyCount++;
+                            }
+                        }
+                    }
+                }
+            }
+            $totalDiscrepancyItems += $discrepancyCount;
+
+            $grandTotalBilling += $billing;
+            $grandTotalFnb += $fnb;
+            $grandTotalPrint += $print;
+            $grandTotalRevenue += $totalRev;
+            $grandTotalDeposited += $deposited;
+            if ($retained > 0) {
+                $grandTotalRetained = $retained;
+            }
+            $grandTotalCashDifference += $cashDiff;
+
+            $shiftReports[] = [
+                'shift_id' => $shift->id,
+                'shift_name' => $shift->name ?? ('Shift '.$shift->id),
+                'shift_hours' => ($shift->start_time ? substr($shift->start_time, 0, 5) : '07:00').' - '.($shift->end_time ? substr($shift->end_time, 0, 5) : '12:00'),
+                'cashier_name' => $summary?->employee?->name ?? ($chk?->employee?->name ?? '-'),
+                'has_data' => ($summary !== null || $chk !== null),
+                'billing_amount' => $billing,
+                'fnb_amount' => $fnb,
+                'print_amount' => $print,
+                'total_revenue' => $totalRev,
+                'deposited_amount' => $deposited,
+                'retained_drawer_cash' => $retained,
+                'cash_difference' => $cashDiff,
+                'deposit_status' => $summary?->deposit_status ?? 'unsubmitted',
+                'deposit_method' => $summary?->deposit_method ?? '-',
+                'deposit_proof_url' => $summary?->depositProofUrl(),
+                'discrepancy_count' => $discrepancyCount,
+                'hardware_status' => $hwStatus,
+                'hardware_notes' => $chk?->hardware_notes,
+                'summary_id' => $summary?->id,
+            ];
+        }
+
+        return [
+            'date' => $targetDate->toDateString(),
+            'date_formatted' => $targetDate->translatedFormat('l, d F Y'),
+            'shifts' => $shiftReports,
+            'grand_total_billing' => $grandTotalBilling,
+            'grand_total_fnb' => $grandTotalFnb,
+            'grand_total_print' => $grandTotalPrint,
+            'grand_total_revenue' => $grandTotalRevenue,
+            'grand_total_deposited' => $grandTotalDeposited,
+            'final_retained_cash' => $grandTotalRetained ?: 150000,
+            'grand_total_cash_difference' => $grandTotalCashDifference,
+            'total_discrepancy_items' => $totalDiscrepancyItems,
+            'total_hardware_issues' => $totalHardwareIssues,
+            'branch_name' => 'MAYA GRAHA KENCANA (MGK)',
+            'printed_at' => Carbon::now()->translatedFormat('d M Y H:i:s'),
         ];
     }
 

@@ -474,10 +474,14 @@
 <body>
 
     @php
+        $shiftIdStr = (string) ($activeShift?->id ?? '');
+        $shiftNameUpper = strtoupper((string) ($activeShift?->name ?? ''));
+        $isShift4 = in_array($shiftIdStr, ['4', 'SHIFT-4'], true) || str_contains($shiftNameUpper, 'SHIFT 4') || str_contains($shiftNameUpper, 'MALAM');
+
         $handoverAmountVal = (float) ($salesSummary?->handoverAmount() ?? $cashInDrawer);
-        $retainedDrawerVal = (float) ($salesSummary?->retained_drawer_cash ?? 100000);
+        $retainedDrawerVal = (float) ($salesSummary?->retained_drawer_cash ?? ($isShift4 ? 150000 : 100000));
         $isAlreadyDeposited = $salesSummary?->hasBeenDeposited() ?? false;
-        $defaultDepositRecipient = $salesSummary?->handoverRecipientName() ?: ($nextShiftLabel ?? 'Kasir Shift Selanjutnya');
+        $defaultDepositRecipient = $salesSummary?->handoverRecipientName() ?: ($nextShiftLabel ?? ($isShift4 ? 'Kasir Shift 1 (Pagi)' : 'Kasir Shift Selanjutnya'));
         $expectedCash = (float) ($systemExpectedCash ?? ($totalRevenue + 100000));
         $diffVal = $handoverAmountVal + $retainedDrawerVal - $expectedCash;
     @endphp
@@ -744,7 +748,19 @@
                     <span style="font-size: 11px; color: #64748b;">Kasir Aktif</span>
                 </div>
                 <div class="panel-box-body">
-                    <form action="{{ route('presensi2.serah-terima.store') }}" method="POST" id="form-serah-terima" onsubmit="return confirmSaveHandover()">
+                    @if($isShift4)
+                        <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(6, 95, 70, 0.2)); border: 1.5px solid #10b981; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; display: flex; align-items: flex-start; gap: 10px;">
+                            <span style="font-size: 22px;">🌙</span>
+                            <div>
+                                <strong style="color: #059669; font-size: 13px;">SHIFT 4: PENUTUP HARI & SETTLEMENT EOD</strong>
+                                <div style="font-size: 11.5px; color: #334155; margin-top: 2px; line-height: 1.4;">
+                                    Sesuai SOP Akhir Hari MGK: Sisakan <strong>Modal Laci Kasir Rp 150.000</strong> untuk Kasir Shift 1 besok pagi. Seluruh sisa uang omset disetorkan ke <strong>Amplop Brankas (Safe Dropbox)</strong> atau <strong>Bank</strong>.
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
+                    <form action="{{ route('presensi2.serah-terima.store') }}" method="POST" id="form-serah-terima" enctype="multipart/form-data" onsubmit="return confirmSaveHandover()">
                         @csrf
                         <input type="hidden" name="summary_id" value="{{ $salesSummary?->id }}">
                         <input type="hidden" name="action_type" value="handover">
@@ -770,6 +786,17 @@
                                    style="color: #0284c7;"
                                    value="{{ (int) $retainedDrawerVal }}"
                                    oninput="updateHandoverDistribution()">
+                            <div style="display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap;">
+                                <button type="button" onclick="setRetainedCashPreset(150000)" style="font-size: 11px; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 4px; padding: 3px 8px; cursor: pointer; font-weight: 700;">
+                                    Rp 150.000 (SOP Shift 1)
+                                </button>
+                                <button type="button" onclick="setRetainedCashPreset(200000)" style="font-size: 11px; background: #f8fafc; color: #475569; border: 1px solid #cbd5e1; border-radius: 4px; padding: 3px 8px; cursor: pointer;">
+                                    Rp 200.000
+                                </button>
+                                <button type="button" onclick="setRetainedCashPreset(100000)" style="font-size: 11px; background: #f8fafc; color: #475569; border: 1px solid #cbd5e1; border-radius: 4px; padding: 3px 8px; cursor: pointer;">
+                                    Rp 100.000
+                                </button>
+                            </div>
                             <small style="color: #64748b; font-size: 11px;">Uang receh yang ditinggal di laci untuk modal kasir selanjutnya</small>
                         </div>
 
@@ -783,6 +810,17 @@
                             <small style="color: #008d4c; font-size: 11px;">Nominal yang diserahkan ke kasir berikutnya / siap setor</small>
                         </div>
 
+                        {{-- METODE PENYETORAN KAS --}}
+                        <div class="form-group">
+                            <label class="form-label">Metode Penyetoran Kas *</label>
+                            <select name="deposit_method" id="select-deposit-method" class="form-control" style="font-size: 12px; background: #fff;">
+                                <option value="safe_dropbox" {{ ($salesSummary?->deposit_method === 'safe_dropbox' || $isShift4) ? 'selected' : '' }}>🔒 Amplop Brankas Kasir (Safe Dropbox) {{ $isShift4 ? '(Rekomendasi SOP Shift 4)' : '' }}</option>
+                                <option value="bank_transfer" {{ $salesSummary?->deposit_method === 'bank_transfer' ? 'selected' : '' }}>🏦 Setor Tunai ATM / Rekening Bank</option>
+                                <option value="next_shift_handover" {{ ($salesSummary?->deposit_method === 'next_shift_handover' && !$isShift4) ? 'selected' : '' }}>🤝 Serah Terima Fisik ke Kasir Selanjutnya</option>
+                                <option value="cash_collector" {{ $salesSummary?->deposit_method === 'cash_collector' ? 'selected' : '' }}>💼 Diserahkan ke Owner / Kolektor</option>
+                            </select>
+                        </div>
+
                         {{-- KASIR / SHIFT PENERIMA --}}
                         <div class="form-group">
                             <label class="form-label">Shift / Kasir Penerima *</label>
@@ -790,6 +828,20 @@
                                    class="form-control"
                                    placeholder="Contoh: Shift 2 / Grace"
                                    value="{{ $defaultDepositRecipient }}">
+                        </div>
+
+                        {{-- BUKTI SETOR FOTO --}}
+                        <div class="form-group">
+                            <label class="form-label">Foto Bukti Setor / Amplop Brankas (Opsional)</label>
+                            <input type="file" name="deposit_proof" id="input-deposit-proof" accept="image/*" class="form-control" style="font-size: 11.5px; padding: 5px;">
+                            <small style="color: #64748b; font-size: 11px;">Upload foto struk transfer / amplop setoran brankas jika ada</small>
+                            @if($salesSummary?->depositProofUrl())
+                                <div style="margin-top: 4px;">
+                                    <a href="{{ $salesSummary->depositProofUrl() }}" target="_blank" style="font-size: 11px; color: #0284c7; text-decoration: underline; font-weight: 600;">
+                                        🔍 Lihat Foto Bukti Setor Tersimpan
+                                    </a>
+                                </div>
+                            @endif
                         </div>
 
                         {{-- CATATAN SHIFT --}}
@@ -1317,6 +1369,14 @@
             var diff = physical - expectedCashValue;
             if (slipDiff) {
                 slipDiff.innerText = diff >= 0 ? '+Rp ' + formatNumber(diff) : '-Rp ' + formatNumber(Math.abs(diff));
+            }
+        }
+
+        function setRetainedCashPreset(amount) {
+            var retainedInput = document.getElementById('input-retained-cash');
+            if (retainedInput) {
+                retainedInput.value = amount;
+                updateHandoverDistribution();
             }
         }
 

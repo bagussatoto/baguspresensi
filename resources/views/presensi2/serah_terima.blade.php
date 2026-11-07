@@ -118,11 +118,15 @@
     </style>
 
     @php
+        $shiftIdStr = (string) ($activeShift?->id ?? '');
+        $shiftNameUpper = strtoupper((string) ($activeShift?->name ?? ''));
+        $isShift4 = in_array($shiftIdStr, ['4', 'SHIFT-4'], true) || str_contains($shiftNameUpper, 'SHIFT 4') || str_contains($shiftNameUpper, 'MALAM');
+
         $currentDepositStatus = $salesSummary->deposit_status ?? 'unsubmitted';
         $currentHandoverStatus = $salesSummary?->handover_status ?? 'completed';
-        $defaultDepositRecipient = $salesSummary?->handoverRecipientName() ?: ($nextShiftLabel ?? 'Kasir Shift Selanjutnya');
+        $defaultDepositRecipient = $salesSummary?->handoverRecipientName() ?: ($nextShiftLabel ?? ($isShift4 ? 'Kasir Shift 1 (Pagi)' : 'Kasir Shift Selanjutnya'));
         $handoverAmountVal = (float) ($salesSummary?->handoverAmount() ?? $cashInDrawer);
-        $retainedDrawerVal = (float) ($salesSummary?->retained_drawer_cash ?? 0);
+        $retainedDrawerVal = (float) ($salesSummary?->retained_drawer_cash ?? ($isShift4 ? 150000 : 0));
         $isAlreadyDeposited = $salesSummary?->hasBeenDeposited() ?? false;
         $totalDrawerPhysical = $handoverAmountVal + $retainedDrawerVal;
     @endphp
@@ -626,7 +630,19 @@
             </div>
         </div>
 
-        <form action="{{ route('presensi2.serah-terima.store') }}" method="POST" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; align-items: end;">
+        @if($isShift4)
+            <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(6, 95, 70, 0.25)); border: 1px solid #10b981; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; display: flex; align-items: flex-start; gap: 10px;">
+                <span style="font-size: 22px;">🌙</span>
+                <div>
+                    <strong style="color: #34d399; font-size: 13px;">SHIFT 4: PENUTUP HARI & SETTLEMENT EOD</strong>
+                    <div style="font-size: 11.5px; color: #cbd5e1; margin-top: 2px; line-height: 1.4;">
+                        Sesuai SOP Akhir Hari MGK: Sisakan <strong>Modal Laci Rp 150.000</strong> untuk Kasir Shift 1 besok pagi. Seluruh sisa uang omset disetorkan ke <strong>Amplop Brankas (Safe Dropbox)</strong> atau <strong>Bank</strong>.
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        <form action="{{ route('presensi2.serah-terima.store') }}" method="POST" enctype="multipart/form-data" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; align-items: end;">
             @csrf
             <input type="hidden" name="summary_id" value="{{ $salesSummary?->id }}">
             <input type="hidden" name="action_type" value="handover">
@@ -646,10 +662,33 @@
             </div>
 
             <div>
+                <label style="display: block; font-size: 11.5px; color: #cbd5e1; margin-bottom: 5px; font-weight: 600;">Metode Penyetoran Kas *</label>
+                <select name="deposit_method" style="width: 100%; background: rgba(15, 23, 42, 0.85); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 12px; outline: none;">
+                    <option value="safe_dropbox" {{ ($salesSummary?->deposit_method === 'safe_dropbox' || $isShift4) ? 'selected' : '' }}>🔒 Amplop Brankas Kasir (Safe Dropbox) {{ $isShift4 ? '(Rekomendasi Shift 4)' : '' }}</option>
+                    <option value="bank_transfer" {{ $salesSummary?->deposit_method === 'bank_transfer' ? 'selected' : '' }}>🏦 Setor Tunai ATM / Rekening Bank</option>
+                    <option value="next_shift_handover" {{ ($salesSummary?->deposit_method === 'next_shift_handover' && !$isShift4) ? 'selected' : '' }}>🤝 Serah Terima Fisik ke Kasir Selanjutnya</option>
+                    <option value="cash_collector" {{ $salesSummary?->deposit_method === 'cash_collector' ? 'selected' : '' }}>💼 Diserahkan ke Owner / Kolektor</option>
+                </select>
+            </div>
+
+            <div>
                 <label style="display: block; font-size: 11.5px; color: #cbd5e1; margin-bottom: 5px; font-weight: 600;">Shift Penerima / Kasir Berikutnya *</label>
                 <input type="text" name="deposit_recipient" required placeholder="Contoh: Shift 2 / Grace"
                        value="{{ $defaultDepositRecipient }}"
                        style="width: 100%; background: rgba(15, 23, 42, 0.85); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 13px; outline: none;">
+            </div>
+
+            <div>
+                <label style="display: block; font-size: 11.5px; color: #cbd5e1; margin-bottom: 5px; font-weight: 600;">Foto Bukti Setor / Amplop Brankas (Opsional)</label>
+                <input type="file" name="deposit_proof" accept="image/*"
+                       style="width: 100%; background: rgba(15, 23, 42, 0.85); border: 1px solid var(--border-glass); border-radius: 8px; padding: 8px 12px; color: #cbd5e1; font-size: 11.5px; outline: none;">
+                @if($salesSummary?->depositProofUrl())
+                    <div style="margin-top: 4px;">
+                        <a href="{{ $salesSummary->depositProofUrl() }}" target="_blank" style="font-size: 11px; color: #38bdf8; text-decoration: underline;">
+                            🔍 Lihat Foto Bukti Setor
+                        </a>
+                    </div>
+                @endif
             </div>
 
             <div style="grid-column: 1 / -1;">

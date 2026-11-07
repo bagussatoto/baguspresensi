@@ -238,6 +238,185 @@
 </div>
 
 <!-- ============================================================== -->
+<!-- LAPORAN AUDIT SERAH TERIMA SHIFT & SELISIH STOK FISIK -->
+<!-- ============================================================== -->
+<div class="dashboard-section-card" style="margin-bottom: 24px; border: 1px solid rgba(139, 92, 246, 0.35); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);">
+    <div class="section-card-header" style="background: rgba(139, 92, 246, 0.08); border-bottom: 1px solid rgba(139, 92, 246, 0.2);">
+        <div class="section-header-left">
+            <div class="section-header-icon" style="background: rgba(139, 92, 246, 0.2); color: #c084fc; font-size: 20px;">🛡️</div>
+            <div>
+                <h3 class="section-title" style="display: flex; align-items: center; gap: 10px;">
+                    Laporan Audit Serah Terima Shift & Rekonsiliasi Stok Fisik
+                    @php $discToday = $stockAuditSummary['total_discrepancy_today'] ?? 0; @endphp
+                    @if($discToday > 0)
+                        <span class="badge-status badge-rose" style="font-size: 11px; padding: 3px 8px;">
+                            ⚠️ {{ $discToday }} Selisih Hari Ini
+                        </span>
+                    @else
+                        <span class="badge-status badge-emerald" style="font-size: 11px; padding: 3px 8px;">
+                            ✓ Semua Stok & Kas Pas
+                        </span>
+                    @endif
+                </h3>
+                <span class="section-subtitle">
+                    Bukti audit keaslian stok antar-shift: operator penyerah (shift lalu) vs penerima (shift sekarang) guna mencegah saling tuduh kasir.
+                </span>
+            </div>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button type="button" onclick="openDailyZReportModal()" class="btn-action-sm" style="padding: 8px 14px; font-size: 12px; background: #059669; border: 1px solid #10b981; color: #ffffff; cursor: pointer; border-radius: 6px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+                <span>🖨️</span> Cetak Z-Report Harian (24 Jam)
+            </button>
+            <a href="{{ route('admin.stok') }}" class="btn-action-sm btn-action-primary" style="padding: 8px 14px; font-size: 12px; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.5); color: #e9d5ff;">
+                <span>📦</span> Buka Modul Stok →
+            </a>
+        </div>
+    </div>
+    <div class="section-card-body" style="padding: 0; overflow-x: auto;">
+        <table class="custom-data-table">
+            <thead>
+                <tr>
+                    <th style="width: 130px;">Waktu & Tanggal</th>
+                    <th>Shift & Cabang</th>
+                    <th>⏮️ Penyerah (Shift Lalu)</th>
+                    <th>⏭️ Penerima (Shift Sekarang)</th>
+                    <th>Status Rekonsiliasi Fisik Barang</th>
+                    <th>Selisih Kas Laci</th>
+                    <th>Kelayakan Hardware</th>
+                    <th>Catatan Kasir</th>
+                    <th style="text-align: center; width: 110px;">Aksi Audit</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($stockAuditSummary['reports'] ?? [] as $audit)
+                @php
+                    $hasDisc = (bool) $audit['has_discrepancy'];
+                    $discCount = (int) $audit['discrepancy_count'];
+                    $hwSt = $audit['hardware_status'] ?? 'normal';
+                @endphp
+                <tr style="{{ $hasDisc ? 'background: rgba(239, 68, 68, 0.04);' : '' }}">
+                    <td>
+                        <div style="font-weight: 700; color: #fff; font-size: 12.5px;">
+                            {{ $audit['completed_at_formatted'] }} WIB
+                        </div>
+                        <span style="font-size: 11px; color: var(--text-muted);">
+                            {{ $audit['check_date_formatted'] }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge-status badge-sky" style="font-size: 10.5px; font-weight: 700;">
+                            {{ $audit['shift_name'] }}
+                        </span>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;">
+                            {{ $audit['branch_name'] }}
+                        </div>
+                    </td>
+                    <td>
+                        <div style="font-weight: 700; color: #38bdf8; font-size: 12.5px; display: flex; align-items: center; gap: 5px;">
+                            <span>👤</span> {{ $audit['prev_operator'] }}
+                        </div>
+                        <span style="font-size: 10.5px; color: var(--text-muted);">
+                            Shift: {{ $audit['prev_shift_name'] }}
+                        </span>
+                    </td>
+                    <td>
+                        <div style="font-weight: 700; color: #a855f7; font-size: 12.5px; display: flex; align-items: center; gap: 5px;">
+                            <span>🔎</span> {{ $audit['recipient_cashier'] }}
+                        </div>
+                        <span style="font-size: 10.5px; color: #34d399;">
+                            ✓ Pemeriksa Masuk
+                        </span>
+                    </td>
+                    <td>
+                        @if($discCount > 0)
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                                @foreach($audit['discrepancies'] as $discItem)
+                                <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); padding: 3px 8px; border-radius: 6px; font-size: 11px;">
+                                    <strong style="color: #fff;">{{ $discItem['name'] }}:</strong>
+                                    <span style="color: #94a3b8;">Sistem: {{ $discItem['system_qty'] }} &bull; Fisik: {{ $discItem['physical_qty'] }}</span>
+                                    <span style="color: {{ $discItem['diff'] < 0 ? '#f87171' : '#38bdf8' }}; font-weight: 800;">
+                                        ({{ $discItem['diff'] > 0 ? '+'.$discItem['diff'] : $discItem['diff'] }} {{ $discItem['unit'] }})
+                                    </span>
+                                </div>
+                                @endforeach
+                            </div>
+                        @else
+                            <span class="badge-status badge-emerald" style="font-size: 10.5px;">
+                                ✓ Semua Stok Fisik Cocok
+                            </span>
+                        @endif
+                    </td>
+                    <td>
+                        @if($audit['cash_diff'] == 0)
+                            <span style="font-size: 11.5px; color: #34d399; font-weight: 600;">
+                                ✓ Pas (Rp {{ number_format($audit['actual_cash'], 0, ',', '.') }})
+                            </span>
+                        @elseif($audit['cash_diff'] < 0)
+                            <span style="font-size: 11.5px; color: #f87171; font-weight: 800;">
+                                ⚠️ Minus Rp {{ number_format(abs($audit['cash_diff']), 0, ',', '.') }}
+                            </span>
+                        @else
+                            <span style="font-size: 11.5px; color: #38bdf8; font-weight: 800;">
+                                +Rp {{ number_format($audit['cash_diff'], 0, ',', '.') }}
+                            </span>
+                        @endif
+                    </td>
+                    <td>
+                        @if($hwSt === 'issue')
+                            <span class="badge-status badge-rose" style="font-size: 10px; font-weight: 800;">
+                                🔴 Butuh Maintenance
+                            </span>
+                        @elseif($hwSt === 'warning')
+                            <span class="badge-status badge-amber" style="font-size: 10px; font-weight: 800;">
+                                🟡 Ada Kendala
+                            </span>
+                        @else
+                            <span class="badge-status badge-emerald" style="font-size: 10px;">
+                                🟢 Normal (15 PC)
+                            </span>
+                        @endif
+                        @if(!empty($audit['hardware_notes']))
+                            <div style="font-size: 10px; color: #fbbf24; margin-top: 3px; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ $audit['hardware_notes'] }}">
+                                🖥️ {{ $audit['hardware_notes'] }}
+                            </div>
+                        @endif
+                    </td>
+                    <td style="max-width: 220px;">
+                        @php
+                            $notes = array_filter([$audit['drink_notes'], $audit['food_notes'], $audit['cash_notes'], $audit['hardware_notes']]);
+                        @endphp
+                        @if(!empty($notes))
+                            <div style="font-size: 11.5px; color: #e2e8f0; background: rgba(15, 23, 42, 0.6); padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border-glass); line-height: 1.35;">
+                                {{ implode(' | ', $notes) }}
+                            </div>
+                        @else
+                            <span style="font-size: 11px; color: var(--text-muted); font-style: italic;">
+                                Tidak ada catatan
+                            </span>
+                        @endif
+                    </td>
+                    <td style="text-align: center; white-space: nowrap;">
+                        <button type="button" 
+                                onclick='openAuditModal(@json($audit))'
+                                class="btn-action-sm" 
+                                style="padding: 5px 10px; font-size: 11px; font-weight: 700; background: rgba(139, 92, 246, 0.18); border: 1px solid rgba(139, 92, 246, 0.4); color: #c084fc; border-radius: 6px; cursor: pointer;">
+                            <span>🔍</span> Detail
+                        </button>
+                    </td>
+                </tr>
+                @empty
+                <tr>
+                    <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 24px;">
+                        Belum ada riwayat laporan serah terima shift atau audit stok yang tersimpan.
+                    </td>
+                </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ============================================================== -->
 <!-- TABEL TRANSAKSI PENJUALAN POS KASIR TERKINI (TAUTAN ADMIN ERP) -->
 <!-- ============================================================== -->
 <div class="dashboard-section-card" style="margin-bottom: 24px;">
@@ -453,4 +632,154 @@
         </div>
     </div>
 </div>
+<!-- MODAL DETAIL AUDIT SERAH TERIMA SHIFT -->
+<div id="modal-audit-detail" style="display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(6px); z-index: 9999; align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: #0f172a; border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 16px; width: 100%; max-width: 620px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6);">
+        <div style="padding: 16px 20px; border-bottom: 1px solid var(--border-glass); display: flex; align-items: center; justify-content: space-between; background: rgba(139, 92, 246, 0.1);">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 36px; height: 36px; border-radius: 10px; background: rgba(139, 92, 246, 0.25); color: #c084fc; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                    🛡️
+                </div>
+                <div>
+                    <h4 style="font-size: 15px; font-weight: 700; color: #fff; margin: 0;">Rincian Berita Acara Audit Serah Terima Shift</h4>
+                    <span id="audit-modal-subtitle" style="font-size: 11px; color: var(--text-muted);">-</span>
+                </div>
+            </div>
+            <button type="button" onclick="closeAuditModal()" style="background: transparent; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer; padding: 0 4px; line-height: 1;">&times;</button>
+        </div>
+        <div style="padding: 20px;">
+            <!-- OPERATOR PAIR CARDS -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 10px; padding: 12px;">
+                    <span style="font-size: 10px; text-transform: uppercase; font-weight: 700; color: #38bdf8; display: block;">⏮️ Operator Penyerah (Shift Lalu)</span>
+                    <div id="audit-prev-operator" style="font-size: 14px; font-weight: 700; color: #fff; margin-top: 3px;">-</div>
+                    <span id="audit-prev-shift" style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 2px;">-</span>
+                </div>
+                <div style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.25); border-radius: 10px; padding: 12px;">
+                    <span style="font-size: 10px; text-transform: uppercase; font-weight: 700; color: #c084fc; display: block;">⏭️ Operator Pemeriksa (Shift Ini)</span>
+                    <div id="audit-recipient-operator" style="font-size: 14px; font-weight: 700; color: #fff; margin-top: 3px;">-</div>
+                    <span id="audit-recipient-shift" style="font-size: 11px; color: #34d399; display: block; margin-top: 2px;">✓ Diverifikasi Saat Masuk</span>
+                </div>
+            </div>
+
+            <!-- RINCIAN SELISIH BARANG -->
+            <div style="margin-bottom: 16px;">
+                <h5 style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #cbd5e1; font-weight: 700; margin-bottom: 8px;">
+                    📦 Temuan Rekonsiliasi Fisik Barang:
+                </h5>
+                <div id="audit-items-container" style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-glass); border-radius: 10px; padding: 12px;">
+                    -
+                </div>
+            </div>
+
+            <!-- SERAH TERIMA KAS -->
+            <div style="margin-bottom: 16px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-glass); border-radius: 10px; padding: 12px;">
+                <h5 style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #cbd5e1; font-weight: 700; margin-bottom: 8px;">
+                    💵 Serah Terima Uang Fisik Kasir:
+                </h5>
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <span style="font-size: 11px; color: var(--text-muted);">Uang Fisik Diterima:</span>
+                        <div id="audit-actual-cash" style="font-size: 15px; font-weight: 800; color: #38bdf8; font-family: monospace;">-</div>
+                    </div>
+                    <div>
+                        <span style="font-size: 11px; color: var(--text-muted);">Ekspektasi Sistem:</span>
+                        <div id="audit-expected-cash" style="font-size: 15px; font-weight: 700; color: #cbd5e1; font-family: monospace;">-</div>
+                    </div>
+                    <div>
+                        <span style="font-size: 11px; color: var(--text-muted);">Status Selisih Kas:</span>
+                        <div id="audit-cash-diff" style="font-size: 15px; font-weight: 800; font-family: monospace;">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CATATAN KASIR -->
+            <div style="margin-bottom: 16px;">
+                <h5 style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #cbd5e1; font-weight: 700; margin-bottom: 6px;">
+                    📝 Catatan Kronologi dari Kasir:
+                </h5>
+                <div id="audit-cashier-notes" style="font-size: 12px; color: #e2e8f0; background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px 12px; min-height: 40px;">
+                    -
+                </div>
+            </div>
+
+            <!-- KONDISI HARDWARE -->
+            <div style="font-size: 11.5px; color: var(--text-muted); background: rgba(255, 255, 255, 0.03); border-radius: 8px; padding: 8px 12px; border: 1px solid rgba(255, 255, 255, 0.05);">
+                <strong>Status Hardware:</strong> <span id="audit-hardware-status">-</span> &bull; <span id="audit-hardware-notes">-</span>
+            </div>
+        </div>
+        <div style="padding: 12px 20px; background: rgba(15, 23, 42, 0.5); border-top: 1px solid var(--border-glass); text-align: right;">
+            <button type="button" onclick="closeAuditModal()" class="btn-action-sm" style="padding: 8px 16px; background: rgba(255,255,255,0.08); color: #fff;">
+                Tutup Jendela
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+function openAuditModal(data) {
+    if (!data) return;
+    document.getElementById('audit-modal-subtitle').textContent = `${data.branch_name} • ${data.shift_name} • ${data.check_date_formatted} (${data.completed_at_formatted} WIB)`;
+    document.getElementById('audit-prev-operator').textContent = data.prev_operator || 'Shift Sebelumnya';
+    document.getElementById('audit-prev-shift').textContent = `Shift: ${data.prev_shift_name || '-'}`;
+    document.getElementById('audit-recipient-operator').textContent = data.recipient_cashier || 'Kasir';
+
+    const itemsContainer = document.getElementById('audit-items-container');
+    if (data.discrepancies && data.discrepancies.length > 0) {
+        let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+        data.discrepancies.forEach(item => {
+            const isMinus = item.diff < 0;
+            html += `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; font-size: 12px;">
+                    <div>
+                        <strong style="color: #fff;">${item.name}</strong>
+                        <span style="font-size: 10.5px; color: var(--text-muted); margin-left: 6px;">[${item.category}]</span>
+                        <div style="font-size: 11px; color: #cbd5e1; margin-top: 2px;">
+                            Sistem: <strong>${item.system_qty}</strong> &bull; Fisik Aktual: <strong>${item.physical_qty} ${item.unit}</strong>
+                        </div>
+                    </div>
+                    <span style="font-weight: 800; font-size: 13px; color: ${isMinus ? '#f87171' : '#38bdf8'}; font-family: monospace;">
+                        ${item.diff > 0 ? '+' + item.diff : item.diff} ${item.unit}
+                    </span>
+                </div>
+            `;
+        });
+        html += '</div>';
+        itemsContainer.innerHTML = html;
+    } else {
+        itemsContainer.innerHTML = '<span style="color: #34d399; font-weight: 600; font-size: 12px;">✓ Semua stok fisik minuman, makanan, dan kertas print cocok dengan catatan sistem.</span>';
+    }
+
+    document.getElementById('audit-actual-cash').textContent = 'Rp ' + Number(data.actual_cash || 0).toLocaleString('id-ID');
+    document.getElementById('audit-expected-cash').textContent = 'Rp ' + Number(data.expected_cash || 0).toLocaleString('id-ID');
+    
+    const cashDiffEl = document.getElementById('audit-cash-diff');
+    if (data.cash_diff == 0) {
+        cashDiffEl.textContent = '✓ Pas (0)';
+        cashDiffEl.style.color = '#34d399';
+    } else if (data.cash_diff < 0) {
+        cashDiffEl.textContent = '-Rp ' + Number(Math.abs(data.cash_diff)).toLocaleString('id-ID');
+        cashDiffEl.style.color = '#f87171';
+    } else {
+        cashDiffEl.textContent = '+Rp ' + Number(data.cash_diff).toLocaleString('id-ID');
+        cashDiffEl.style.color = '#38bdf8';
+    }
+
+    const notes = [data.drink_notes, data.food_notes, data.cash_notes].filter(Boolean);
+    document.getElementById('audit-cashier-notes').textContent = notes.length > 0 ? notes.join(' | ') : 'Tidak ada catatan tambahan yang ditulis kasir.';
+
+    document.getElementById('audit-hardware-status').textContent = (data.hardware_status || 'normal').toUpperCase();
+    document.getElementById('audit-hardware-notes').textContent = data.hardware_notes || 'Semua hardware normal.';
+
+    const modal = document.getElementById('modal-audit-detail');
+    modal.style.display = 'flex';
+}
+
+function closeAuditModal() {
+    const modal = document.getElementById('modal-audit-detail');
+    if (modal) modal.style.display = 'none';
+}
+</script>
+
+@include('admin.dashboard.partials.modal_z_report')
 @endsection

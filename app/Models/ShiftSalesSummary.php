@@ -381,4 +381,14 @@ class ShiftSalesSummary extends Model
     {
         return $this->belongsTo(AttendanceRecord::class);
     }
+
+    public function depositProofUrl(): ?string
+    {
+        $notes = (string) ($this->deposit_notes ?? $this->handover_notes ?? '');
+        if (preg_match('/\[Bukti Setor: ([^\]]+)\]/', $notes, $matches)) {
+            return asset(trim($matches[1]));
+        }
+
+        return null;
+    }
 }

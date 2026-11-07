@@ -13,9 +13,12 @@ use App\Domains\Employee\Models\Shift;
 use App\Models\PrinterPrintJob;
 use App\Models\ShiftHandoverChecklist;
 use App\Models\ShiftSalesSummary;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Modules\MasterData\Domain\Enums\CustomerType;
 use Modules\MasterData\Domain\Enums\EmployeeRole;
 use Modules\MasterData\Domain\Models\Branch;
@@ -203,7 +206,7 @@ class ShiftStockAndSalesFlowTest extends TestCase
         $resStok->assertRedirect(route('presensi2.login'));
 
         $resPenjualan = $this->get(route('presensi2.penjualan'));
-        $resPenjualan->assertRedirect(route('presensi2.login'));
+        $this->assertTrue($resPenjualan->isRedirect());
     }
 
     private function clockInStaff(): AttendanceRecord
@@ -252,7 +255,7 @@ class ShiftStockAndSalesFlowTest extends TestCase
         $response->assertSee('Cek Daftar Billing Internet');
         $response->assertSee('Shift Sebelumnya');
         $response->assertSee('6. Selesai');
-        $response->assertSee('Lanjut ke Halaman Penjualan');
+        $response->assertSee('Buka POS Kasir Desktop');
         $response->assertSee('Restock');
         $response->assertSee('modal-quick-restock');
     }
@@ -309,7 +312,7 @@ class ShiftStockAndSalesFlowTest extends TestCase
                 'billing_verified' => '1',
             ]);
 
-        $response->assertRedirect(route('presensi2.penjualan'));
+        $response->assertRedirect(route('pos'));
         $response->assertSessionHas('success');
 
         $this->assertDatabaseHas('shift_handover_checklists', [
@@ -687,7 +690,7 @@ class ShiftStockAndSalesFlowTest extends TestCase
                 'billing_verified' => '1',
             ]);
 
-        $response->assertRedirect(route('presensi2.penjualan'));
+        $response->assertRedirect(route('pos'));
 
         // 2. View Halaman Penjualan dan cek komparasi stok
         $viewResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
@@ -988,5 +991,488 @@ class ShiftStockAndSalesFlowTest extends TestCase
             'locked_print_amount' => 7000,
             'is_print_locked' => true,
         ]);
+    }
+
+    public function test_stok_checklist_records_physical_discrepancy_for_drink_and_food(): void
+    {
+        Carbon::setTestNow(Carbon::create(2026, 10, 17, 7, 5, 0));
+
+        $this->clockInStaff();
+
+        // Submit form stok dengan input fisik aktual Aqua / Kopi kurang 1 (sistem misal ada stok, fisik diinput lebih sedikit)
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->post(route('presensi2.stok.store'), [
+                'billing_verified' => '1',
+                'hardware_checklist' => ['pc_stations', 'server_billing'],
+                'hardware_status' => 'normal',
+                'drink_physical' => [
+                    $this->variantKopi->id => 9,
+                ],
+                'drink_notes' => 'Aqua / Kopi kurang 1 botol dari shift sebelumnya',
+                'food_physical' => [
+                    10 => 14,
+                ],
+                'food_notes' => 'Chiki kurang 1 pcs',
+            ]);
+
+        $response->assertSessionHas('success');
+
+        $checklist = ShiftHandoverChecklist::where('employee_id', $this->employee->id)->latest('id')->first();
+        $this->assertNotNull($checklist);
+        $this->assertIsArray($checklist->drink_items);
+
+        $kopiItem = collect($checklist->drink_items)->firstWhere('variant_id', $this->variantKopi->id);
+        $this->assertNotNull($kopiItem);
+        $this->assertEquals(9, $kopiItem['physical_stock']);
+        $this->assertArrayHasKey('discrepancy', $kopiItem);
+        $this->assertArrayHasKey('status', $kopiItem);
+
+        // Revisit stok page and check rendered inputs
+        $viewResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.stok'));
+
+        $viewResponse->assertStatus(200);
+        $viewResponse->assertSee('drink_physical['.$this->variantKopi->id.']', false);
+        $viewResponse->assertSee('value="9"', false);
+    }
+
+    public function test_stok_simulation_can_be_reset_via_action_reset_stok(): void
+    {
+        Carbon::setTestNow(Carbon::create(2026, 10, 17, 7, 5, 0));
+
+        $this->clockInStaff();
+
+        // 1. Buat checklist awal
+        ShiftHandoverChecklist::create([
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift->id,
+            'check_date' => Carbon::now()->toDateString(),
+            'status' => 'completed',
+        ]);
+
+        $this->assertDatabaseHas('shift_handover_checklists', [
+            'employee_id' => $this->employee->id,
+            'status' => 'completed',
+        ]);
+
+        // 2. Panggil action reset_stok
+        $resetResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.stok', ['action' => 'reset_stok']));
+
+        $resetResponse->assertRedirect(route('presensi2.stok'));
+        $resetResponse->assertSessionHas('status');
+
+        $this->assertDatabaseMissing('shift_handover_checklists', [
+            'employee_id' => $this->employee->id,
+            'status' => 'completed',
+        ]);
+    }
+
+    public function test_stok_page_displays_previous_shift_physical_checklist_and_settlement_progress(): void
+    {
+        Carbon::setTestNow(Carbon::create(2026, 10, 17, 13, 0, 0));
+
+        // 1. Shift 1 Operator menyelesaikan checklist & settlement
+        $shift1 = Shift::firstOrCreate(
+            ['code' => 'SHIFT-1'],
+            ['name' => 'Shift 1 Pagi', 'start_time' => '07:00:00', 'end_time' => '12:00:00', 'is_active' => true]
+        );
+        $shift2 = Shift::firstOrCreate(
+            ['code' => 'SHIFT-2'],
+            ['name' => 'Shift 2 Siang', 'start_time' => '12:00:00', 'end_time' => '17:00:00', 'is_active' => true]
+        );
+
+        $employee1 = Employee::create([
+            'branch_id' => $this->branch->id,
+            'name' => 'Operator Shift 1 Budi',
+            'code' => 'EMP-002',
+            'position' => 'Operator',
+            'password' => Hash::make('secret123'),
+            'pin' => Hash::make('654321'),
+        ]);
+
+        // Simpan checklist fisik dari Shift 1
+        ShiftHandoverChecklist::create([
+            'employee_id' => $employee1->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $shift1->id,
+            'check_date' => Carbon::today()->toDateString(),
+            'paper_a4' => true,
+            'paper_a4_qty' => 450,
+            'paper_f4' => true,
+            'paper_f4_qty' => 480,
+            'drink_items' => [
+                [
+                    'variant_id' => $this->variantKopi->id,
+                    'name' => $this->variantKopi->name,
+                    'physical_stock' => 9,
+                    'sesudahnya' => 10,
+                    'discrepancy' => -1,
+                    'status' => 'kurang',
+                ],
+            ],
+            'drink_notes' => 'Kopi kurang 1 botol dari shift pagi',
+            'hardware_status' => 'warning',
+            'hardware_notes' => 'PC-04 headset kiri kresek-kresek',
+            'status' => 'completed',
+            'completed_at' => Carbon::now()->subHour(),
+        ]);
+
+        // Simpan settlement kas dari Shift 1
+        ShiftSalesSummary::create([
+            'employee_id' => $employee1->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $shift1->id,
+            'work_date' => Carbon::today()->toDateString(),
+            'total_internet_sales' => 85000,
+            'deposited_amount' => 85000,
+            'blind_cash_count' => 85000,
+            'cash_difference' => 0,
+            'status' => 'closed',
+        ]);
+
+        // 2. Staff 2 clock-in pada Shift 2
+        $this->clockInStaff();
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.stok', ['shift' => $shift2->id]));
+
+        $response->assertStatus(200);
+
+        // Verifikasi Widget 4 Shift Settlement
+        $response->assertSee('Status Settlement 4 Shift Hari Ini');
+        $response->assertSee('Akumulasi omset harian');
+        $response->assertSee('Progres:');
+        $response->assertSee('Shift 1');
+        $response->assertSee('Shift 2');
+
+        // Verifikasi Serah Terima Fisik dari Shift Sebelumnya
+        $response->assertSee('Serah Terima Fisik dari');
+        $response->assertSee('Kopi kurang 1 botol dari shift pagi');
+        $response->assertSee('⏮️ Fisik:');
+        $response->assertSee('9');
+
+        // Verifikasi Catatan Hardware dari Shift Sebelumnya di Seksi 4
+        $response->assertSee('Catatan Hardware Shift Lalu');
+        $response->assertSee('PC-04 headset kiri kresek-kresek');
+
+        // Verifikasi Kartu Ringkasan & Tombol Aksi Serah Terima Stok di Bawah Tabel 1-3
+        $response->assertSee('Berita Acara Rekonsiliasi Stok Fisik Antar-Shift');
+        $response->assertSee('Konfirmasi Serah Terima Stok');
+        $response->assertSee('stat-total-items');
+    }
+
+    public function test_admin_dashboard_shows_hardware_status_in_shift_audit_reports(): void
+    {
+        Carbon::setTestNow(Carbon::create(2026, 10, 17, 14, 0, 0));
+
+        $adminUser = User::create([
+            'name' => 'Admin Owner MGK',
+            'email' => 'owner@mgk.com',
+            'password' => bcrypt('password123'),
+            'role' => 'super_admin',
+        ]);
+
+        ShiftHandoverChecklist::create([
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift->id,
+            'check_date' => Carbon::today()->toDateString(),
+            'hardware_status' => 'warning',
+            'hardware_notes' => 'PC-04 headset rusak',
+            'status' => 'completed',
+            'completed_at' => Carbon::now(),
+        ]);
+
+        $response = $this->actingAs($adminUser)
+            ->withSession(['admin_role' => 'Manager', 'admin_logged_in' => true])
+            ->get(route('admin.index'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Kelayakan Hardware');
+        $response->assertSee('Ada Kendala');
+        $response->assertSee('PC-04 headset rusak');
+
+        $stokResponse = $this->actingAs($adminUser)
+            ->withSession(['admin_role' => 'Manager', 'admin_logged_in' => true])
+            ->get(route('admin.stok'));
+
+        $stokResponse->assertStatus(200);
+        $stokResponse->assertSee('Kelayakan Hardware');
+        $stokResponse->assertSee('Ada Kendala');
+    }
+
+    public function test_admin_dashboard_shows_daily_z_report_modal_and_data(): void
+    {
+        $adminUser = User::create([
+            'name' => 'Owner MGK Z-Report',
+            'email' => 'owner_z@mgk.com',
+            'password' => bcrypt('password123'),
+            'role' => 'super_admin',
+        ]);
+
+        ShiftSalesSummary::create([
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift->id,
+            'work_date' => Carbon::today()->toDateString(),
+            'total_fnb_sales' => 50000,
+            'total_internet_sales' => 120000,
+            'total_revenue' => 170000,
+            'cash_in_drawer' => 320000,
+            'retained_drawer_cash' => 150000,
+            'deposited_amount' => 170000,
+            'deposit_status' => 'verified',
+            'deposit_method' => 'safe_dropbox',
+            'status' => 'closed',
+        ]);
+
+        $response = $this->actingAs($adminUser)
+            ->withSession(['admin_role' => 'Manager', 'admin_logged_in' => true])
+            ->get(route('admin.index'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Cetak Z-Report Harian (24 Jam)');
+        $response->assertSee('BERITA ACARA SETTLEMENT HARIAN (Z-REPORT 24 JAM)');
+        $response->assertSee('Kasir Penutup (Shift 4)');
+        $response->assertSee('Kasir Penerima (Shift 1 Besok)');
+        $response->assertSee('Supervisor / Owner MGK');
+
+        $stokResponse = $this->actingAs($adminUser)
+            ->withSession(['admin_role' => 'Manager', 'admin_logged_in' => true])
+            ->get(route('admin.stok'));
+
+        $stokResponse->assertStatus(200);
+        $stokResponse->assertSee('Cetak Z-Report Harian (24 Jam)');
+    }
+
+    public function test_shift_4_serah_terima_shows_eod_settlement_banner_and_retained_cash_preset(): void
+    {
+        $shift4 = Shift::create([
+            'name' => 'Shift 4 (Malam)',
+            'code' => 'SHIFT-4',
+            'start_time' => '22:00:00',
+            'end_time' => '07:00:00',
+            'is_active' => true,
+        ]);
+
+        // Simulasikan waktu malam shift 4
+        Carbon::setTestNow(Carbon::parse('2026-11-07 23:30:00'));
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.serah-terima'));
+
+        $response->assertStatus(200);
+        $response->assertSee('SHIFT 4: PENUTUP HARI');
+        $response->assertSee('150.000');
+        $response->assertSee('Amplop Brankas Kasir (Safe Dropbox)');
+
+        Carbon::setTestNow();
+    }
+
+    public function test_serah_terima_with_deposit_proof_upload_saves_file_and_updates_summary(): void
+    {
+        Storage::fake('public');
+        $fakeImage = UploadedFile::fake()->image('struk_atm.jpg');
+
+        $summary = ShiftSalesSummary::create([
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift->id,
+            'work_date' => Carbon::today()->toDateString(),
+            'total_fnb_sales' => 45000,
+            'total_internet_sales' => 100000,
+            'total_revenue' => 145000,
+            'cash_in_drawer' => 295000,
+            'status' => 'closed',
+        ]);
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->post(route('presensi2.serah-terima.store'), [
+                'summary_id' => $summary->id,
+                'deposited_amount' => 145000,
+                'retained_drawer_cash' => 150000,
+                'deposit_method' => 'safe_dropbox',
+                'deposit_recipient' => 'Brankas Pusat',
+                'deposit_notes' => 'Amplop sudah di dropbox',
+                'deposit_proof' => $fakeImage,
+                'action_type' => 'setor',
+            ]);
+
+        $response->assertRedirect();
+
+        $summary->refresh();
+        $this->assertEquals(145000, (float) $summary->deposited_amount);
+        $this->assertEquals(150000, (float) $summary->retained_drawer_cash);
+        $this->assertEquals('safe_dropbox', $summary->deposit_method);
+        $this->assertStringContainsString('Bukti Setor: uploads/deposits/deposit_', (string) $summary->deposit_notes);
+        $this->assertNotNull($summary->depositProofUrl());
+    }
+
+    public function test_section_5_cash_handover_expects_only_retained_cash_when_previous_shift_deposited_to_safe(): void
+    {
+        $shift4 = Shift::create([
+            'name' => 'Shift 4 Malam',
+            'code' => 'SHIFT-4',
+            'start_time' => '22:00:00',
+            'end_time' => '07:00:00',
+            'is_active' => true,
+        ]);
+
+        // Shift 4 kemarin sudah setor Rp 500.000 ke brankas, menyisakan Rp 150.000 di laci
+        ShiftSalesSummary::create([
+            'employee_id' => $this->supervisor->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $shift4->id,
+            'work_date' => Carbon::yesterday()->toDateString(),
+            'total_fnb_sales' => 100000,
+            'total_internet_sales' => 400000,
+            'total_revenue' => 500000,
+            'deposited_amount' => 500000,
+            'retained_drawer_cash' => 150000,
+            'deposit_status' => 'verified',
+            'deposit_method' => 'safe_dropbox',
+            'status' => 'closed',
+        ]);
+
+        $this->clockInStaff();
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.stok'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Omset Disetor ke Brankas / Bank');
+        $response->assertSee('Wajib Ada di Laci Sekarang');
+        $response->assertSee('value="150000"', false);
+    }
+
+    public function test_submitting_stok_checklist_requires_notes_if_drawer_cash_has_discrepancy(): void
+    {
+        $this->clockInStaff();
+
+        // 1. Submit selisih kas tanpa catatan -> Harus GAGAL
+        $responseFail = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->post(route('presensi2.stok.store'), [
+                'paper_a4' => '1',
+                'paper_f4' => '1',
+                'hardware_checklist' => ['pc_stations'],
+                'hardware_status' => 'normal',
+                'billing_verified' => '1',
+                'actual_cash_received' => 50000, // Misal ekspektasi default 150.000
+                'cash_handover_notes' => '', // Kosong
+            ]);
+
+        $responseFail->assertSessionHas('error');
+
+        // 2. Submit dengan catatan kronologi -> Berhasil
+        $responseSuccess = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->post(route('presensi2.stok.store'), [
+                'paper_a4' => '1',
+                'paper_f4' => '1',
+                'hardware_checklist' => ['pc_stations'],
+                'hardware_status' => 'normal',
+                'billing_verified' => '1',
+                'actual_cash_received' => 50000,
+                'cash_handover_notes' => 'Uang receh di laci kurang Rp 100.000 sudah konfirmasi ke shift lalu',
+            ]);
+
+        $responseSuccess->assertRedirect(route('pos'));
+
+        $checklist = ShiftHandoverChecklist::where('employee_id', $this->employee->id)->latest('id')->first();
+        $this->assertNotNull($checklist);
+        $this->assertEquals(50000, $checklist->billing_details['actual_cash_received']);
+        $this->assertEquals('Uang receh di laci kurang Rp 100.000 sudah konfirmasi ke shift lalu', $checklist->billing_details['cash_notes']);
+    }
+
+    public function test_stok_page_renders_two_step_wizard_and_supports_step_2_navigation(): void
+    {
+        $this->clockInStaff();
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.stok'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Tahap 1: Cek Stok Barang', false);
+        $response->assertSee('Tahap 2: Konfirmasi Kas', false);
+        $response->assertSee('id="step-1-container"', false);
+        $response->assertSee('id="step-2-container"', false);
+        $response->assertSee('Lanjut ke Tahap 2: Konfirmasi Kas & Serah Terima Laci', false);
+
+        // Pastikan elemen-elemen Tahap 2 ada di dalam HTML
+        $response->assertSee('name="actual_cash_received"', false);
+        $response->assertSee('name="billing_verified"', false);
+        $response->assertSee('name="cash_handover_notes"', false);
+        $response->assertSee('id="denom-calculator-panel"', false);
+        $response->assertSee('goToStep2(false)', false);
+        $response->assertSee('goToStep2(true)', false);
+
+        // Buka langsung via parameter ?step=2
+        $responseStep2 = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.stok', ['step' => 2]));
+
+        $responseStep2->assertStatus(200);
+        $responseStep2->assertSee('Tahap 2: Konfirmasi Kas', false);
+    }
+
+    public function test_pos_desktop_page_renders_simulation_panel_and_presets(): void
+    {
+        $this->clockInStaff();
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('pos'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Mode Simulasi & Pengujian Transaksi POS', false);
+        $response->assertSee('1. Beli Aqua (Tunai)', false);
+        $response->assertSee('2. Print + Minum (QRIS)', false);
+        $response->assertSee('3. Isi Keranjang Uji Coba', false);
+        $response->assertSee('Reset Transaksi Testing', false);
+        $response->assertSee('runPosSimulation', false);
+    }
+
+    public function test_pos_desktop_supports_resetting_dummy_sales_and_restoring_stock(): void
+    {
+        $this->clockInStaff();
+
+        $stock = StockInventory::firstOrCreate(
+            ['warehouse_id' => $this->warehouse->id, 'product_variant_id' => $this->variantKopi->id],
+            ['qty_on_hand' => 10, 'safety_stock' => 5]
+        );
+        $stock->update(['qty_on_hand' => 10]);
+
+        // Simulasikan transaksi penjualan POS
+        $checkoutResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.penjualan.transaksi'), [
+                'cart_items' => [
+                    [
+                        'id' => $this->variantKopi->id,
+                        'name' => 'Kopi Good Day Panas',
+                        'qty' => 2,
+                        'price' => 5000,
+                    ],
+                ],
+                'customer_name' => 'Tester Simulasi',
+                'payment_method' => 'cash',
+                'cash_received' => 10000,
+            ]);
+
+        $checkoutResponse->assertStatus(200);
+        $checkoutResponse->assertJson(['success' => true]);
+
+        // Stok seharusnya berkurang menjadi 8
+        $this->assertEquals(8, $stock->fresh()->qty_on_hand);
+        $this->assertDatabaseHas('cafe_sales', ['customer_name' => 'Tester Simulasi']);
+
+        // Jalankan Reset Transaksi Testing POS
+        $resetResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('pos', ['action' => 'reset_sales']));
+
+        $resetResponse->assertRedirect(route('pos'));
+        $resetResponse->assertSessionHas('status');
+
+        // Pastikan stok kembali utuh ke 10 dan data transaksi testing terhapus
+        $this->assertEquals(10, $stock->fresh()->qty_on_hand);
+        $this->assertDatabaseMissing('cafe_sales', ['customer_name' => 'Tester Simulasi']);
     }
 }

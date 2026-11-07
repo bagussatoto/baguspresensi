@@ -500,6 +500,27 @@
                 border: none !important;
             }
         }
+
+        /* POS SIMULATION BAR & PRESETS */
+        .pos-simulation-bar {
+            margin: 0 20px 14px 20px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-left: 4px solid #8b5cf6;
+            border-radius: 8px;
+            padding: 10px 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            transition: all 0.2s ease;
+        }
+        .btn-pos-preset {
+            transition: all 0.15s ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+        }
+        .btn-pos-preset:hover {
+            transform: translateY(-1px);
+            filter: brightness(0.96);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
     </style>
 </head>
 <body>
@@ -516,6 +537,9 @@
             <a href="{{ route('presensi2.serah-terima') }}" class="btn-nav-pill" style="color: #b45309; border-color: #fcd34d; background: #fef3c7;" title="Tutup Shift & Serah Terima Kasir">
                 <span>🏁</span> Tutup Shift
             </a>
+            <button type="button" onclick="togglePosSimulation()" class="btn-nav-pill" style="color: #7c3aed; border-color: #c4b5fd; background: #f5f3ff;" title="Buka / Tutup Panel Uji Coba Transaksi">
+                <span>🧪</span> <span id="btn-toggle-sim-label">Mode Simulasi</span>
+            </button>
         </div>
 
         <h1 class="pos-top-title">Orderan POS</h1>
@@ -529,6 +553,70 @@
             </a>
         </div>
     </header>
+
+    {{-- ALERT STATUS / NOTIFIKASI RESET --}}
+    @if (session('status'))
+        <div style="background: #dcfce7; border: 1px solid #86efac; color: #166534; padding: 10px 16px; border-radius: 6px; margin: 0 20px 12px 20px; font-weight: 500; font-size: 13px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 16px;">✅</span>
+                <span>{{ session('status') }}</span>
+            </div>
+            <button type="button" onclick="this.parentElement.remove()" style="background: none; border: none; font-size: 16px; cursor: pointer; color: #166534;">✕</button>
+        </div>
+    @endif
+    @if (session('error'))
+        <div style="background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; padding: 10px 16px; border-radius: 6px; margin: 0 20px 12px 20px; font-weight: 500; font-size: 13px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 16px;">⚠️</span>
+                <span>{{ session('error') }}</span>
+            </div>
+            <button type="button" onclick="this.parentElement.remove()" style="background: none; border: none; font-size: 16px; cursor: pointer; color: #991b1b;">✕</button>
+        </div>
+    @endif
+
+    {{-- PANEL MODE SIMULASI & PENGUJIAN TRANSAKSI POS --}}
+    <div id="pos-simulation-container" class="pos-simulation-bar" style="display: block;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 20px;">🧪</span>
+                <div>
+                    <div style="font-size: 12.5px; font-weight: 700; color: #6d28d9; display: flex; align-items: center; gap: 6px;">
+                        <span>Mode Simulasi & Pengujian Transaksi POS</span>
+                        <span style="background: #ede9fe; color: #7c3aed; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px;">TESTING & TRAINING</span>
+                    </div>
+                    <div style="font-size: 11px; color: #64748b;">
+                        Uji coba alur transaksi instan & buktikan efeknya ke stok fisik dan rekap serah terima shift tanpa repot input manual.
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                {{-- PRESET 1: AQUA 600ML TUNAI --}}
+                <button type="button" onclick="runPosSimulation('aqua_cash')" class="btn-pos-preset" style="background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 6px 11px; border-radius: 6px; font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px;" title="Langsung checkout 1 Aqua 600ml tunai dan cetak struk">
+                    <span>⚡ 1. Beli Aqua (Tunai)</span>
+                </button>
+
+                {{-- PRESET 2: PRINT A4 + MINUMAN QRIS --}}
+                <button type="button" onclick="runPosSimulation('print_qris')" class="btn-pos-preset" style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 6px 11px; border-radius: 6px; font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px;" title="Langsung checkout 2 Lembar Print + 1 Minuman via QRIS">
+                    <span>⚡ 2. Print + Minum (QRIS)</span>
+                </button>
+
+                {{-- PRESET 3: ISI KERANJANG SAJA --}}
+                <button type="button" onclick="runPosSimulation('fill_cart')" class="btn-pos-preset" style="background: #faf5ff; border: 1px solid #e9d5ff; color: #6b21a8; padding: 6px 11px; border-radius: 6px; font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px;" title="Hanya isi 2 produk ke keranjang untuk dicoba kasir manual">
+                    <span>🛒 3. Isi Keranjang Uji Coba</span>
+                </button>
+
+                {{-- RESET TRANSAKSI TESTING HARI INI --}}
+                <a href="{{ request()->fullUrlWithQuery(['action' => 'reset_sales']) }}"
+                   onclick="return confirm('PERINGATAN UJI COBA:\n\nApakah Anda yakin ingin me-reset seluruh transaksi penjualan shift hari ini?\n\n• Seluruh transaksi testing hari ini akan dihapus dari sistem\n• Stok barang di gudang/kulkas akan dikembalikan utuh\n• Rekap omset shift akan kembali bersih Rp 0')"
+                   class="btn-pos-preset"
+                   style="background: #fff1f2; border: 1px solid #fecdd3; color: #be123c; padding: 6px 11px; border-radius: 6px; font-size: 11.5px; font-weight: 700; cursor: pointer; text-decoration: none; display: flex; align-items: center; gap: 5px;"
+                   title="Bersihkan seluruh riwayat transaksi dummy hari ini & kembalikan stok fisik">
+                    <span>🔄 Reset Transaksi Testing</span>
+                </a>
+            </div>
+        </div>
+    </div>
 
     {{-- MAIN 2-COLUMN GRID --}}
     <main class="pos-main-container">
@@ -1411,6 +1499,127 @@
         function closeReceiptModal() {
             const modal = document.getElementById('modal-receipt');
             if (modal) modal.style.display = 'none';
+            if (lastSalePayload) {
+                window.location.reload();
+            }
+        }
+
+        // TOGGLE & RUN MODE SIMULASI POS
+        function togglePosSimulation() {
+            const panel = document.getElementById('pos-simulation-container');
+            const label = document.getElementById('btn-toggle-sim-label');
+            if (!panel) return;
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+                if (label) label.innerText = 'Tutup Simulasi';
+                localStorage.setItem('pos_simulation_visible', '1');
+            } else {
+                panel.style.display = 'none';
+                if (label) label.innerText = 'Mode Simulasi';
+                localStorage.setItem('pos_simulation_visible', '0');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const panel = document.getElementById('pos-simulation-container');
+            const label = document.getElementById('btn-toggle-sim-label');
+            if (!panel) return;
+            const stored = localStorage.getItem('pos_simulation_visible');
+            if (stored === '0') {
+                panel.style.display = 'none';
+                if (label) label.innerText = 'Mode Simulasi';
+            } else {
+                panel.style.display = 'block';
+                if (label) label.innerText = 'Tutup Simulasi';
+            }
+        });
+
+        async function runPosSimulation(scenario) {
+            if (!Array.isArray(fnbCatalog) || fnbCatalog.length === 0) {
+                alert('Katalog produk belum dimuat atau kosong.');
+                return;
+            }
+
+            if (scenario === 'fill_cart') {
+                clearCart();
+                addToCart(fnbCatalog[0].id);
+                if (fnbCatalog.length > 1) {
+                    addToCart(fnbCatalog[1].id);
+                }
+                const notif = document.createElement('div');
+                notif.style = "position:fixed;bottom:24px;right:24px;background:#6d28d9;color:#ffffff;padding:12px 18px;border-radius:8px;box-shadow:0 10px 25px rgba(0,0,0,0.2);z-index:99999;font-weight:700;font-size:12.5px;display:flex;align-items:center;gap:8px;";
+                notif.innerHTML = '<span>🛒</span> <span>Keranjang belanja berhasil diisi 2 item produk pengujian!</span>';
+                document.body.appendChild(notif);
+                setTimeout(() => notif.remove(), 2500);
+                return;
+            }
+
+            if (scenario === 'aqua_cash') {
+                let target = fnbCatalog.find(p => (p.name || '').includes('AQUA')) || fnbCatalog[0];
+                if (!target) {
+                    alert('Produk tidak ditemukan di katalog POS.');
+                    return;
+                }
+
+                clearCart();
+                posCart[target.id] = {
+                    id: target.id,
+                    name: target.name,
+                    price: target.price,
+                    qty: 1,
+                    stock: target.stock
+                };
+                renderCart();
+
+                const customerInput = document.getElementById('cart-customer-input');
+                if (customerInput) customerInput.value = 'Simulasi Tester (Aqua)';
+                const paymentSelect = document.getElementById('cart-payment-select');
+                if (paymentSelect) paymentSelect.value = 'cash';
+                const cashInput = document.getElementById('cart-cash-input');
+                if (cashInput) cashInput.value = target.price;
+
+                if (confirm(`Jalankan simulasi beli 1x ${target.name} seharga Rp ${Number(target.price).toLocaleString('id-ID')} via Tunai?`)) {
+                    await submitPosCheckout();
+                }
+                return;
+            }
+
+            if (scenario === 'print_qris') {
+                let paper = fnbCatalog.find(p => (p.name || '').includes('A4') || (p.category || '').includes('paper')) || fnbCatalog[0];
+                let drink = fnbCatalog.find(p => p.id !== paper?.id) || fnbCatalog[1] || paper;
+
+                clearCart();
+                posCart[paper.id] = {
+                    id: paper.id,
+                    name: paper.name,
+                    price: paper.price,
+                    qty: 2,
+                    stock: paper.stock
+                };
+                if (drink && drink.id !== paper.id) {
+                    posCart[drink.id] = {
+                        id: drink.id,
+                        name: drink.name,
+                        price: drink.price,
+                        qty: 1,
+                        stock: drink.stock
+                    };
+                }
+                renderCart();
+
+                const customerInput = document.getElementById('cart-customer-input');
+                if (customerInput) customerInput.value = 'Simulasi QRIS (Print + Minum)';
+                const paymentSelect = document.getElementById('cart-payment-select');
+                if (paymentSelect) paymentSelect.value = 'qris';
+                const total = Object.values(posCart).reduce((sum, item) => sum + (item.price * item.qty), 0);
+                const cashInput = document.getElementById('cart-cash-input');
+                if (cashInput) cashInput.value = total;
+
+                if (confirm(`Jalankan simulasi order ${Object.values(posCart).length} item seharga Rp ${Number(total).toLocaleString('id-ID')} via QRIS?`)) {
+                    await submitPosCheckout();
+                }
+                return;
+            }
         }
 
         function printReceipt() {

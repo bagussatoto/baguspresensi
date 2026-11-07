@@ -1996,7 +1996,7 @@ class AttendanceWebV2Controller extends Controller
     /**
      * Halaman Stok Barang (Checklist Serah Terima Shift).
      */
-    public function stokIndex(): View|RedirectResponse
+    public function stokIndex(Request $request): View|RedirectResponse
     {
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
@@ -2005,7 +2005,30 @@ class AttendanceWebV2Controller extends Controller
 
         $now = Carbon::now();
         $activeShift = $this->shiftResolverService->resolveShift(null, $now);
+
+        if ($request->filled('shift')) {
+            $simShift = Shift::where('code', 'SHIFT-'.(int) $request->input('shift'))
+                ->orWhere('id', (int) $request->input('shift'))
+                ->first();
+            if ($simShift) {
+                $activeShift = $simShift;
+            }
+        }
+
         $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
+
+        // Fitur Reset Simulasi Pengujian Stok: Menghapus record checklist testing hari ini agar tester/kasir tidak terkunci
+        if ($request->input('action') === 'reset_stok' || $request->has('reset_stok')) {
+            ShiftHandoverChecklist::where('employee_id', $employee->id)
+                ->whereDate('check_date', $workDate->toDateString())
+                ->when($activeShift, fn ($q) => $q->where('shift_id', $activeShift->id))
+                ->delete();
+
+            $queryParams = $request->except(['action', 'reset_stok']);
+
+            return redirect()->route('presensi2.stok', $queryParams)
+                ->with('status', 'Simulasi serah terima stok hari ini berhasil di-reset! Form kembali bersih untuk simulasi pengujian baru.');
+        }
 
         $attendanceToday = AttendanceRecord::with('shift')
             ->where('employee_id', $employee->id)
@@ -2061,11 +2084,14 @@ class AttendanceWebV2Controller extends Controller
             ->orderBy('station_code')
             ->get();
 
-        // Rincian Billing Setiap Shift Hari Ini (Isolasi per Cabang)
-        $billingData = $this->getBillingIncomePerShift($workDate, $branchId);
-
-        $stockComparisons = $this->buildStockComparison($workDate, $employee);
+        // 1. Data Serah Terima Shift Sebelumnya (Kas Laci, Operator & Checklist Fisik)
         $prevShiftBilling = $this->getPreviousShiftBillingData($now, $activeShift, $branchId);
+
+        // 2. Data Stok Komparasi (Sinkron dengan Checklist Fisik Shift Sebelumnya jika ada)
+        $stockComparisons = $this->buildStockComparison($workDate, $employee, $prevShiftBilling['checklist'] ?? null);
+
+        // 3. Rincian & Status Settlement 4 Shift Hari Ini (Isolasi per Cabang)
+        $billingData = $this->getBillingIncomePerShift($workDate, $branchId, $activeShift);
 
         // Checklist verifikasi shift aktif saat ini (wajib dicek ulang pada setiap shift 1 s/d 4)
         $existingChecklist = ShiftHandoverChecklist::with(['employee', 'shift'])
@@ -2132,6 +2158,15 @@ class AttendanceWebV2Controller extends Controller
             ->latest('id')
             ->first();
 
+        // Cari riwayat ShiftHandoverChecklist dari shift sebelumnya jika ada
+        $prevChecklist = ShiftHandoverChecklist::with('employee')
+            ->where('shift_id', $prevShift?->id)
+            ->whereDate('check_date', $prevWorkDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->where('status', 'completed')
+            ->latest('id')
+            ->first();
+
         $billingIncome = $prevSummary ? (float) $prevSummary->total_internet_sales : 0.0;
 
         if ($billingIncome <= 0 && $prevShift) {
@@ -2152,14 +2187,37 @@ class AttendanceWebV2Controller extends Controller
             $billingIncome = (float) ($defaults[$prevShift?->code ?? 'SHIFT-1'] ?? 150000.0);
         }
 
+        $depositMethod = $prevSummary?->deposit_method ?? 'next_shift_handover';
+        $depositStatus = $prevSummary?->deposit_status ?? 'unsubmitted';
+
+        $isSafeOrBankDeposit = in_array($depositMethod, ['safe_dropbox', 'bank_transfer', 'cash_collector'], true)
+            || $depositStatus === 'verified'
+            || ($prevShift?->code === 'SHIFT-4');
+
         $depositedAmount = $prevSummary
             ? (float) ($prevSummary->deposited_amount ?? $prevSummary->blind_cash_count ?? $prevSummary->cash_in_drawer ?? $billingIncome)
             : $billingIncome;
         $retainedDrawerCash = $prevSummary ? (float) ($prevSummary->retained_drawer_cash ?? 0) : 0.0;
-        $totalExpectedCash = $depositedAmount + $retainedDrawerCash;
+
+        // Jika uang omset sudah disetor ke brankas/bank atau penutup hari Shift 4, uang yang WAJIB ada di laci hanyalah retainedDrawerCash!
+        if ($isSafeOrBankDeposit) {
+            $drawerExpectedCash = $retainedDrawerCash > 0 ? $retainedDrawerCash : ($prevShift?->code === 'SHIFT-4' ? 150000.0 : $retainedDrawerCash);
+        } else {
+            $drawerExpectedCash = $depositedAmount + $retainedDrawerCash;
+        }
+
+        $totalExpectedCash = $drawerExpectedCash;
         $denominations = is_array($prevSummary?->cash_denominations) ? $prevSummary->cash_denominations : [];
         $recipientName = $prevSummary?->deposit_recipient ?: ($activeShift?->name ?? 'Kasir Shift Ini');
         $handoverNotes = $prevSummary?->deposit_notes ?: ($prevSummary?->handover_notes ?? 'Uang kas dan rekapan billing shift sebelumnya dalam kondisi normal.');
+        $operatorName = $prevSummary?->employee?->name ?? $prevChecklist?->employee?->name ?? 'Operator Shift Sebelumnya';
+
+        $depositMethodLabel = match ($depositMethod) {
+            'safe_dropbox' => 'Amplop Brankas (Safe Dropbox)',
+            'bank_transfer' => 'Setor Tunai ATM / Rekening Bank',
+            'cash_collector' => 'Diserahkan ke Owner / Kolektor',
+            default => 'Serah Terima Estafet di Laci Kasir',
+        };
 
         return [
             'shift' => $prevShift,
@@ -2168,27 +2226,41 @@ class AttendanceWebV2Controller extends Controller
             'time_range' => $prevShift ? substr((string) $prevShift->start_time, 0, 5).' - '.substr((string) $prevShift->end_time, 0, 5) : '00:00 - 00:00',
             'work_date' => $prevWorkDate->toDateString(),
             'work_date_formatted' => $prevWorkDate->translatedFormat('d F Y'),
-            'amount' => $totalExpectedCash,
+            'amount' => $drawerExpectedCash,
             'deposited_amount' => $depositedAmount,
             'retained_drawer_cash' => $retainedDrawerCash,
-            'total_expected_cash' => $totalExpectedCash,
+            'drawer_expected_cash' => $drawerExpectedCash,
+            'total_expected_cash' => $drawerExpectedCash,
+            'is_deposited_to_safe' => $isSafeOrBankDeposit,
+            'deposit_method' => $depositMethod,
+            'deposit_method_label' => $depositMethodLabel,
+            'deposit_status' => $depositStatus,
             'denominations' => $denominations,
-            'operator_name' => $prevSummary?->employee?->name ?? 'Operator Shift Sebelumnya',
+            'operator_name' => $operatorName,
             'recipient_name' => $recipientName,
             'handover_notes' => $handoverNotes,
+            'checklist' => $prevChecklist,
+            'prev_checklist_time' => $prevChecklist?->completed_at ? $prevChecklist->completed_at->format('H:i') : null,
         ];
     }
 
     /**
-     * Helper: Menghitung omset billing per shift (Shift 1 s/d 4).
+     * Helper: Menghitung omset billing per shift (Shift 1 s/d 4) dan status settlement hari ini.
      */
-    protected function getBillingIncomePerShift(Carbon $workDate, ?int $branchId = null): array
+    protected function getBillingIncomePerShift(Carbon $workDate, ?int $branchId = null, ?Shift $activeShift = null): array
     {
-        $shifts = Shift::where('is_active', true)->orderBy('start_time')->get();
+        $shifts = Shift::whereIn('code', ['SHIFT-1', 'SHIFT-2', 'SHIFT-3', 'SHIFT-4'])
+            ->orderBy('start_time')
+            ->get();
+        if ($shifts->isEmpty()) {
+            $shifts = Shift::where('is_active', true)->orderBy('start_time')->get();
+        }
         $dateStr = $workDate->toDateString();
 
         $shiftResults = [];
         $totalBilling = 0.0;
+        $settledCount = 0;
+        $totalSettledCash = 0.0;
 
         foreach ($shifts as $s) {
             $shiftSales = CafeSale::whereDate('created_at', $dateStr)
@@ -2207,20 +2279,67 @@ class AttendanceWebV2Controller extends Controller
                 $shiftSales = $defaultIncomes[$s->code] ?? 150000.0;
             }
 
-            $totalBilling += (float) $shiftSales;
+            // Cari ShiftSalesSummary untuk status settlement shift ini
+            $summary = ShiftSalesSummary::with('employee')
+                ->where('shift_id', $s->id)
+                ->whereDate('work_date', $dateStr)
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+                ->latest('id')
+                ->first();
+
+            $isSettled = $summary !== null;
+            $isCurrent = $activeShift && ($s->id === $activeShift->id || $s->code === $activeShift->code);
+
+            $statusKey = 'upcoming';
+            $statusLabel = '⚪ Belum Mulai';
+            $statusColor = '#94a3b8';
+
+            if ($isSettled) {
+                $settledCount++;
+                $statusKey = 'completed';
+                $statusLabel = '✅ Settlement Selesai';
+                $statusColor = '#34d399';
+                $deposited = (float) ($summary->deposited_amount ?? $summary->blind_cash_count ?? $summary->cash_in_drawer ?? $shiftSales);
+                $totalSettledCash += $deposited;
+            } elseif ($isCurrent) {
+                $statusKey = 'in_progress';
+                $statusLabel = '🟢 Shift Anda (Aktif)';
+                $statusColor = '#38bdf8';
+            } else {
+                $nowTime = Carbon::now()->format('H:i:s');
+                if ($nowTime > (string) $s->end_time && $workDate->isToday()) {
+                    $statusKey = 'pending';
+                    $statusLabel = '🟡 Menunggu Closing';
+                    $statusColor = '#fbbf24';
+                }
+            }
+
+            $revenue = $summary ? (float) ($summary->total_revenue ?? $summary->total_internet_sales ?? $shiftSales) : (float) $shiftSales;
+            $totalBilling += $revenue;
 
             $shiftResults[] = [
                 'id' => $s->id,
                 'code' => $s->code,
                 'name' => $s->name,
                 'time_range' => substr((string) $s->start_time, 0, 5).' - '.substr((string) $s->end_time, 0, 5),
-                'amount' => (float) $shiftSales,
+                'amount' => $revenue,
+                'is_settled' => $isSettled,
+                'is_current' => $isCurrent,
+                'status_key' => $statusKey,
+                'status_label' => $statusLabel,
+                'status_color' => $statusColor,
+                'operator_name' => $summary?->employee?->name ?? ($isCurrent ? 'Kasir Shift Ini' : 'Belum Ditugaskan'),
+                'cash_diff' => $summary ? (float) ($summary->cash_difference ?? 0) : null,
+                'deposited_amount' => $summary ? (float) ($summary->deposited_amount ?? $summary->blind_cash_count ?? 0) : null,
             ];
         }
 
         return [
             'shifts' => $shiftResults,
             'total_income' => $totalBilling,
+            'settled_count' => $settledCount,
+            'total_shifts' => count($shifts),
+            'total_settled_cash' => $totalSettledCash,
         ];
     }
 
@@ -2279,47 +2398,63 @@ class AttendanceWebV2Controller extends Controller
         $drinkFreeChecked = true;
         $drinkItems = $request->input('drink_items');
         $drinkStockInitial = $request->input('drink_stock_initial', []);
+        $drinkPhysical = $request->input('drink_physical', []);
         $drinkNotes = $request->input('drink_notes');
 
         $foodFreeChecked = true;
         $foodItems = $request->input('food_items');
         $foodStockInitial = $request->input('food_stock_initial', []);
+        $foodPhysical = $request->input('food_physical', []);
         $foodNotes = $request->input('food_notes');
 
-        // Susun payload detail stok awal minuman (otomatis dari tabel perbandingan jika tidak dikirim via form)
+        // Susun payload detail stok fisik & rekonsiliasi selisih minuman
         $drinkPayload = [];
-        if (is_array($drinkItems) && count($drinkItems) > 0) {
-            foreach ($drinkItems as $item) {
-                $name = is_array($item) ? ($item['name'] ?? '') : (string) $item;
-                $variant = ProductVariant::where('name', $name)->first();
-                $initStock = isset($drinkStockInitial[$variant?->id]) ? (int) $drinkStockInitial[$variant->id] : (int) ($variant ? StockInventory::where('product_variant_id', $variant->id)->sum('qty_on_hand') : 24);
-                $drinkPayload[] = [
-                    'variant_id' => $variant?->id,
-                    'name' => $name,
-                    'initial_stock' => $initStock,
-                    'unit' => 'pcs',
-                ];
-            }
-        } else {
-            $drinkPayload = $stockComparisons['minuman'] ?? [];
+        foreach ($stockComparisons['minuman'] ?? [] as $d) {
+            $variantId = $d['variant_id'];
+            $systemQty = (int) $d['sesudahnya'];
+            $physicalQty = isset($drinkPhysical[$variantId]) ? (int) $drinkPhysical[$variantId] : $systemQty;
+            $diff = $physicalQty - $systemQty;
+            $status = $diff === 0 ? 'cocok' : ($diff < 0 ? 'kurang' : 'lebih');
+
+            $drinkPayload[] = [
+                'variant_id' => $variantId,
+                'sku' => $d['sku'] ?? '',
+                'name' => $d['name'],
+                'sebelumnya' => $d['sebelumnya'],
+                'terjual' => $d['terjual'],
+                'system_stock' => $systemQty,
+                'physical_stock' => $physicalQty,
+                'initial_stock' => $d['sebelumnya'],
+                'discrepancy' => $diff,
+                'status' => $status,
+                'unit' => $d['unit'] ?? 'pcs',
+                'is_critical' => $d['is_critical'] ?? false,
+            ];
         }
 
-        // Susun payload detail stok awal makanan (otomatis dari tabel perbandingan jika tidak dikirim via form)
+        // Susun payload detail stok fisik & rekonsiliasi selisih makanan
         $foodPayload = [];
-        if (is_array($foodItems) && count($foodItems) > 0) {
-            foreach ($foodItems as $item) {
-                $name = is_array($item) ? ($item['name'] ?? '') : (string) $item;
-                $variant = ProductVariant::where('name', $name)->first();
-                $initStock = isset($foodStockInitial[$variant?->id]) ? (int) $foodStockInitial[$variant->id] : (int) ($variant ? StockInventory::where('product_variant_id', $variant->id)->sum('qty_on_hand') : 15);
-                $foodPayload[] = [
-                    'variant_id' => $variant?->id,
-                    'name' => $name,
-                    'initial_stock' => $initStock,
-                    'unit' => 'pcs',
-                ];
-            }
-        } else {
-            $foodPayload = $stockComparisons['makanan'] ?? [];
+        foreach ($stockComparisons['makanan'] ?? [] as $m) {
+            $variantId = $m['variant_id'];
+            $systemQty = (int) $m['sesudahnya'];
+            $physicalQty = isset($foodPhysical[$variantId]) ? (int) $foodPhysical[$variantId] : $systemQty;
+            $diff = $physicalQty - $systemQty;
+            $status = $diff === 0 ? 'cocok' : ($diff < 0 ? 'kurang' : 'lebih');
+
+            $foodPayload[] = [
+                'variant_id' => $variantId,
+                'sku' => $m['sku'] ?? '',
+                'name' => $m['name'],
+                'sebelumnya' => $m['sebelumnya'],
+                'terjual' => $m['terjual'],
+                'system_stock' => $systemQty,
+                'physical_stock' => $physicalQty,
+                'initial_stock' => $m['sebelumnya'],
+                'discrepancy' => $diff,
+                'status' => $status,
+                'unit' => $m['unit'] ?? 'pcs',
+                'is_critical' => $m['is_critical'] ?? false,
+            ];
         }
 
         $hardwareStatus = (string) $request->input('hardware_status', 'normal');
@@ -2330,9 +2465,15 @@ class AttendanceWebV2Controller extends Controller
         $actualCashReceived = $request->filled('actual_cash_received')
             ? (float) $request->input('actual_cash_received')
             : (float) ($request->input('billing_shift_income') ?: $expectedCash);
-        $cashHandoverNotes = (string) $request->input('cash_handover_notes', '');
+        $cashHandoverNotes = trim((string) $request->input('cash_handover_notes', ''));
         $cashDifference = $actualCashReceived - $expectedCash;
         $billingVerified = $request->boolean('billing_verified', true);
+
+        if (abs($cashDifference) > 0.001 && empty($cashHandoverNotes)) {
+            $formattedDiff = ($cashDifference < 0 ? '-Rp ' : '+Rp ').number_format(abs($cashDifference), 0, ',', '.');
+
+            return back()->withInput()->with('error', "Pemeriksaan kas belum lengkap! Terjadi selisih uang kas laci sebesar {$formattedDiff}. Mohon isi Catatan Serah Terima / Kondisi Laci untuk verifikasi audit.");
+        }
 
         $formBillingDetails = $request->input('billing_details', []);
         $billingDetails = array_merge([
@@ -2387,7 +2528,7 @@ class AttendanceWebV2Controller extends Controller
      * Helper: Menghitung komparasi Stok Sebelumnya vs Terjual vs Stok Sesudahnya
      * untuk Kertas Print, Makanan, dan Minuman secara realtime (Isolasi per Cabang).
      */
-    protected function buildStockComparison(Carbon $workDate, ?Employee $employee = null): array
+    protected function buildStockComparison(Carbon $workDate, ?Employee $employee = null, ?ShiftHandoverChecklist $prevChecklist = null): array
     {
         $branchId = $employee?->branch_id;
         $warehouseId = ($branchId ? Warehouse::where('branch_id', $branchId)->value('id') : null)
@@ -2409,6 +2550,8 @@ class AttendanceWebV2Controller extends Controller
 
         $paperA4Initial = (int) ($existingChecklist->paper_a4_qty ?? 500);
         $paperF4Initial = (int) ($existingChecklist->paper_f4_qty ?? 500);
+        $prevA4Qty = $prevChecklist?->paper_a4_qty;
+        $prevF4Qty = $prevChecklist?->paper_f4_qty;
 
         // Terpakai shift ini di cabang ini
         $paperA4Used = (int) CafeSaleItem::whereDate('created_at', $workDate->toDateString())
@@ -2438,9 +2581,13 @@ class AttendanceWebV2Controller extends Controller
                 'name' => 'Kertas HVS A4 70gsm',
                 'unit' => 'Lembar',
                 'sebelumnya' => $paperA4Initial,
+                'prev_physical' => $prevA4Qty,
+                'prev_diff' => $prevA4Qty !== null ? ($prevA4Qty - $paperA4Initial) : null,
                 'terjual' => $paperA4Used,
                 'terpakai' => $paperA4Used,
                 'sesudahnya' => $kertasA4Remaining,
+                'physical_stock' => $kertasA4Remaining,
+                'discrepancy' => 0,
                 'rim_info' => $paperA4StockRim.' Rim di Loker',
                 'rim_stock' => $paperA4StockRim,
                 'is_critical' => ($paperA4StockRim < 3 && $kertasA4Remaining < 100),
@@ -2451,9 +2598,13 @@ class AttendanceWebV2Controller extends Controller
                 'name' => 'Kertas HVS F4 / Folio 70gsm',
                 'unit' => 'Lembar',
                 'sebelumnya' => $paperF4Initial,
+                'prev_physical' => $prevF4Qty,
+                'prev_diff' => $prevF4Qty !== null ? ($prevF4Qty - $paperF4Initial) : null,
                 'terjual' => $paperF4Used,
                 'terpakai' => $paperF4Used,
                 'sesudahnya' => $kertasF4Remaining,
+                'physical_stock' => $kertasF4Remaining,
+                'discrepancy' => 0,
                 'rim_info' => $paperF4StockRim.' Rim di Loker',
                 'rim_stock' => $paperF4StockRim,
                 'is_critical' => ($paperF4StockRim < 3 && $kertasF4Remaining < 100),
@@ -2478,12 +2629,31 @@ class AttendanceWebV2Controller extends Controller
                     ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId)))
                 ->sum('qty');
 
-            // Cari stok awal dari checklist shift jika pernah tercatat
+            // Cari stok awal & stok fisik tersimpan dari checklist shift jika pernah tercatat
             $initialQty = null;
+            $savedPhysical = null;
             if ($existingChecklist && is_array($existingChecklist->food_items)) {
                 foreach ($existingChecklist->food_items as $fItem) {
                     if (is_array($fItem) && (($fItem['variant_id'] ?? null) == $food->id || ($fItem['name'] ?? null) === $food->name)) {
                         $initialQty = isset($fItem['sebelumnya']) ? (int) $fItem['sebelumnya'] : (isset($fItem['initial_stock']) ? (int) $fItem['initial_stock'] : null);
+                        if (isset($fItem['physical_stock'])) {
+                            $savedPhysical = (int) $fItem['physical_stock'];
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // Cari stok fisik peninggalan checklist shift sebelumnya jika ada
+            $prevFoodPhysical = null;
+            $prevFoodDiff = null;
+            if ($prevChecklist && is_array($prevChecklist->food_items)) {
+                foreach ($prevChecklist->food_items as $pfItem) {
+                    if (is_array($pfItem) && (($pfItem['variant_id'] ?? null) == $food->id || ($pfItem['name'] ?? null) === $food->name)) {
+                        if (isset($pfItem['physical_stock'])) {
+                            $prevFoodPhysical = (int) $pfItem['physical_stock'];
+                            $prevFoodDiff = isset($pfItem['discrepancy']) ? (int) $pfItem['discrepancy'] : ($prevFoodPhysical - (int) ($pfItem['sesudahnya'] ?? $prevFoodPhysical));
+                        }
                         break;
                     }
                 }
@@ -2496,6 +2666,7 @@ class AttendanceWebV2Controller extends Controller
 
             // Sisa stok saat ini selalu merefleksikan stok fisik aktual di inventaris kasir
             $makananRemaining = $currentStock;
+            $physicalStock = $savedPhysical ?? $makananRemaining;
 
             $makanan[] = [
                 'variant_id' => $food->id,
@@ -2503,8 +2674,12 @@ class AttendanceWebV2Controller extends Controller
                 'name' => $food->name,
                 'unit' => 'pcs',
                 'sebelumnya' => $initialQty,
+                'prev_physical' => $prevFoodPhysical,
+                'prev_diff' => $prevFoodDiff,
                 'terjual' => $soldToday,
                 'sesudahnya' => $makananRemaining,
+                'physical_stock' => $physicalStock,
+                'discrepancy' => $physicalStock - $makananRemaining,
                 'price' => (float) $food->base_price,
                 'is_critical' => ($makananRemaining <= 5),
             ];
@@ -2527,12 +2702,31 @@ class AttendanceWebV2Controller extends Controller
                     ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId)))
                 ->sum('qty');
 
-            // Cari stok awal dari checklist shift jika pernah tercatat
+            // Cari stok awal & stok fisik tersimpan dari checklist shift jika pernah tercatat
             $initialQty = null;
+            $savedPhysical = null;
             if ($existingChecklist && is_array($existingChecklist->drink_items)) {
                 foreach ($existingChecklist->drink_items as $dItem) {
                     if (is_array($dItem) && (($dItem['variant_id'] ?? null) == $drink->id || ($dItem['name'] ?? null) === $drink->name)) {
                         $initialQty = isset($dItem['sebelumnya']) ? (int) $dItem['sebelumnya'] : (isset($dItem['initial_stock']) ? (int) $dItem['initial_stock'] : null);
+                        if (isset($dItem['physical_stock'])) {
+                            $savedPhysical = (int) $dItem['physical_stock'];
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // Cari stok fisik peninggalan checklist shift sebelumnya jika ada
+            $prevDrinkPhysical = null;
+            $prevDrinkDiff = null;
+            if ($prevChecklist && is_array($prevChecklist->drink_items)) {
+                foreach ($prevChecklist->drink_items as $pdItem) {
+                    if (is_array($pdItem) && (($pdItem['variant_id'] ?? null) == $drink->id || ($pdItem['name'] ?? null) === $drink->name)) {
+                        if (isset($pdItem['physical_stock'])) {
+                            $prevDrinkPhysical = (int) $pdItem['physical_stock'];
+                            $prevDrinkDiff = isset($pdItem['discrepancy']) ? (int) $pdItem['discrepancy'] : ($prevDrinkPhysical - (int) ($pdItem['sesudahnya'] ?? $prevDrinkPhysical));
+                        }
                         break;
                     }
                 }
@@ -2544,6 +2738,7 @@ class AttendanceWebV2Controller extends Controller
 
             // Sisa stok saat ini selalu merefleksikan stok fisik aktual di inventaris kasir
             $minumanRemaining = $currentStock;
+            $physicalStock = $savedPhysical ?? $minumanRemaining;
 
             $minuman[] = [
                 'variant_id' => $drink->id,
@@ -2551,8 +2746,12 @@ class AttendanceWebV2Controller extends Controller
                 'name' => $drink->name,
                 'unit' => 'pcs',
                 'sebelumnya' => $initialQty,
+                'prev_physical' => $prevDrinkPhysical,
+                'prev_diff' => $prevDrinkDiff,
                 'terjual' => $soldToday,
                 'sesudahnya' => $minumanRemaining,
+                'physical_stock' => $physicalStock,
+                'discrepancy' => $physicalStock - $minumanRemaining,
                 'price' => (float) $drink->base_price,
                 'is_critical' => ($minumanRemaining <= 5),
             ];
@@ -3018,8 +3217,12 @@ class AttendanceWebV2Controller extends Controller
     /**
      * Halaman POS Kasir Shift (Tampilan Mobile).
      */
-    public function penjualanIndex(): View|RedirectResponse
+    public function penjualanIndex(Request $request): View|RedirectResponse
     {
+        if ($resetResponse = $this->handleResetSalesToday($request, 'presensi2.penjualan')) {
+            return $resetResponse;
+        }
+
         $data = $this->getPenjualanData();
         if ($data instanceof RedirectResponse) {
             return $data;
@@ -3031,14 +3234,85 @@ class AttendanceWebV2Controller extends Controller
     /**
      * Dashboard POS Penjualan Baru untuk Desktop PC (Landscape 3 Kolom).
      */
-    public function posDesktopIndex(): View|RedirectResponse
+    public function posDesktopIndex(Request $request): View|RedirectResponse
     {
+        if ($resetResponse = $this->handleResetSalesToday($request, 'pos')) {
+            return $resetResponse;
+        }
+
         $data = $this->getPenjualanData();
         if ($data instanceof RedirectResponse) {
             return $data;
         }
 
         return view('presensi2.pos_desktop', $data);
+    }
+
+    /**
+     * Fitur Reset Simulasi Pengujian Penjualan POS Hari Ini:
+     * Menghapus transaksi dummy kasir hari ini dan mengembalikan stok barang ke gudang.
+     */
+    protected function handleResetSalesToday(Request $request, string $redirectRoute): ?RedirectResponse
+    {
+        if ($request->input('action') !== 'reset_sales' && ! $request->has('reset_sales')) {
+            return null;
+        }
+
+        $employee = $this->getAuthenticatedEmployee();
+        if (! $employee) {
+            return redirect()->route('pos.login');
+        }
+
+        $now = Carbon::now();
+        $activeShift = $this->shiftResolverService->resolveShift(null, $now);
+        $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
+        $branchId = $employee->branch_id;
+
+        $warehouseId = ($branchId ? Warehouse::where('branch_id', $branchId)->value('id') : null)
+            ?? Warehouse::where('id', 5)->value('id')
+            ?? Warehouse::first()?->id;
+
+        $todaySales = CafeSale::with('items')
+            ->whereDate('created_at', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->get();
+
+        $deletedCount = $todaySales->count();
+        $restoredItemsCount = 0;
+
+        if ($deletedCount > 0) {
+            DB::transaction(function () use ($todaySales, $warehouseId, &$restoredItemsCount, $workDate, $branchId, $employee) {
+                foreach ($todaySales as $sale) {
+                    if ($sale->payment_status !== 'cancelled') {
+                        foreach ($sale->items as $item) {
+                            if ($item->product_variant_id && $warehouseId) {
+                                StockInventory::where('warehouse_id', $warehouseId)
+                                    ->where('product_variant_id', $item->product_variant_id)
+                                    ->increment('qty_on_hand', (int) $item->qty);
+                                $restoredItemsCount += (int) $item->qty;
+                            }
+                        }
+                    }
+
+                    CafePayment::where('cafe_sale_id', $sale->id)->delete();
+                    $sale->items()->delete();
+                    $sale->delete();
+                }
+
+                // Reset rekap settlement penjualan shift hari ini agar omset kembali bersih
+                ShiftSalesSummary::whereDate('work_date', $workDate->toDateString())
+                    ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+                    ->delete();
+            });
+        }
+
+        $queryParams = $request->except(['action', 'reset_sales']);
+
+        $msg = $deletedCount > 0
+            ? "Simulasi POS berhasil di-reset! Sebanyak {$deletedCount} transaksi testing telah dibersihkan, {$restoredItemsCount} pcs stok dikembalikan ke gudang, dan omset shift kembali bersih."
+            : 'Tidak ada data transaksi penjualan shift hari ini yang perlu di-reset.';
+
+        return redirect()->route($redirectRoute, $queryParams)->with('status', $msg);
     }
 
     /**
@@ -5460,7 +5734,31 @@ BAT;
             'deposit_method' => 'nullable|in:cash_collector,safe_dropbox,bank_transfer,next_shift_handover',
             'deposit_recipient' => 'nullable|string|max:120',
             'deposit_notes' => 'nullable|string|max:500',
+            'deposit_proof' => 'nullable|file|image|max:5120',
         ]);
+
+        $proofPath = null;
+        if ($request->hasFile('deposit_proof')) {
+            try {
+                $uploadDir = public_path('uploads/deposits');
+                File::ensureDirectoryExists($uploadDir);
+                $file = $request->file('deposit_proof');
+                $fileName = 'deposit_'.$employee->id.'_'.time().'.'.$file->getClientOriginalExtension();
+                $file->move($uploadDir, $fileName);
+                $proofPath = "uploads/deposits/{$fileName}";
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        $depositNotes = $validated['deposit_notes'] ?? 'Setor kas shift';
+        if ($proofPath) {
+            $depositNotes .= " [Bukti Setor: {$proofPath}]";
+        }
+        $handoverNotes = $validated['deposit_notes'] ?? 'Serah terima langsung ke shift selanjutnya';
+        if ($proofPath) {
+            $handoverNotes .= " [Bukti Setor: {$proofPath}]";
+        }
 
         $now = Carbon::now();
         $activeShift = $this->shiftResolverService->resolveShift(null, $now);
@@ -5523,7 +5821,7 @@ BAT;
             'handover_recipient' => $recipient,
             'handover_by' => $employee->name,
             'handover_at' => $now,
-            'handover_notes' => $validated['deposit_notes'] ?? 'Serah terima langsung ke shift selanjutnya',
+            'handover_notes' => $handoverNotes,
         ]);
 
         if ($isExplicitHandover) {
@@ -5542,6 +5840,8 @@ BAT;
                     'retained_drawer_cash' => $retainedCash,
                     'handover_recipient' => $recipient,
                     'handover_status' => 'completed',
+                    'deposit_proof' => $proofPath,
+                    'deposit_proof' => $proofPath,
                 ],
                 'ip_address' => $request->ip() ?? '127.0.0.1',
                 'user_agent' => $request->userAgent() ?? 'Portal Presensi v2',
@@ -5554,7 +5854,7 @@ BAT;
                 'deposited_amount' => $depositedAmount,
                 'deposit_method' => $method,
                 'deposit_recipient' => $recipient,
-                'deposit_notes' => $validated['deposit_notes'] ?? 'Setor kas shift',
+                'deposit_notes' => $depositNotes,
                 'deposited_at' => $now,
                 'deposit_verified_at' => $now,
                 'deposit_verified_by' => $recipient,
@@ -5945,9 +6245,33 @@ BAT;
             'handover_recipient' => 'nullable|string|max:120',
             'deposit_notes' => 'nullable|string|max:500',
             'handover_notes' => 'nullable|string|max:500',
+            'deposit_proof' => 'nullable|file|image|max:5120',
             'action_type' => 'nullable|string',
             'auto_clock_out' => 'nullable|boolean',
         ]);
+
+        $proofPath = null;
+        if ($request->hasFile('deposit_proof')) {
+            try {
+                $uploadDir = public_path('uploads/deposits');
+                File::ensureDirectoryExists($uploadDir);
+                $file = $request->file('deposit_proof');
+                $fileName = 'deposit_'.$employee->id.'_'.time().'.'.$file->getClientOriginalExtension();
+                $file->move($uploadDir, $fileName);
+                $proofPath = "uploads/deposits/{$fileName}";
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        $handoverNotes = $validated['handover_notes'] ?? $validated['deposit_notes'] ?? 'Serah terima langsung ke shift selanjutnya';
+        if ($proofPath) {
+            $handoverNotes .= " [Bukti Setor: {$proofPath}]";
+        }
+        $depositNotes = $validated['deposit_notes'] ?? 'Setor kas shift';
+        if ($proofPath) {
+            $depositNotes .= " [Bukti Setor: {$proofPath}]";
+        }
 
         $now = Carbon::now();
         $activeShift = $this->shiftResolverService->resolveShift(null, $now);
@@ -6012,7 +6336,7 @@ BAT;
             'handover_recipient' => $recipient,
             'handover_by' => $employee->name,
             'handover_at' => $now,
-            'handover_notes' => $validated['handover_notes'] ?? $validated['deposit_notes'] ?? 'Serah terima langsung ke shift selanjutnya',
+            'handover_notes' => $handoverNotes,
         ]);
 
         if ($request->filled('blind_cash_count')) {
@@ -6042,7 +6366,7 @@ BAT;
                 'deposited_amount' => $depositedAmount,
                 'deposit_method' => $method ?: 'bank_transfer',
                 'deposit_recipient' => $recipient,
-                'deposit_notes' => $validated['deposit_notes'] ?? 'Setor kas shift',
+                'deposit_notes' => $depositNotes,
                 'deposited_at' => $now,
                 'deposit_verified_at' => $now,
                 'deposit_verified_by' => $recipient,
@@ -6061,6 +6385,7 @@ BAT;
                     'deposit_method' => $method,
                     'deposit_recipient' => $recipient,
                     'deposit_status' => 'verified',
+                    'deposit_proof' => $proofPath,
                 ],
                 'ip_address' => $request->ip() ?? '127.0.0.1',
                 'user_agent' => $request->userAgent() ?? 'Portal Presensi v2',
@@ -6084,6 +6409,7 @@ BAT;
                     'retained_drawer_cash' => $retainedCash,
                     'handover_recipient' => $recipient,
                     'handover_status' => 'completed',
+                    'deposit_proof' => $proofPath,
                 ],
                 'ip_address' => $request->ip() ?? '127.0.0.1',
                 'user_agent' => $request->userAgent() ?? 'Portal Presensi v2',
