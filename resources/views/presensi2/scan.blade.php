@@ -294,13 +294,16 @@
                 </div>
             </div>
 
-            {{-- TOMBOL UTAMA: MASUK KE SISTEM / POS KASIR --}}
+            {{-- TOMBOL UTAMA ALUR OPERASIONAL: CEK STOK & POS KASIR --}}
             <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px;">
-                <a href="{{ route('presensi2.index') }}" style="background: linear-gradient(135deg, #0284c7, #0ea5e9); color: #fff; font-size: 15px; font-weight: 700; padding: 13px 18px; border-radius: 12px; text-decoration: none; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(14, 165, 233, 0.35);">
-                    <span>🚀</span> Masuk ke Beranda Sistem
+                <a href="{{ route('presensi2.stok') }}" style="background: linear-gradient(135deg, #059669, #10b981); color: #fff; font-size: 15px; font-weight: 700; padding: 13px 18px; border-radius: 12px; text-decoration: none; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);">
+                    <span>📦</span> Lanjut Pemeriksaan Stok Awal Shift (Langkah 2)
                 </a>
-                <a href="{{ route('presensi2.pos') }}" style="background: linear-gradient(135deg, #7c3aed, #8b5cf6); color: #fff; font-size: 14px; font-weight: 700; padding: 12px 18px; border-radius: 12px; text-decoration: none; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(139, 92, 246, 0.35);">
-                    <span>🛒</span> Buka POS Kasir Penjualan
+                <a href="{{ route('pos') }}" style="background: linear-gradient(135deg, #7c3aed, #8b5cf6); color: #fff; font-size: 14px; font-weight: 700; padding: 12px 18px; border-radius: 12px; text-decoration: none; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(139, 92, 246, 0.35);">
+                    <span>🛒</span> Buka POS Kasir Penjualan Desktop
+                </a>
+                <a href="{{ route('presensi2.index') }}" style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.15); color: #cbd5e1; font-size: 13px; font-weight: 600; padding: 10px 18px; border-radius: 12px; text-decoration: none; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <span>🏠</span> Masuk ke Beranda Sistem
                 </a>
             </div>
 

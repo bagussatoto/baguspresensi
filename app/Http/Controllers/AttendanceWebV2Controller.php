@@ -1860,10 +1860,10 @@ class AttendanceWebV2Controller extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Presensi masuk berhasil!',
+                'message' => 'Presensi masuk berhasil! Mengalihkan ke pemeriksaan stok awal shift...',
                 'status' => $record->status->value,
                 'clock_in_at' => $record->clock_in_at?->format('H:i:s'),
-                'redirect_url' => route('presensi2.scan'),
+                'redirect_url' => route('presensi2.stok'),
             ]);
         } catch (AlreadyClockedInException $e) {
             return response()->json([

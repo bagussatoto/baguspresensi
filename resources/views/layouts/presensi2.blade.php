@@ -479,7 +479,7 @@
          * Saat true: Hanya menampilkan 3 menu utama (Beranda, Presensi, Riwayat).
          * Untuk mengembalikan menu lengkap (Stok, Penjualan, Rekap): Ubah nilainya menjadi false.
          */
-        $modeSimulasiPresensi = true;
+        $modeSimulasiPresensi = false;
     @endphp
     <!-- BOTTOM NAV BAR (TERINTEGRASI DATABASE NAVICAT SYSTEM_MENUS) -->
     <nav class="mobile-bottom-nav" id="mobileBottomNav">
