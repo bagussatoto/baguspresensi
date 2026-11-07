@@ -881,7 +881,7 @@
                                     🖨️ Cetak
                                 </button>
                                 @if(!$isCancelled)
-                                    <button type="button" onclick="promptCancelSale({{ $sale->id }}, '{{ $sale->invoice_number }}')" style="padding: 3px 8px; font-size: 11px; background: #fee2e2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 3px; cursor: pointer; margin-left: 4px;">
+                                    <button type="button" onclick='openVoidModal(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #fee2e2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 3px; cursor: pointer; margin-left: 4px;">
                                         ✕ Batal
                                     </button>
                                 @endif
@@ -1189,6 +1189,90 @@
             <div style="padding: 10px 16px; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end;">
                 <button type="button" onclick="closeModal('modal-print-kertas')" style="padding: 6px 14px; background: #fff; border: 1px solid #cbd5e1; border-radius: 3px; font-size: 12px;">Tutup</button>
             </div>
+        </div>
+    </div>
+
+    {{-- MODAL 6: KONFIRMASI PEMBATALAN TRANSAKSI (VOID) --}}
+    <div id="modal-void-sale" class="pos-modal-overlay">
+        <div class="pos-modal-box" style="max-width: 480px; border-top: 4px solid #ef4444;">
+            <div class="pos-modal-header" style="background: #ef4444;">
+                <span style="display: flex; align-items: center; gap: 8px;">
+                    <span>⚠️</span> Konfirmasi Pembatalan Transaksi (VOID)
+                </span>
+                <button type="button" onclick="closeVoidModal()" style="background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; line-height: 1;">✕</button>
+            </div>
+            <form id="form-void-sale" onsubmit="submitVoidSaleForm(event)" style="padding: 16px;">
+                <input type="hidden" id="void-sale-id">
+
+                {{-- RINCIAN TRANSAKSI YANG DIBATALKAN --}}
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 14px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12px;">
+                        <span style="color: #64748b;">No. Invoice:</span>
+                        <strong id="void-invoice-num" style="font-family: monospace; color: #0284c7;">-</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12px;">
+                        <span style="color: #64748b;">Pelanggan:</span>
+                        <span id="void-customer-name" style="font-weight: 600;">-</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12px;">
+                        <span style="color: #64748b;">Item Pesanan:</span>
+                        <span id="void-items-summary" style="font-weight: 600; text-align: right; max-width: 65%; color: #334155;">-</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding-top: 6px; border-top: 1px dashed #cbd5e1; font-size: 13px;">
+                        <span style="color: #475569; font-weight: 700;">Total Tagihan:</span>
+                        <strong id="void-total-amount" style="color: #ef4444; font-family: monospace; font-size: 15px;">Rp 0</strong>
+                    </div>
+                </div>
+
+                {{-- PERINGATAN EFEK PEMBATALAN --}}
+                <div style="background: #fff1f2; border: 1px solid #fecaca; border-radius: 6px; padding: 10px 12px; margin-bottom: 14px; font-size: 11.5px; color: #991b1b; display: flex; gap: 8px;">
+                    <span style="font-size: 16px;">📦</span>
+                    <div>
+                        <strong>Peringatan Sistem:</strong><br>
+                        Seluruh stok produk makanan/minuman pada nota ini akan <strong>otomatis dikembalikan ke inventaris gudang</strong>, dan nilai transaksi dihapus dari omzet kasir.
+                    </div>
+                </div>
+
+                {{-- PILIHAN ALASAN PEMBATALAN --}}
+                <div style="margin-bottom: 10px;">
+                    <label for="void-reason-select" style="display: block; font-size: 11.5px; font-weight: 700; color: #334155; margin-bottom: 4px;">
+                        Pilih Alasan Pembatalan: <span style="color: #ef4444;">*</span>
+                    </label>
+                    <select id="void-reason-select" style="width: 100%; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; background: #fff;">
+                        <option value="Salah input menu / pesanan">Salah input menu / pesanan</option>
+                        <option value="Pelanggan membatalkan pesanan">Pelanggan membatalkan pesanan</option>
+                        <option value="Perubahan metode pembayaran (QRIS/Tunai)">Perubahan metode pembayaran (QRIS/Tunai)</option>
+                        <option value="Salah hitung / koreksi kasir">Salah hitung / koreksi kasir</option>
+                        <option value="Lainnya">Lainnya (Tulis catatan khusus)</option>
+                    </select>
+                </div>
+
+                {{-- CATATAN TAMBAHAN (OPSIONAL) --}}
+                <div style="margin-bottom: 12px;">
+                    <input type="text" id="void-reason-custom" placeholder="Catatan tambahan alasan (opsional)..." style="width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 11.5px;">
+                </div>
+
+                {{-- OTORISASI PIN SUPERVISOR / ADMIN --}}
+                <div style="margin-bottom: 16px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px;">
+                    <label for="void-supervisor-pin" style="display: block; font-size: 11.5px; font-weight: 700; color: #1e293b; margin-bottom: 4px;">
+                        🔐 PIN Otorisasi Supervisor / Admin SoD: <span style="color: #ef4444;">*</span>
+                    </label>
+                    <input type="password" id="void-supervisor-pin" placeholder="Masukkan PIN Otorisasi Supervisor" required autocomplete="off" style="width: 100%; padding: 8px 10px; border: 1.5px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-family: monospace; letter-spacing: 2px;">
+                    <div style="font-size: 10.5px; color: #64748b; margin-top: 4px;">
+                        Kepatuhan Dual-Control: pembatalan nota kasir wajib diotorisasi atasan.
+                    </div>
+                </div>
+
+                {{-- ACTION BUTTONS --}}
+                <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                    <button type="button" onclick="closeVoidModal()" style="padding: 8px 16px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;">
+                        Kembali
+                    </button>
+                    <button type="submit" id="btn-submit-void" style="padding: 8px 18px; border: none; background: #ef4444; color: #fff; font-weight: 700; border-radius: 6px; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);">
+                        <span>✕</span> Ya, Batalkan Transaksi (VOID)
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -1595,7 +1679,7 @@
             }
             const btnCancel = tr.querySelector('.btn-cancel-sale');
             if (btnCancel) {
-                btnCancel.onclick = () => promptCancelSale(sale.id, invoiceNum);
+                btnCancel.onclick = () => openVoidModal(sale);
             }
 
             tbody.insertBefore(tr, tbody.firstChild);
@@ -1775,14 +1859,65 @@
             showReceiptModal(sale, Number(sale.total_fnb || 0));
         }
 
-        // 8. VOID / BATAL PESANAN
-        async function promptCancelSale(saleId, invoiceNum) {
-            const pin = prompt(`Batalkan Nota ${invoiceNum}?\nMasukkan PIN Supervisor / Admin SoD:`);
-            if (pin === null) return;
-            if (!pin.trim()) {
-                alert('PIN Supervisor wajib diisi.');
+        // 8. VOID / BATAL PESANAN (MODAL POPUP RESMI DENGAN OTORISASI & SINKRONISASI REALTIME)
+        function openVoidModal(sale) {
+            if (!sale) return;
+
+            document.getElementById('void-sale-id').value = sale.id;
+            document.getElementById('void-invoice-num').innerText = sale.invoice_number || '-';
+            document.getElementById('void-customer-name').innerText = sale.customer_name || (sale.customer?.name ?? 'Umum');
+
+            const total = Number(sale.net_amount > 0 ? sale.net_amount : (sale.total_fnb || 0));
+            document.getElementById('void-total-amount').innerText = 'Rp ' + total.toLocaleString('id-ID');
+
+            let itemsStr = '';
+            if (sale.items && sale.items.length > 0) {
+                itemsStr = sale.items.map(i => `${i.qty}x ${i.item_name || i.name}`).join(', ');
+            } else {
+                itemsStr = '1 Item Pesanan';
+            }
+            document.getElementById('void-items-summary').innerText = itemsStr;
+
+            document.getElementById('void-supervisor-pin').value = '';
+            document.getElementById('void-reason-select').selectedIndex = 0;
+            document.getElementById('void-reason-custom').value = '';
+
+            const modal = document.getElementById('modal-void-sale');
+            if (modal) modal.style.display = 'flex';
+
+            setTimeout(() => {
+                document.getElementById('void-supervisor-pin')?.focus();
+            }, 120);
+        }
+
+        function closeVoidModal() {
+            const modal = document.getElementById('modal-void-sale');
+            if (modal) modal.style.display = 'none';
+        }
+
+        // Fallback backward compatibility
+        function promptCancelSale(saleId, invoiceNum) {
+            openVoidModal({ id: saleId, invoice_number: invoiceNum, total_fnb: 0 });
+        }
+
+        async function submitVoidSaleForm(e) {
+            e.preventDefault();
+            const saleId = document.getElementById('void-sale-id').value;
+            const invoiceNum = document.getElementById('void-invoice-num').innerText;
+            const pin = document.getElementById('void-supervisor-pin').value.trim();
+            const reasonSelect = document.getElementById('void-reason-select').value;
+            const reasonCustom = document.getElementById('void-reason-custom').value.trim();
+            const finalReason = reasonCustom ? `${reasonSelect} (${reasonCustom})` : reasonSelect;
+
+            if (!pin) {
+                alert('PIN Otorisasi Supervisor / Admin wajib diisi.');
+                document.getElementById('void-supervisor-pin')?.focus();
                 return;
             }
+
+            const btn = document.getElementById('btn-submit-void');
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Membatalkan...';
 
             try {
                 const response = await fetch(`{{ url('/presensi2/penjualan/transaksi') }}/${saleId}/cancel`, {
@@ -1792,18 +1927,60 @@
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                         'Accept': 'application/json'
                     },
-                    body: JSON.stringify({ supervisor_pin: pin })
+                    body: JSON.stringify({
+                        supervisor_pin: pin,
+                        reason: finalReason
+                    })
                 });
 
                 const data = await response.json();
                 if (response.ok && data.success) {
-                    alert('Nota ' + invoiceNum + ' berhasil dibatalkan (VOID).');
-                    window.location.reload();
+                    closeVoidModal();
+                    updateHistoryRowToVoid(saleId, invoiceNum);
+                    alert(`✅ Nota ${invoiceNum} berhasil dibatalkan (VOID).\nStok produk telah dikembalikan ke inventaris gudang.`);
                 } else {
-                    alert('Gagal membatalkan nota: ' + (data.message || 'PIN Supervisor salah.'));
+                    alert('Gagal membatalkan transaksi: ' + (data.message || 'PIN Supervisor salah atau wewenang tidak mencukupi.'));
                 }
             } catch (err) {
-                alert('Terjadi kesalahan jaringan.');
+                console.error(err);
+                alert('Terjadi kesalahan jaringan saat memproses pembatalan.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>✕</span> Ya, Batalkan Transaksi (VOID)';
+            }
+        }
+
+        function updateHistoryRowToVoid(saleId, invoiceNum) {
+            let row = document.getElementById(`history-row-${saleId}`);
+            if (!row) {
+                const rows = document.querySelectorAll('#pos-history-tbody tr');
+                rows.forEach(r => {
+                    if (r.innerText.includes(invoiceNum)) {
+                        row = r;
+                    }
+                });
+            }
+
+            if (row) {
+                row.style.background = '#fff1f2';
+                row.style.opacity = '0.75';
+
+                const invCell = row.children[1];
+                if (invCell) {
+                    invCell.style.color = '#ef4444';
+                    invCell.innerHTML = `<span style="text-decoration: line-through;">${invoiceNum}</span>`;
+                }
+
+                const statusCell = row.children[6];
+                if (statusCell) {
+                    statusCell.innerHTML = `<span style="background: #fee2e2; color: #dc2626; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px;">VOID</span>`;
+                }
+
+                const actionCell = row.children[7];
+                if (actionCell) {
+                    const btnCancel = actionCell.querySelector('.btn-cancel-sale') || actionCell.querySelectorAll('button')[1];
+                    if (btnCancel) btnCancel.remove();
+                }
             }
         }
 

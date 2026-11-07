@@ -23,6 +23,7 @@ use Modules\MasterData\Domain\Enums\CustomerType;
 use Modules\MasterData\Domain\Enums\EmployeeRole;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\CafeSale;
+use Modules\MasterData\Domain\Models\CafeSaleItem;
 use Modules\MasterData\Domain\Models\Category;
 use Modules\MasterData\Domain\Models\Customer;
 use Modules\MasterData\Domain\Models\Employee;
@@ -810,6 +811,50 @@ class ShiftStockAndSalesFlowTest extends TestCase
             ->get(route('presensi2.penjualan'));
         $pageResponse->assertSee($sale->invoice_number);
         $pageResponse->assertSee('DIBATALKAN');
+    }
+
+    public function test_pos_desktop_can_cancel_fnb_order_via_json_with_supervisor_pin(): void
+    {
+        $this->clockInStaff();
+
+        $sale = CafeSale::create([
+            'invoice_number' => 'INV-TEST-JSON-VOID',
+            'branch_id' => $this->branch->id,
+            'employee_id' => $this->employee->id,
+            'customer_name' => 'Pelanggan POS',
+            'total_fnb' => 20000,
+            'gross_amount' => 20000,
+            'net_amount' => 20000,
+            'amount_paid' => 20000,
+            'payment_method' => 'cash',
+            'payment_status' => 'paid',
+            'cashier_notes' => 'Kasir POS',
+        ]);
+
+        CafeSaleItem::create([
+            'cafe_sale_id' => $sale->id,
+            'product_variant_id' => $this->variantKopi->id,
+            'item_name' => 'Kopi Kapal Api',
+            'qty' => 2,
+            'unit_price' => 10000,
+            'subtotal' => 20000,
+        ]);
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.penjualan.batal', $sale), [
+                'supervisor_pin' => '999888',
+                'reason' => 'Salah input menu / pesanan',
+            ]);
+
+        $response->assertOk();
+        $response->assertJson([
+            'success' => true,
+            'payment_status' => 'cancelled',
+        ]);
+
+        $sale->refresh();
+        $this->assertEquals('cancelled', $sale->payment_status);
+        $this->assertStringContainsString('Salah input menu', $sale->cashier_notes);
     }
 
     public function test_cancelling_already_cancelled_order_is_handled_gracefully(): void

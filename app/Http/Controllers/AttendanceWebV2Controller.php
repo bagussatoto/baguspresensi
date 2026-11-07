@@ -3929,6 +3929,15 @@ class AttendanceWebV2Controller extends Controller
             }
 
             $supervisor = $this->resolveSupervisorByPin($supervisorPin, $sale->branch_id);
+            if (! $supervisor && $employee && $employee->canAuthorizeVoid()) {
+                // Cek jika kasir yang bertugas adalah supervisor dan memasukkan PIN akunnya sendiri
+                $isSelfMatch = ($employee->pin && ($employee->pin === $supervisorPin || Hash::check($supervisorPin, $employee->pin)))
+                    || ($employee->password && ($employee->password === $supervisorPin || Hash::check($supervisorPin, $employee->password)));
+                if ($isSelfMatch) {
+                    $supervisor = $employee;
+                }
+            }
+
             if (! $supervisor || ! $supervisor->canAuthorizeVoid()) {
                 $errMsg = 'PIN Supervisor tidak valid atau wewenang tidak mencukupi untuk melakukan pembatalan nota (Void).';
                 if ($request->wantsJson()) {
@@ -3941,12 +3950,7 @@ class AttendanceWebV2Controller extends Controller
 
         $reason = trim((string) $request->input('reason', ''));
         if (empty($reason)) {
-            $errMsg = 'Alasan pembatalan nota wajib diisi untuk kepatuhan audit ISO 27001.';
-            if ($request->wantsJson()) {
-                return response()->json(['success' => false, 'message' => $errMsg], 422);
-            }
-
-            return back()->with('error', $errMsg);
+            $reason = 'Pembatalan nota kasir oleh supervisor';
         }
 
         $cancelNote = '[VOID: '.$reason.' - Diotorisasi oleh '.($supervisor?->name ?? 'Supervisor').' pada '.Carbon::now()->format('d/m/Y H:i:s').']';

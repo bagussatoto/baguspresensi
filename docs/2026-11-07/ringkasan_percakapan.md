@@ -493,6 +493,28 @@ Berdasarkan keluhan sinkronisasi lambat saat simpan order penjualan:
    - Seluruh 41 unit & feature tests di `ShiftStockAndSalesFlowTest` LULUS (304 assertions).
    - Diformat dengan Laravel Pint.
 
+---
+
+## 28. Modal Konfirmasi Pembatalan Transaksi (VOID) & Pengembalian Stok Real-Time
+
+Berdasarkan perbaikan alur pembatalan transaksi POS:
+1. **Modal Dialog Void Transaksi Resmi ([`pos_desktop.blade.php`](file:///var/www/laravel_apps/bagus/resources/views/presensi2/pos_desktop.blade.php)):**
+   - Menggantikan browser `prompt()` lama dengan modal dialog `#modal-void-sale` yang menampilkan:
+     - Nomor Invoice, Nama Pelanggan, Rincian Item Pesanan, dan Total Tagihan.
+     - Peringatan sistem bahwa stok F&B otomatis dikembalikan ke gudang/outlet.
+     - Pilihan Alasan Pembatalan Cepat: `Salah input menu`, `Pelanggan batal`, `Ganti metode bayar`, `Koreksi kasir`, atau catatan kustom.
+     - Input PIN Otorisasi Supervisor / Admin (Dual-Control SoD).
+2. **Sinkronisasi Real-Time Tabel History:**
+   - Setelah void berhasil di database, baris transaksi di tabel riwayat langsung berubah warna, nomor invoice dicoret (`text-decoration: line-through`), status berganti menjadi badge merah `VOID`, dan tombol batal otomatis dilepas tanpa perlu refresh browser.
+3. **Penyempurnaan Backend Controller ([`AttendanceWebV2Controller.php`](file:///var/www/laravel_apps/bagus/app/Http/Controllers/AttendanceWebV2Controller.php)):**
+   - Mendukung otorisasi mandiri jika kasir yang bertugas berstatus supervisor/otorisator.
+   - Menyediakan fallback alasan pembatalan jika field catatan kosong sehingga tidak menyebabkan error validasi 422.
+4. **Verifikasi & Testing:**
+   - Menambahkan unit/feature test `test_pos_desktop_can_cancel_fnb_order_via_json_with_supervisor_pin` di [`ShiftStockAndSalesFlowTest.php`](file:///var/www/laravel_apps/bagus/tests/Feature/ShiftStockAndSalesFlowTest.php).
+   - Seluruh **42 tests (308 assertions)** LULUS 100%.
+   - Diformat dengan Laravel Pint.
+
+
 
 
 
