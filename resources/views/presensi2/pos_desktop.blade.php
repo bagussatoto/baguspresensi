@@ -524,6 +524,9 @@
             <span>👤</span>
             <span>penjualan &gt; {{ $activeShift?->id ?? '1' }};</span>
             <span style="color: #059669; font-weight: bold;">({{ $currentEmployee->name }})</span>
+            <a href="{{ route('presensi2.logout', ['mode' => 'pos']) }}" class="btn-nav-pill" style="color: #dc2626; border-color: #fca5a5; background: #fff5f5; padding: 3px 8px; font-size: 11px;" title="Keluar / Ganti Kasir POS" onclick="return confirm('Keluar dari sesi POS kasir?')">
+                <span>🚪</span> Keluar
+            </a>
         </div>
     </header>
 

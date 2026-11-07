@@ -1552,6 +1552,11 @@ class AttendanceWebV2Controller extends Controller
 
         $request->session()->forget('presensi2_employee_id');
 
+        if ($request->input('mode') === 'pos' || str_contains((string) $request->headers->get('referer', ''), 'pos')) {
+            return redirect()->route('pos.login')
+                ->with('success', 'Anda telah keluar dari POS Kasir Desktop.');
+        }
+
         return redirect()->route('presensi2.login')
             ->with('success', 'Anda telah keluar dari portal presensi.');
     }
@@ -2616,7 +2621,7 @@ class AttendanceWebV2Controller extends Controller
     {
         $employee = $this->getAuthenticatedEmployee();
         if (! $employee) {
-            return redirect()->route('presensi2.login');
+            return redirect()->route('pos.login');
         }
 
         $now = Carbon::now();
@@ -2635,8 +2640,35 @@ class AttendanceWebV2Controller extends Controller
                 ->first();
 
         if (! $attendanceToday || ! $attendanceToday->clock_in_at) {
-            return redirect()->route('presensi2.index')
-                ->with('error', 'Presensi dulu! Silakan lakukan presensi masuk terlebih dahulu sebelum mengakses sistem kasir POS.');
+            try {
+                $branch = $employee->branch ?? Branch::first();
+                $dto = new ClockInDTO(
+                    employeeId: $employee->id,
+                    branchId: (int) ($branch->id ?? 1),
+                    latitude: (float) ($branch->latitude ?? -6.1585),
+                    longitude: (float) ($branch->longitude ?? 106.9080),
+                    shiftId: $activeShift?->id,
+                    photoPath: null,
+                    verificationMethod: VerificationMethod::AdminManual,
+                    deviceInfo: [
+                        'user_agent' => request()->userAgent(),
+                        'platform' => 'POS Desktop Cashier',
+                    ],
+                    ipAddress: request()->ip(),
+                    isMockLocation: false,
+                    notes: 'Clock-in otomatis via POS Desktop',
+                    wifiBssid: null,
+                    livenessScore: null
+                );
+                $this->clockInAction->execute($dto);
+
+                $attendanceToday = AttendanceRecord::with('shift')
+                    ->where('employee_id', $employee->id)
+                    ->latest('id')
+                    ->first();
+            } catch (\Throwable $e) {
+                // If already clocked in or exception, continue
+            }
         }
 
         $branchId = $employee->branch_id;
@@ -3007,6 +3039,104 @@ class AttendanceWebV2Controller extends Controller
         }
 
         return view('presensi2.pos_desktop', $data);
+    }
+
+    /**
+     * Halaman Login Khusus Kasir POS Desktop PC.
+     */
+    public function posDesktopShowLogin(): View|RedirectResponse
+    {
+        $employee = $this->getAuthenticatedEmployee();
+        if ($employee) {
+            return redirect()->route('pos');
+        }
+
+        $now = Carbon::now();
+        $activeShift = $this->shiftResolverService->resolveShift(null, $now);
+
+        $employees = Employee::with('branch')
+            ->where('is_active', true)
+            ->orderBy('name', 'asc')
+            ->get();
+
+        return view('presensi2.pos_desktop_login', [
+            'employees' => $employees,
+            'activeShift' => $activeShift,
+            'now' => $now,
+        ]);
+    }
+
+    /**
+     * Proses Login Kasir POS Desktop & Otomatis Presensi Masuk (Clock In).
+     */
+    public function posDesktopLogin(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'credential' => 'required|string|min:4',
+        ], [
+            'employee_id.required' => 'Pilih nama kasir yang bertugas.',
+            'credential.required' => 'PIN / Password kasir wajib diisi.',
+            'credential.min' => 'PIN / Password minimal 4 karakter.',
+        ]);
+
+        $employee = Employee::where('is_active', true)->find($request->input('employee_id'));
+        if (! $employee) {
+            return redirect()->route('pos.login')->withErrors(['employee_id' => 'Karyawan tidak ditemukan atau tidak aktif.']);
+        }
+
+        $credential = (string) $request->input('credential');
+        if (! $this->verifyEmployeeCredential($employee, $credential)) {
+            return redirect()->route('pos.login')
+                ->withInput(['employee_id' => $employee->id])
+                ->withErrors(['credential' => 'PIN atau Password yang Anda masukkan salah.']);
+        }
+
+        session(['presensi2_employee_id' => $employee->id]);
+        $employee->update(['last_login_at' => now()]);
+
+        // Otomatis lakukan Presensi Masuk (Clock In) untuk kasir POS jika belum clock in
+        $now = Carbon::now();
+        $activeShift = $this->shiftResolverService->resolveShift(null, $now);
+        $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
+
+        $attendanceToday = AttendanceRecord::where('employee_id', $employee->id)
+            ->whereNull('clock_out_at')
+            ->latest('id')
+            ->first()
+            ?: AttendanceRecord::where('employee_id', $employee->id)
+                ->where('work_date', $workDate->toDateString())
+                ->latest('id')
+                ->first();
+
+        if (! $attendanceToday || ! $attendanceToday->clock_in_at) {
+            try {
+                $branch = $employee->branch ?? Branch::first();
+                $dto = new ClockInDTO(
+                    employeeId: $employee->id,
+                    branchId: (int) ($branch->id ?? 1),
+                    latitude: (float) ($branch->latitude ?? -6.1585),
+                    longitude: (float) ($branch->longitude ?? 106.9080),
+                    shiftId: $activeShift?->id,
+                    photoPath: null,
+                    verificationMethod: VerificationMethod::AdminManual,
+                    deviceInfo: [
+                        'user_agent' => $request->userAgent(),
+                        'platform' => 'POS Desktop Cashier',
+                    ],
+                    ipAddress: $request->ip(),
+                    isMockLocation: false,
+                    notes: 'Clock-in otomatis via Login POS Desktop',
+                    wifiBssid: null,
+                    livenessScore: null
+                );
+                $this->clockInAction->execute($dto);
+            } catch (\Throwable $e) {
+                // Ignore if already clocked in or similar
+            }
+        }
+
+        return redirect()->route('pos')->with('success', 'Selamat bertugas di POS Kasir, '.$employee->name.'!');
     }
 
     /**

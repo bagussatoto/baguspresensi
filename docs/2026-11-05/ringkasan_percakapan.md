@@ -100,4 +100,20 @@
     - Tab riwayat serah terima, antrean siap setor, histori setor bank, dan audit sisa stok fisik produk.
     - Tombol switch fleksibel antara Mode Desktop (`?view=desktop`) dan Mode HP (`?view=mobile`).
 
+---
+
+## 10. Login Khusus Kasir POS Desktop & Otomatis Presensi Masuk (Clock In)
+- **URL Akses:**
+  - `http://192.168.5.10:8086/bagus/pos/login`
+  - `http://192.168.5.10:8086/pos/login`
+  - Otomatis diarahkan jika kasir membuka `/bagus/pos` dalam keadaan belum login.
+- **Tujuan:** Memberikan pengalaman login yang cepat, ergonomis untuk monitor komputer PC kasir tanpa melewati tampilan sempit ala HP.
+- **Fitur Utama:**
+  - Header digital jam server *real-time* dan info Shift Aktif dinas kasir.
+  - Dropdown pemilihan nama kasir aktif outlet.
+  - Input PIN kasir dengan dukungan penuh keyboard fisik numpad PC serta *on-screen numeric keypad* interaktif.
+  - **Otomatis Presensi Masuk (Auto Clock In):** Saat kasir menekan "Buka Kasir POS Desktop", sistem otomatis mencatatkan jam masuk dinas (Clock In) di database `attendance_records` dan langsung membuka layar **Orderan POS Desktop** tanpa hambatan.
+  - Tombol **🚪 Keluar** di header kanan POS Desktop untuk berganti kasir secara instan.
+
+
 

@@ -175,6 +175,14 @@ Route::get('/pos', [AttendanceWebV2Controller::class, 'posDesktopIndex'])->name(
 Route::get('/bagus/pos', [AttendanceWebV2Controller::class, 'posDesktopIndex'])->name('bagus.pos');
 Route::get('/presensi2/pos', [AttendanceWebV2Controller::class, 'posDesktopIndex'])->name('presensi2.pos');
 Route::get('/bagus/presensi2/pos', [AttendanceWebV2Controller::class, 'posDesktopIndex'])->name('bagus.presensi2.pos');
+Route::get('/pos/login', [AttendanceWebV2Controller::class, 'posDesktopShowLogin'])->name('pos.login');
+Route::post('/pos/login', [AttendanceWebV2Controller::class, 'posDesktopLogin'])->name('pos.login.post');
+Route::get('/bagus/pos/login', [AttendanceWebV2Controller::class, 'posDesktopShowLogin'])->name('bagus.pos.login');
+Route::post('/bagus/pos/login', [AttendanceWebV2Controller::class, 'posDesktopLogin']);
+Route::get('/presensi2/pos/login', [AttendanceWebV2Controller::class, 'posDesktopShowLogin']);
+Route::post('/presensi2/pos/login', [AttendanceWebV2Controller::class, 'posDesktopLogin']);
+Route::get('/bagus/presensi2/pos/login', [AttendanceWebV2Controller::class, 'posDesktopShowLogin']);
+Route::post('/bagus/presensi2/pos/login', [AttendanceWebV2Controller::class, 'posDesktopLogin']);
 Route::get('/bagus/presensi2/penjualan', [AttendanceWebV2Controller::class, 'penjualanIndex']);
 Route::get('/bagus/presensi2/rekap', [AttendanceWebV2Controller::class, 'rekapIndex']);
 Route::get('/bagus/presensi2/serah-terima', [AttendanceWebV2Controller::class, 'serahTerimaIndex']);
