@@ -601,6 +601,34 @@ Menjawab permintaan pengguna untuk mengonsolidasi seluruh modul ERP yang pernah 
    - Pengujian render halaman, format JSON metrik, dan variasi case-insensitive route (`/admin/ERP` dan `/admin/erp`) LULUS 100% (3 tests, 27 assertions).
    - Diformat dengan Laravel Pint.
 
+---
+
+## 33. Implementasi Penuh Modul Akuntansi SAK: Jurnal Umum, Buku Besar, Neraca Saldo, Laba Rugi, & Neraca
+
+Menindaklanjuti persetujuan pengguna untuk melengkapi sistem akuntansi formal berpasangan (*Double-Entry Bookkeeping*):
+1. **Database Schema & Migrasi ([`create_journal_entries_tables.php`](file:///var/www/laravel_apps/bagus/Modules/Kas/database/migrations/2026_11_07_190001_create_journal_entries_tables.php)):**
+   - Tabel `journal_entries`: `entry_number`, `entry_date`, `reference_type`, `reference_id`, `branch_id`, `creator_employee_id`, `description`, `status`, `total_debit`, `total_credit`.
+   - Tabel `journal_entry_lines`: `journal_entry_id`, `chart_of_account_id`, `debit`, `credit`, `memo`.
+2. **Domain Models & AutoJournalService ([`AutoJournalService.php`](file:///var/www/laravel_apps/bagus/Modules/Kas/app/Domain/Services/AutoJournalService.php)):**
+   - `journalSale(CafeSale $sale)`: Otomatis menjurnal kas masuk (`1-10001`), pendapatan FnB (`4-10001`), pendapatan billing (`4-10002`), serta HPP (`5-10001`) dan Persediaan (`1-13001`).
+   - `journalVoidSale(CafeSale $sale, string $reason)`: Pembalikan jurnal otomatis jika transaksi di-void.
+   - `createManualJournal(array $data)`: Pencatatan jurnal umum manual dengan validasi ketat Debit == Kredit.
+   - `recalculateAllAccountBalances()`: Perhitungan ulang saldo akun COA secara konsisten.
+   - Terhubung langsung ke proses checkout POS dan void transaksi di [`AttendanceWebV2Controller.php`](file:///var/www/laravel_apps/bagus/app/Http/Controllers/AttendanceWebV2Controller.php).
+3. **Controller & Antarmuka Akuntansi ([`AdminAccountingController.php`](file:///var/www/laravel_apps/bagus/app/Http/Controllers/Admin/AdminAccountingController.php)):**
+   - **Jurnal Umum (`/admin/akuntansi/jurnal`):** Rekap kronologis debit/kredit, filter tanggal, modal input jurnal manual.
+   - **Buku Besar (`/admin/akuntansi/buku-besar`):** Kartu mutasi individual per akun COA, saldo awal, mutasi debit/kredit, saldo berjalan.
+   - **Neraca Saldo (`/admin/akuntansi/neraca-saldo`):** Validasi keseimbangan seluruh akun pembukuan SAK.
+   - **Laporan Laba Rugi (`/admin/akuntansi/laba-rugi`):** Pendapatan Usaha dikurangi HPP menghasilkan Laba Kotor, dikurangi Beban Operasional menghasilkan Laba Bersih Usaha.
+   - **Neraca Keuangan (`/admin/akuntansi/neraca`):** Persamaan akuntansi T-Account: Total Aset = Total Kewajiban + Total Ekuitas Modal (termasuk laba periode berjalan).
+4. **Command Sinkronisasi Historis:**
+   - Dibuat [`SyncHistoricalAccountingCommand.php`](file:///var/www/laravel_apps/bagus/app/Console/Commands/SyncHistoricalAccountingCommand.php) (`php artisan accounting:sync-sales`) yang berhasil menjurnal 50 transaksi penjualan kasir POS historis ke Jurnal Umum.
+5. **Testing & QA:**
+   - Feature Test [`AdminAccountingTest.php`](file:///var/www/laravel_apps/bagus/tests/Feature/AdminAccountingTest.php) (7 tests, 22 assertions) LULUS 100%.
+   - Semua rute akuntansi merespon HTTP `200 OK`.
+   - Diformat dengan Laravel Pint.
+
+
 
 
 

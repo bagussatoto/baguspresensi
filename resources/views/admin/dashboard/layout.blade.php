@@ -923,12 +923,22 @@
                 <li>
                     <a href="{{ route('admin.laporan') }}" class="nav-link-item {{ request()->routeIs('admin.laporan') ? 'active' : '' }}">
                         <span class="nav-item-left">
-                            <span>📊</span> <span>4. Laporan Keuangan</span>
+                            <span>📊</span> <span>4. Laporan Penjualan & Z-Report</span>
                         </span>
                     </a>
                 </li>
 
-                {{-- 5. PENYESUAIAN BILLING & PRINT --}}
+                {{-- 5. AKUNTANSI & BUKU BESAR (SAK) --}}
+                <li>
+                    <a href="{{ route('admin.akuntansi.jurnal') }}" class="nav-link-item {{ request()->routeIs('admin.akuntansi*') ? 'active' : '' }}">
+                        <span class="nav-item-left">
+                            <span>📖</span> <span>5. Akuntansi & Buku Besar</span>
+                        </span>
+                        <span class="badge-status badge-cyan" style="font-size: 9px; padding: 2px 6px;">SAK GL</span>
+                    </a>
+                </li>
+
+                {{-- 6. PENYESUAIAN BILLING & PRINT --}}
                 @php
                     $sidebarBillingPendingCount = \App\Models\ShiftSalesSummary::where(function($q) {
                         $q->where('billing_adjustment_status', 'pending_approval')
@@ -948,11 +958,11 @@
                     </a>
                 </li>
 
-                {{-- 6. KELUAR --}}
+                {{-- 7. KELUAR --}}
                 <li>
                     <a href="javascript:void(0)" onclick="openLogoutModal()" class="nav-link-item" style="color: #fb7185;">
                         <span class="nav-item-left">
-                            <span>🚪</span> <span>6. Keluar</span>
+                            <span>🚪</span> <span>7. Keluar</span>
                         </span>
                     </a>
                 </li>

@@ -38,6 +38,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\View\View;
+use Modules\Kas\Domain\Services\AutoJournalService;
 use Modules\MasterData\Domain\Enums\EmployeeRole;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\CafePayment;
@@ -3769,6 +3770,12 @@ class AttendanceWebV2Controller extends Controller
 
                 DB::commit();
 
+                try {
+                    app(AutoJournalService::class)->journalSale($sale);
+                } catch (\Throwable $e) {
+                    Log::warning('AutoJournal POS sale error: '.$e->getMessage());
+                }
+
                 if ($request->wantsJson() || $request->ajax()) {
                     return response()->json([
                         'success' => true,
@@ -3852,6 +3859,12 @@ class AttendanceWebV2Controller extends Controller
                 ]);
 
                 DB::commit();
+
+                try {
+                    app(AutoJournalService::class)->journalSale($sale);
+                } catch (\Throwable $e) {
+                    Log::warning('AutoJournal POS sale error: '.$e->getMessage());
+                }
 
                 if ($request->wantsJson() || $request->ajax()) {
                     return response()->json([
@@ -3977,6 +3990,12 @@ class AttendanceWebV2Controller extends Controller
                     ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
                     ->increment('qty_on_hand', $item->qty);
             }
+        }
+
+        try {
+            app(AutoJournalService::class)->journalVoidSale($sale, $reason);
+        } catch (\Throwable $e) {
+            Log::warning('AutoJournal void error: '.$e->getMessage());
         }
 
         // 3. Update payment status jika ada

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AdminAccountingController;
 use App\Http\Controllers\Admin\AdminAttendanceController;
 use App\Http\Controllers\Admin\AdminAttendanceSettingController;
 use App\Http\Controllers\Admin\AdminBrandController;
@@ -283,6 +284,17 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::put('/coa/{coa}', [AdminChartOfAccountController::class, 'update'])->name('admin.coa.update');
     Route::post('/coa/{coa}/toggle-status', [AdminChartOfAccountController::class, 'toggleStatus'])->name('admin.coa.toggle-status');
     Route::delete('/coa/{coa}', [AdminChartOfAccountController::class, 'destroy'])->name('admin.coa.destroy');
+
+    // Modul Akuntansi Lengkap: Jurnal Umum, Buku Besar, Neraca Saldo, Laba Rugi & Neraca
+    Route::get('/akuntansi', function () {
+        return redirect()->route('admin.akuntansi.jurnal');
+    })->name('admin.akuntansi.index');
+    Route::get('/akuntansi/jurnal', [AdminAccountingController::class, 'jurnalIndex'])->name('admin.akuntansi.jurnal');
+    Route::post('/akuntansi/jurnal/manual', [AdminAccountingController::class, 'storeManualJournal'])->name('admin.akuntansi.jurnal.manual');
+    Route::get('/akuntansi/buku-besar', [AdminAccountingController::class, 'bukuBesarIndex'])->name('admin.akuntansi.buku-besar');
+    Route::get('/akuntansi/neraca-saldo', [AdminAccountingController::class, 'neracaSaldoIndex'])->name('admin.akuntansi.neraca-saldo');
+    Route::get('/akuntansi/laba-rugi', [AdminAccountingController::class, 'labaRugiIndex'])->name('admin.akuntansi.laba-rugi');
+    Route::get('/akuntansi/neraca', [AdminAccountingController::class, 'neracaIndex'])->name('admin.akuntansi.neraca');
 
     // Stok Limit & Ledger Inventaris Fisik Gudang
     Route::get('/stok-limit', [AdminStockController::class, 'index'])->name('admin.stok-limit');
