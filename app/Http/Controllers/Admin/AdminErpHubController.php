@@ -6,8 +6,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domains\Attendance\Models\AttendanceRecord;
 use App\Http\Controllers\Controller;
-use App\Models\EmployeePasswordResetRequest;
 use App\Models\EmployeeRegistration;
+use App\Models\PasswordResetRequest;
 use App\Models\ShiftSalesSummary;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -51,27 +51,27 @@ class AdminErpHubController extends Controller
 
         // 2. STATISTIK PERSONEL & PRESENSI
         $activeEmployees = Employee::where('is_active', true)->count();
-        $todayAttendance = AttendanceRecord::whereDate('date', $today)->count();
+        $todayAttendance = AttendanceRecord::whereDate('work_date', $today)->count();
         $pendingRegistrations = Schema::hasTable('employee_registrations')
             ? EmployeeRegistration::where('status', 'pending')->count()
             : 0;
-        $pendingPasswordResets = Schema::hasTable('employee_password_reset_requests')
-            ? EmployeePasswordResetRequest::where('status', 'pending')->count()
+        $pendingPasswordResets = Schema::hasTable('password_reset_requests')
+            ? PasswordResetRequest::where('status', 'pending')->count()
             : 0;
 
         // 3. STATISTIK PENJUALAN & TRANSAKSI HARI INI
         $todaySalesCount = CafeSale::whereDate('created_at', $today)->count();
-        $todaySalesAmount = (float) CafeSale::whereDate('created_at', $today)->sum('total_amount');
+        $todaySalesAmount = (float) CafeSale::whereDate('created_at', $today)->sum('net_amount');
         $pendingBillingAdjustments = ShiftSalesSummary::where(function ($q): void {
             $q->where('billing_adjustment_status', 'pending_approval')
                 ->orWhere('print_adjustment_status', 'pending_approval');
         })->count();
 
         // 4. STATISTIK LOGISTIK & STOK
-        $totalPhysicalStock = (int) StockInventory::sum('quantity');
-        $pendingStockTransfers = DB::table('stock_transfer_dispatches')
-            ->where('status', '!=', 'received')
-            ->count();
+        $totalPhysicalStock = (int) StockInventory::sum('qty_on_hand');
+        $pendingStockTransfers = Schema::hasTable('stock_transfer_dispatches')
+            ? DB::table('stock_transfer_dispatches')->where('status', '!=', 'received')->count()
+            : 0;
 
         // 5. STATISTIK KEUANGAN & COA
         $coaAccountsCount = Schema::hasTable('chart_of_accounts')
