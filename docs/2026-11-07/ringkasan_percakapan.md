@@ -429,3 +429,19 @@ Berdasarkan kebutuhan kecepatan operasional kasir:
 3. **Verifikasi & Testing:**
    - Menambahkan unit test `test_pos_desktop_order_saves_directly_without_forced_modal_print`.
    - Seluruh **41 feature tests** di [`ShiftStockAndSalesFlowTest.php`](file:///var/www/laravel_apps/bagus/tests/Feature/ShiftStockAndSalesFlowTest.php) **LULUS 100% (304 assertions)**.
+
+---
+
+## 24. Penyederhanaan Keranjang POS: Penghapusan Kolom Uang Diterima & Kembalian
+
+Berdasarkan permintaan kasir agar proses input POS lebih ringkas dan tidak memakan ruang antarmuka:
+1. **Penghapusan Kolom Input Uang Diterima & Kembalian:**
+   - Menghapus elemen `#cash-change-container` (input "Uang Diterima" dan teks "Kembalian: Rp 0") di panel keranjang [`pos_desktop.blade.php`](file:///var/www/laravel_apps/bagus/resources/views/presensi2/pos_desktop.blade.php).
+   - Tampilan **Total Bayar** dibuat lebih menonjol, proporsional, dan bersih (`font-size: 22px`).
+2. **Otomasi Pembayaran:**
+   - Transaksi kasir secara otomatis mengasumsikan nominal bayar pas (`cash_received = total`), sehingga kasir cukup memilih item lalu mengklik **Simpan Order Penjualan**.
+   - Fungsi JS `calculateChange()` dan `submitPosOrder()` diamankan dengan guard clause sehingga tetap berjalan lancar tanpa input uang manual.
+3. **Verifikasi & Format:**
+   - Seluruh **41 feature tests** di [`ShiftStockAndSalesFlowTest.php`](file:///var/www/laravel_apps/bagus/tests/Feature/ShiftStockAndSalesFlowTest.php) **LULUS 100% (304 assertions)**.
+   - Kode diformat menggunakan `vendor/bin/pint --dirty --format agent`.
+

@@ -790,25 +790,11 @@
                             </div>
                         </div>
 
-                        {{-- TOTAL TAGIHAN & NOMINAL BAYAR --}}
-                        <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 6px; border-top: 1px dashed #cbd5e1;">
-                            <div>
-                                <span style="font-size: 11px; color: #64748b;">Total Bayar:</span>
-                                <div id="cart-total-display" style="font-size: 20px; font-weight: 800; color: #008d4c; font-family: monospace;">
-                                    Rp 0
-                                </div>
-                            </div>
-                            <div id="cash-change-container" style="display: flex; align-items: center; gap: 8px;">
-                                <div>
-                                    <span style="font-size: 10.5px; color: #64748b;">Uang Diterima:</span>
-                                    <input type="number" id="cart-cash-input" min="0" placeholder="0" oninput="calculateChange()" style="width: 110px; padding: 4px 6px; border: 1px solid #cbd5e1; border-radius: 3px; font-size: 12px; font-family: monospace; text-align: right;">
-                                </div>
-                                <div>
-                                    <span style="font-size: 10.5px; color: #64748b;">Kembalian:</span>
-                                    <div id="cart-change-display" style="font-size: 14px; font-weight: 700; color: #0369a1; font-family: monospace;">
-                                        Rp 0
-                                    </div>
-                                </div>
+                        {{-- TOTAL TAGIHAN (BAYAR PAS / LANGSUNG SIMPAN) --}}
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 4px 4px 4px; border-top: 1px dashed #cbd5e1;">
+                            <span style="font-size: 13px; font-weight: 700; color: #475569;">Total Bayar:</span>
+                            <div id="cart-total-display" style="font-size: 22px; font-weight: 800; color: #008d4c; font-family: monospace;">
+                                Rp 0
                             </div>
                         </div>
                     </div>
@@ -928,7 +914,7 @@
         <div style="margin-top: 10px; padding: 8px 10px; background: rgba(255,255,255,0.06); border-radius: 6px; font-size: 12.5px; display: flex; justify-content: space-between; align-items: center;">
             <span>Total: <strong id="toast-total" style="color: #f8fafc;">Rp 0</strong></span>
             <span style="background: #15803d; color: #fff; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 12px;" id="toast-change-wrap">
-                Kembalian: <span id="toast-change">Rp 0</span>
+                <span id="toast-change">Lunas</span>
             </span>
         </div>
         <div style="margin-top: 10px; display: flex; gap: 8px; justify-content: flex-end;">
@@ -1446,7 +1432,10 @@
 
             const cashVal = cashReceived || total;
             const changeVal = Math.max(0, cashVal - total);
-            document.getElementById('toast-change').innerText = 'Rp ' + changeVal.toLocaleString('id-ID');
+            const changeElem = document.getElementById('toast-change');
+            if (changeElem) {
+                changeElem.innerText = changeVal > 0 ? ('Kembalian: Rp ' + changeVal.toLocaleString('id-ID')) : 'Lunas';
+            }
 
             const btnLastPrint = document.getElementById('btn-print-last-receipt');
             if (btnLastPrint) {
