@@ -404,17 +404,8 @@
     </header>
     @endif
 
-    @php
-        $hideBottomNav = request()->routeIs('presensi2.penjualan*')
-            || request()->routeIs('presensi2.rekap*')
-            || request()->routeIs('presensi2.serah-terima*')
-            || request()->is('*penjualan*')
-            || request()->is('*rekap*')
-            || request()->is('*serah-terima*');
-    @endphp
-
     <!-- CONTENT -->
-    <main class="mobile-container {{ request()->is('*login*') || request()->routeIs('presensi2.login') ? 'is-login-page' : '' }}" @if($hideBottomNav) style="padding-bottom: 24px;" @endif>
+    <main class="mobile-container {{ request()->is('*login*') || request()->routeIs('presensi2.login') ? 'is-login-page' : '' }}">
         @if(session('success'))
             <div class="alert-box alert-success" id="flash-success">
                 <span>✅</span>
@@ -490,18 +481,18 @@
          */
         $modeSimulasiPresensi = false;
     @endphp
-    @if(!$hideBottomNav)
-    <!-- BOTTOM NAV BAR (TERINTEGRASI DATABASE NAVICAT SYSTEM_MENUS) -->
+    <!-- BOTTOM NAV BAR: 4 MENU UTAMA PRESENSI (BERANDA, STOK, PRESENSI, RIWAYAT) -->
     <nav class="mobile-bottom-nav" id="mobileBottomNav">
         <!-- Floating Active Bubble Indicator -->
         <div class="nav-indicator-bubble" id="navIndicatorBubble" aria-hidden="true"></div>
 
+        {{-- 1. BERANDA PRESENSI --}}
         <a href="{{ $berandaMenu?->url ?? route('presensi2.index') }}" class="nav-item {{ request()->routeIs('presensi2.index') ? 'active' : '' }}" title="{{ $berandaMenu?->description ?? 'Beranda Presensi' }}">
             <span class="nav-icon">{{ $berandaMenu?->icon ?? '🏠' }}</span>
             <span class="nav-label">{{ $berandaMenu?->name ?? 'Beranda' }}</span>
         </a>
 
-        @if(!$modeSimulasiPresensi)
+        {{-- 2. STOK BARANG --}}
         <a href="{{ $stokMenu?->url ?? route('presensi2.stok') }}" 
            class="nav-item {{ request()->routeIs('presensi2.stok*') ? 'active' : '' }}" 
            @if(!$navHasClockedIn)
@@ -511,38 +502,19 @@
             <span class="nav-icon">{{ $stokMenu?->icon ?? '📦' }}</span>
             <span class="nav-label">{{ $stokMenu ? explode(' &', $stokMenu->name)[0] : 'Stok' }}</span>
         </a>
-        @endif
 
+        {{-- 3. PRESENSI --}}
         <a href="{{ route('presensi2.scan') }}" class="nav-item {{ request()->routeIs('presensi2.scan*') ? 'active' : '' }}" title="Presensi Masuk & Keluar">
             <span class="nav-icon">🔐</span>
             <span class="nav-label">Presensi</span>
         </a>
 
-        @if(!$modeSimulasiPresensi)
-        <a href="{{ $penjualanMenu?->url ?? route('presensi2.penjualan') }}" 
-           class="nav-item {{ request()->routeIs('presensi2.penjualan*') ? 'active' : '' }}" 
-           @if(!$navHasClockedIn)
-               onclick="event.preventDefault(); showPresensiRequiredModal('penjualan');"
-           @endif
-           title="{{ $penjualanMenu?->description ?? 'Penjualan & Kasir Shift' }}">
-            <span class="nav-icon">{{ $penjualanMenu?->icon ?? '🛒' }}</span>
-            <span class="nav-label">{{ $penjualanMenu ? explode(' &', $penjualanMenu->name)[0] : 'Penjualan' }}</span>
-        </a>
-
-        <a href="{{ $rekapMenu?->url ?? route('presensi2.rekap') }}" 
-           class="nav-item {{ (request()->routeIs('presensi2.rekap*') || request()->routeIs('presensi2.serah-terima*')) ? 'active' : '' }}" 
-           title="{{ $rekapMenu?->description ?? 'Rekap Penjualan & Shift' }}">
-            <span class="nav-icon">{{ $rekapMenu?->icon ?? '📊' }}</span>
-            <span class="nav-label">{{ $rekapMenu ? explode(' &', $rekapMenu->name)[0] : 'Rekap' }}</span>
-        </a>
-        @endif
-
+        {{-- 4. RIWAYAT PRESENSI --}}
         <a href="{{ $riwayatMenu?->url ?? route('presensi2.riwayat') }}" class="nav-item {{ request()->routeIs('presensi2.riwayat*') ? 'active' : '' }}" title="{{ $riwayatMenu?->description ?? 'Riwayat Presensi' }}">
             <span class="nav-icon">{{ $riwayatMenu?->icon ?? '📅' }}</span>
             <span class="nav-label">{{ $riwayatMenu?->name ?? 'Riwayat' }}</span>
         </a>
     </nav>
-    @endif
 
     <!-- MODAL NOTIFIKASI INTERAKTIF (PRESENSI DULU / BELUM LENGKAP) -->
     <div id="mgk-notification-modal" style="display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.78); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); align-items: center; justify-content: center; padding: 20px;">

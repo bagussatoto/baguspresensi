@@ -395,12 +395,13 @@ Berdasarkan persetujuan implementasi mode simulasi serah terima shift kasir:
 
 ## 22. Penonaktifan Navbar Bawah Halaman Kasir, Redesain Struk Serah Terima Format Tabel Navicat, & Verifikasi Sinkronisasi Database
 
-1. **Penonaktifan Navbar Bawah (Bottom Navigation Bar):**
-   - Navbar bawah (`mobile-bottom-nav`) otomatis dinonaktifkan / disembunyikan pada halaman:
-     - `/presensi2/penjualan`
-     - `/presensi2/rekap`
-     - `/presensi2/serah-terima`
-   - Padding bawah kontainer disesuaikan sehingga layar lebih luas dan nyaman digunakan kasir tanpa terhalang navbar.
+1. **Penyesuaian Navbar Bawah (Tepat 4 Menu Utama Saja):**
+   - Navbar bawah (`mobile-bottom-nav`) diaktifkan kembali secara permanen dengan membatasi hanya 4 menu utama:
+     1. 🏠 **Beranda Presensi** (`/presensi2`)
+     2. 📦 **Stok Barang** (`/presensi2/stok`)
+     3. 🔐 **Presensi** (`/presensi2/scan`)
+     4. 📅 **Riwayat Presensi** (`/presensi2/riwayat`)
+   - Menu *Penjualan* dan *Rekap* dikeluarkan dari navbar bawah agar navigasi presensi tetap ringkas, bersih, dan fokus.
 
 2. **Revisi Struk Serah Terima Kasir (Mengadopsi Format Tabel Summary Resmi):**
    - Modal cetak struk serah terima desktop kini menggunakan format tabel bergaris standar (*Laporan Summary Serah Terima Shift*):
