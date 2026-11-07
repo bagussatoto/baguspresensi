@@ -83,7 +83,11 @@ class ClockOutAction
 
         // 9. Hitung total durasi menit bekerja
         $clockInAt = Carbon::instance($record->clock_in_at);
-        $durationMinutes = max(0, (int) round($clockInAt->diffInMinutes($clockOutAt)));
+        if ($dto->manualDurationMinutes !== null && $dto->manualDurationMinutes > 0) {
+            $durationMinutes = $dto->manualDurationMinutes;
+        } else {
+            $durationMinutes = max(0, (int) round($clockInAt->diffInMinutes($clockOutAt)));
+        }
         $effectiveMinutes = $durationMinutes;
 
         // 10. Kalkulasi lembur (overtime) atau pulang lebih awal (early leave)

@@ -24,5 +24,6 @@ readonly class ClockOutDTO
         public ?string $notes = null,
         public ?CarbonInterface $clockOutAt = null,
         public bool $forceEarlyLeave = false,
+        public ?int $manualDurationMinutes = null,
     ) {}
 }

@@ -445,3 +445,22 @@ Berdasarkan permintaan kasir agar proses input POS lebih ringkas dan tidak memak
    - Seluruh **41 feature tests** di [`ShiftStockAndSalesFlowTest.php`](file:///var/www/laravel_apps/bagus/tests/Feature/ShiftStockAndSalesFlowTest.php) **LULUS 100% (304 assertions)**.
    - Kode diformat menggunakan `vendor/bin/pint --dirty --format agent`.
 
+---
+
+## 25. Input Textbox Satuan Jam pada Presensi Pulang (Scan Check-Out)
+
+Berdasarkan permintaan user agar kasir dapat memilih durasi jam kerja secara manual per 1 jam saat presensi pulang:
+1. **Antarmuka UI Presensi Pulang ([`scan.blade.php`](file:///var/www/laravel_apps/bagus/resources/views/presensi2/scan.blade.php)):**
+   - Menambahkan kartu input durasi jam kerja modern saat status kasir sedang aktif dinas:
+     - Input Textbox Angka dengan step per 1 jam (`1`, `2`, `3`, ..., `24` Jam).
+     - Tombol kontrol `[ − ]` dan `[ + ]` untuk menaikkan/menurunkan 1 jam secara cepat.
+     - Preset chip tombol cepat: `[ 1 Jam ]` `[ 2 Jam ]` `[ 4 Jam ]` `[ 6 Jam ]` `[ 8 Jam (Shift) ]` `[ 12 Jam ]`.
+2. **Backend Processing & Database Synchronization:**
+   - Di [`AttendanceWebV2Controller.php`](file:///var/www/laravel_apps/bagus/app/Http/Controllers/AttendanceWebV2Controller.php), payload `duration_hours` divalidasi dan dikonversikan menjadi menit (`jam * 60`).
+   - Di [`ClockOutDTO.php`](file:///var/www/laravel_apps/bagus/app/Domains/Attendance/DataTransferObjects/ClockOutDTO.php) dan [`ClockOutAction.php`](file:///var/www/laravel_apps/bagus/app/Domains/Attendance/Actions/ClockOutAction.php), durasi menit manual diterapkan langsung ke `duration_minutes` dan `effective_minutes` serta tercatat rapi pada kolom `notes`.
+3. **Verifikasi & Testing:**
+   - Unit test [`AttendanceActionsTest::test_clock_out_action_respects_manual_duration_minutes`](file:///var/www/laravel_apps/bagus/tests/Feature/AttendanceActionsTest.php) LULUS (100%).
+   - Feature test [`AttendanceWebV2PortalTest::test_employee_can_clock_out_with_manual_duration_hours`](file:///var/www/laravel_apps/bagus/tests/Feature/AttendanceWebV2PortalTest.php) LULUS (100%).
+   - Diformat dengan Laravel Pint (`vendor/bin/pint --dirty --format agent`).
+
+

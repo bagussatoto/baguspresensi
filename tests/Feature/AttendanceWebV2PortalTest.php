@@ -376,6 +376,43 @@ class AttendanceWebV2PortalTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_employee_can_clock_out_with_manual_duration_hours(): void
+    {
+        Carbon::setTestNow('2026-10-13 07:00:00');
+
+        $record = AttendanceRecord::create([
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift->id,
+            'work_date' => Carbon::today(),
+            'clock_in_at' => Carbon::now(),
+            'clock_in_lat' => -6.200000,
+            'clock_in_lng' => 106.816666,
+            'status' => AttendanceStatus::Present,
+            'verification_method' => VerificationMethod::AdminManual,
+        ]);
+
+        Carbon::setTestNow('2026-10-13 15:00:00');
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.clock-out'), [
+                'shift_id' => $this->shift->id,
+                'duration_hours' => 6,
+            ]);
+
+        $response->assertOk();
+        $response->assertJson([
+            'success' => true,
+        ]);
+
+        $record->refresh();
+        $this->assertNotNull($record->clock_out_at);
+        $this->assertSame(360, $record->duration_minutes);
+        $this->assertStringContainsString('6 Jam', (string) $record->notes);
+
+        Carbon::setTestNow();
+    }
+
     public function test_employee_can_view_riwayat(): void
     {
         $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])

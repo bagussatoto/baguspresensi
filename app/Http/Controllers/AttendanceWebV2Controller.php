@@ -1897,6 +1897,7 @@ class AttendanceWebV2Controller extends Controller
         $request->validate([
             'credential' => 'nullable|string',
             'shift_id' => 'nullable|exists:shifts,id',
+            'duration_hours' => 'nullable|numeric|min:1|max:24',
         ]);
 
         if ($request->filled('credential')) {
@@ -1917,6 +1918,16 @@ class AttendanceWebV2Controller extends Controller
         $lat = (float) ($branch->latitude ?? -6.1585);
         $lng = (float) ($branch->longitude ?? 106.9080);
 
+        $manualDurationMinutes = $request->filled('duration_hours')
+            ? (int) round(((float) $request->input('duration_hours')) * 60)
+            : null;
+
+        $notes = 'Clock-out via Portal Presensi v2 (Verifikasi Kredensial)';
+        if ($manualDurationMinutes !== null) {
+            $hours = (float) $request->input('duration_hours');
+            $notes .= " | Durasi jam kerja dipilih: {$hours} Jam";
+        }
+
         try {
             $dto = new ClockOutDTO(
                 employeeId: $employee->id,
@@ -1931,14 +1942,17 @@ class AttendanceWebV2Controller extends Controller
                 ],
                 ipAddress: $request->ip(),
                 isMockLocation: false,
-                notes: 'Clock-out via Portal Presensi v2 (Verifikasi Kredensial)'
+                notes: $notes,
+                manualDurationMinutes: $manualDurationMinutes
             );
 
             $record = $this->clockOutAction->execute($dto);
 
+            $durationDisplay = round($record->duration_minutes / 60, 1);
+
             return response()->json([
                 'success' => true,
-                'message' => 'Presensi pulang berhasil! Total durasi: '.round($record->duration_minutes / 60, 1).' jam.',
+                'message' => 'Presensi pulang berhasil! Total durasi kerja: '.$durationDisplay.' jam.',
                 'clock_out_at' => $record->clock_out_at?->format('H:i:s'),
                 'duration_minutes' => $record->duration_minutes,
             ]);

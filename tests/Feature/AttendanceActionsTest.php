@@ -217,4 +217,37 @@ class AttendanceActionsTest extends TestCase
         $this->expectException(NotClockedInException::class);
         $outAction->execute($outDto);
     }
+
+    public function test_clock_out_action_respects_manual_duration_minutes(): void
+    {
+        /** @var ClockInAction $inAction */
+        $inAction = app(ClockInAction::class);
+        /** @var ClockOutAction $outAction */
+        $outAction = app(ClockOutAction::class);
+
+        // 1. Clock in jam 07:00
+        $inDto = new ClockInDTO(
+            employeeId: $this->employee->id,
+            branchId: $this->branch->id,
+            latitude: -6.15850000,
+            longitude: 106.90800000,
+            shiftId: $this->shift->id,
+            clockInAt: Carbon::parse('2026-10-11 07:00:00')
+        );
+        $inAction->execute($inDto);
+
+        // 2. Clock out dengan manualDurationMinutes = 480 (8 Jam)
+        $outDto = new ClockOutDTO(
+            employeeId: $this->employee->id,
+            latitude: -6.15850000,
+            longitude: 106.90800000,
+            clockOutAt: Carbon::parse('2026-10-11 13:00:00'),
+            manualDurationMinutes: 480
+        );
+        $record = $outAction->execute($outDto);
+
+        $this->assertNotNull($record->clock_out_at);
+        $this->assertSame(480, $record->duration_minutes);
+        $this->assertSame(480, $record->effective_minutes);
+    }
 }

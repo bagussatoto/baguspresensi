@@ -2,6 +2,33 @@
 
 @section('title', 'Presensi Kredensial — Clock In/Out')
 
+@push('styles')
+<style>
+.btn-chip-hours {
+    padding: 6px 11px;
+    font-size: 11.5px;
+    font-weight: 600;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.btn-chip-hours:hover {
+    background: rgba(244, 63, 94, 0.15);
+    border-color: rgba(244, 63, 94, 0.4);
+    color: #fda4af;
+}
+.btn-chip-hours.active {
+    background: rgba(244, 63, 94, 0.25);
+    border-color: #fda4af;
+    color: #fff;
+    font-weight: 700;
+}
+</style>
+@endpush
+
 @section('content')
 <div class="scan-v2-page">
     {{-- NETWORK & OFFLINE BUFFER STATUS BANNER --}}
@@ -307,12 +334,49 @@
                 </a>
             </div>
 
-            {{-- OPSI PRESENSI PULANG / SELESAI DINAS --}}
-            <div style="padding-top: 14px; border-top: 1px dashed rgba(255, 255, 255, 0.12); text-align: center;">
-                <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px;">
-                    Gunakan tombol di bawah ini saat Anda selesai dinas untuk pulang / serah terima:
+            {{-- OPSI PRESENSI PULANG / SELESAI DINAS DENGAN INPUT DURASI JAM MANUAL --}}
+            <div style="padding-top: 16px; border-top: 1px dashed rgba(255, 255, 255, 0.15); text-align: left;">
+                
+                {{-- KARTU INPUT TEXTBOX DURASI JAM KERJA --}}
+                <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(244, 63, 94, 0.35); border-radius: 14px; padding: 14px 16px; margin-bottom: 14px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                        <label for="duration_hours_input" style="font-size: 13px; font-weight: 700; color: #fda4af; display: flex; align-items: center; gap: 6px;">
+                            <span>⏱️</span> Durasi Jam Kerja:
+                        </label>
+                        <span style="font-size: 11px; color: #94a3b8; background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 6px;">
+                            Pilihan manual per 1 Jam
+                        </span>
+                    </div>
+
+                    {{-- TEXTBOX KELIPATAN 1 JAM & TOMBOL +/- --}}
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button type="button" onclick="adjustDurationHours(-1)" title="Kurangi 1 Jam" style="width: 44px; height: 44px; border-radius: 10px; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.4); color: #fda4af; font-size: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
+                            −
+                        </button>
+                        <div style="flex: 1; position: relative;">
+                            <input type="number" id="duration_hours_input" name="duration_hours" min="1" max="24" step="1" value="8" oninput="onDurationHoursChange()" style="width: 100%; height: 44px; background: rgba(10, 14, 26, 0.9); border: 1.5px solid rgba(244, 63, 94, 0.4); border-radius: 10px; color: #fff; font-size: 18px; font-weight: 800; text-align: center; font-family: monospace; outline: none; padding-right: 48px;">
+                            <span style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 13px; color: #94a3b8; font-weight: 700; pointer-events: none;">Jam</span>
+                        </div>
+                        <button type="button" onclick="adjustDurationHours(1)" title="Tambah 1 Jam" style="width: 44px; height: 44px; border-radius: 10px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #6ee7b7; font-size: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
+                            +
+                        </button>
+                    </div>
+
+                    {{-- PRESET CHIPS PILIHAN CEPAT PER 1 JAM --}}
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px;">
+                        <button type="button" class="btn-chip-hours" onclick="setDurationHours(1)">1 Jam</button>
+                        <button type="button" class="btn-chip-hours" onclick="setDurationHours(2)">2 Jam</button>
+                        <button type="button" class="btn-chip-hours" onclick="setDurationHours(4)">4 Jam</button>
+                        <button type="button" class="btn-chip-hours" onclick="setDurationHours(6)">6 Jam</button>
+                        <button type="button" class="btn-chip-hours active" onclick="setDurationHours(8)">8 Jam (Shift)</button>
+                        <button type="button" class="btn-chip-hours" onclick="setDurationHours(12)">12 Jam</button>
+                    </div>
                 </div>
-                <button type="button" id="btn-clock-out" onclick="submitAttendance('out')" class="btn btn-rose" style="padding: 12px; font-size: 13.5px; width: 100%; font-weight: 600;">
+
+                <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px; text-align: center;">
+                    Pastikan durasi jam kerja di atas sudah sesuai sebelum konfirmasi pulang / serah terima:
+                </div>
+                <button type="button" id="btn-clock-out" onclick="submitAttendance('out')" class="btn btn-rose" style="padding: 14px; font-size: 14.5px; width: 100%; font-weight: 700; box-shadow: 0 4px 14px rgba(244, 63, 94, 0.35);">
                     <span>🏁</span> Konfirmasi Check-Out (Selesai Dinas)
                 </button>
             </div>
@@ -558,6 +622,11 @@
             if (shiftSelect && shiftSelect.value) {
                 payload.shift_id = parseInt(shiftSelect.value, 10);
             }
+        } else if (mode === 'out') {
+            const durInput = document.getElementById('duration_hours_input');
+            if (durInput && durInput.value) {
+                payload.duration_hours = parseInt(durInput.value, 10);
+            }
         }
 
         // Cek apakah perangkat offline
@@ -657,6 +726,48 @@
                 ? '<span>⚡</span> Konfirmasi Check-In'
                 : '<span>🏁</span> Konfirmasi Check-Out';
         }
+    }
+
+    function adjustDurationHours(delta) {
+        const input = document.getElementById('duration_hours_input');
+        if (!input) return;
+        let val = parseInt(input.value) || 8;
+        val = Math.max(1, Math.min(24, val + delta));
+        input.value = val;
+        updateChipSelection(val);
+    }
+
+    function setDurationHours(hours) {
+        const input = document.getElementById('duration_hours_input');
+        if (!input) return;
+        input.value = hours;
+        updateChipSelection(hours);
+    }
+
+    function onDurationHoursChange() {
+        const input = document.getElementById('duration_hours_input');
+        if (!input) return;
+        let val = parseInt(input.value) || 1;
+        if (val < 1) val = 1;
+        if (val > 24) val = 24;
+        input.value = val;
+        updateChipSelection(val);
+    }
+
+    function updateChipSelection(val) {
+        document.querySelectorAll('.btn-chip-hours').forEach(btn => {
+            if (btn.innerText.trim().startsWith(val + ' Jam')) {
+                btn.style.borderColor = '#fda4af';
+                btn.style.background = 'rgba(244, 63, 94, 0.25)';
+                btn.style.color = '#fff';
+                btn.style.fontWeight = '700';
+            } else {
+                btn.style.borderColor = 'rgba(255, 255, 255, 0.12)';
+                btn.style.background = 'rgba(255, 255, 255, 0.05)';
+                btn.style.color = '#94a3b8';
+                btn.style.fontWeight = '600';
+            }
+        });
     }
 
     function showResult(success, message) {
