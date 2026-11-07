@@ -863,9 +863,9 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($todayHandovers as $idx => $th)
+                            @forelse($todayHandovers as $th)
                                 <tr>
-                                    <td style="text-align: center; font-weight: 700; color: #64748b;">{{ $idx + 1 }}</td>
+                                    <td style="text-align: center; font-weight: 700; color: #64748b;">{{ $loop->iteration }}</td>
                                     <td style="font-family: monospace;">
                                         {{ $th->work_date?->format('d-m-Y') ?? date('d-m-Y') }}
                                         <small style="color: #64748b;">{{ ($th->handover_at ?? $th->updated_at)?->format('H:i') }}</small>
@@ -911,9 +911,9 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($readyToDepositSummaries as $idx => $rtd)
+                            @forelse($readyToDepositSummaries as $rtd)
                                 <tr>
-                                    <td style="text-align: center; font-weight: 700; color: #64748b;">{{ $idx + 1 }}</td>
+                                    <td style="text-align: center; font-weight: 700; color: #64748b;">{{ $loop->iteration }}</td>
                                     <td style="font-family: monospace;">{{ $rtd->work_date?->format('d-m-Y') ?? date('d-m-Y') }}</td>
                                     <td><span class="badge-shift">{{ $rtd->shiftNumber() }}</span></td>
                                     <td><strong>{{ strtoupper($rtd->employee->name ?? 'Kasir') }}</strong></td>
@@ -953,9 +953,9 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($historyDepositSummaries as $idx => $hs)
+                            @forelse($historyDepositSummaries as $hs)
                                 <tr>
-                                    <td style="text-align: center; font-weight: 700; color: #64748b;">{{ $idx + 1 }}</td>
+                                    <td style="text-align: center; font-weight: 700; color: #64748b;">{{ $loop->iteration }}</td>
                                     <td style="font-family: monospace;">
                                         {{ $hs->deposited_at ? $hs->deposited_at->format('d-m-Y H:i') : ($hs->work_date?->format('d-m-Y') ?? '-') }}
                                     </td>
@@ -998,9 +998,9 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($stockComparisons as $idx => $stk)
+                            @forelse($stockComparisons as $stk)
                                 <tr>
-                                    <td style="text-align: center; font-weight: 700; color: #64748b;">{{ $idx + 1 }}</td>
+                                    <td style="text-align: center; font-weight: 700; color: #64748b;">{{ $loop->iteration }}</td>
                                     <td><strong>{{ $stk['product_name'] ?? '-' }}</strong></td>
                                     <td><span style="color: #64748b; font-size: 11px;">{{ $stk['category'] ?? 'Produk' }}</span></td>
                                     <td style="text-align: right; font-family: monospace;">{{ $stk['opening_stock'] ?? 0 }}</td>
@@ -1343,3 +1343,4 @@
     </script>
 </body>
 </html>
+
