@@ -80,6 +80,24 @@ class AdminStockTest extends TestCase
         $response->assertSee('Gudang Utama Pusat');
     }
 
+    public function test_admin_stock_ketersediaan_page_renders_with_erd_modal(): void
+    {
+        StockInventory::create([
+            'warehouse_id' => $this->warehouse->id,
+            'product_variant_id' => $this->variant->id,
+            'qty_on_hand' => 15,
+            'safety_stock' => 5,
+        ]);
+
+        $response = $this->get(route('admin.stok'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Diagram ERD Pergudangan');
+        $response->assertSee('erdModal');
+        $response->assertSee('stock_inventories');
+        $response->assertSee('stock_transfer_dispatches');
+    }
+
     public function test_admin_can_fetch_stocks_via_json(): void
     {
         StockInventory::create([

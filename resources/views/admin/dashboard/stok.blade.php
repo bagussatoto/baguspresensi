@@ -14,6 +14,9 @@
             </div>
         </div>
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <button type="button" onclick="openErdModal()" class="btn-action-sm" style="background: linear-gradient(135deg, rgba(99,102,241,0.25), rgba(56,189,248,0.25)); border: 1px solid rgba(56,189,248,0.4); color: #7dd3fc; padding: 8px 14px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                <span>📊</span> Diagram ERD Pergudangan
+            </button>
             <a href="{{ route('admin.stok-limit') }}" class="btn-action-sm btn-action-primary" style="padding: 8px 14px;">
                 <span>⚙️</span> Kelola Stok Limit ERP
             </a>
@@ -281,4 +284,5 @@
 </div>
 
 @include('admin.dashboard.partials.modal_z_report')
+@include('admin.dashboard.partials.modal_erd_stok')
 @endsection
