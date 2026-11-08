@@ -28,6 +28,9 @@
         </p>
     </div>
     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <a href="{{ route('admin.cabang.konsolidasi') }}" class="btn-action-sm btn-action-primary" style="padding: 10px 18px; font-size: 13px; background: rgba(56, 189, 248, 0.2); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8;">
+            <span>📊</span> Dashboard Konsolidasi
+        </a>
         <button type="button" onclick="openAddBranchModal()" class="btn-action-sm btn-action-emerald" style="padding: 10px 18px; font-size: 13px;">
             <span>➕</span> Daftarkan Cabang / DC Baru
         </button>

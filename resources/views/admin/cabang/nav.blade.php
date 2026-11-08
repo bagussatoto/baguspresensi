@@ -1,4 +1,7 @@
 <div class="tab-nav-pills" style="margin-bottom: 24px; display: flex; gap: 8px; flex-wrap: wrap;">
+    <a href="{{ route('admin.cabang.konsolidasi') }}" class="tab-pill-btn {{ request()->routeIs('admin.cabang.konsolidasi*') ? 'active' : '' }}" style="background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.4);">
+        <span>📊</span> Dashboard Konsolidasi
+    </a>
     <a href="{{ route('admin.cabang') }}" class="tab-pill-btn {{ request()->routeIs('admin.cabang') ? 'active' : '' }}">
         <span>🏢</span> Jaringan Cabang & DC
     </a>
