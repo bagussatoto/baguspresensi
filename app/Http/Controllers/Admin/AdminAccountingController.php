@@ -16,6 +16,7 @@ use Modules\Kas\Domain\Models\JournalEntry;
 use Modules\Kas\Domain\Models\JournalEntryLine;
 use Modules\Kas\Domain\Services\AutoJournalService;
 use Modules\MasterData\Domain\Models\Branch;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Controller Admin Akuntansi, Buku Besar, dan Laporan Keuangan Formal SAK.
@@ -521,5 +522,297 @@ class AdminAccountingController extends Controller
         }
 
         return redirect()->route('admin.akuntansi.jurnal')->with('success', "Jurnal {$entry->entry_number} berhasil dicatat dan diposting ke Buku Besar.");
+    }
+
+    /**
+     * 6. Halaman Pivot Table & Analisis Transaksi Akuntansi SAK Multidimensi.
+     */
+    public function pivotIndex(Request $request): View|JsonResponse|StreamedResponse
+    {
+        $startDate = $request->filled('start_date')
+            ? Carbon::parse($request->input('start_date'))->toDateString()
+            : Carbon::now()->startOfMonth()->toDateString();
+        $endDate = $request->filled('end_date')
+            ? Carbon::parse($request->input('end_date'))->toDateString()
+            : Carbon::now()->endOfMonth()->toDateString();
+
+        $selectedBranchId = $request->input('branch_id', 'all');
+        $selectedCategory = $request->input('category', 'all');
+        $rowDim = in_array($request->input('row_dim'), ['account', 'category', 'branch', 'source_type'], true)
+            ? $request->input('row_dim')
+            : 'account';
+
+        $colDim = in_array($request->input('col_dim'), ['branch', 'month', 'category', 'source_type'], true)
+            ? $request->input('col_dim')
+            : ($rowDim === 'branch' ? 'month' : 'branch');
+
+        // Mencegah dimensi baris dan kolom sama persis
+        if ($rowDim === $colDim) {
+            $colDim = $rowDim === 'branch' ? 'month' : 'branch';
+        }
+
+        $metric = in_array($request->input('metric'), ['net', 'debit', 'credit', 'both'], true)
+            ? $request->input('metric')
+            : 'net';
+
+        // Base Query Baris Jurnal
+        $linesQuery = JournalEntryLine::query()
+            ->with(['journalEntry.branch', 'chartOfAccount'])
+            ->whereHas('journalEntry', function ($q) use ($startDate, $endDate, $selectedBranchId): void {
+                $q->where('status', 'posted')
+                    ->whereBetween('entry_date', [$startDate, $endDate]);
+
+                if ($selectedBranchId !== 'all' && is_numeric($selectedBranchId)) {
+                    $q->where('branch_id', (int) $selectedBranchId);
+                }
+            });
+
+        if ($selectedCategory !== 'all') {
+            $linesQuery->whereHas('chartOfAccount', function ($q) use ($selectedCategory): void {
+                $q->where('account_category', $selectedCategory);
+            });
+        }
+
+        $rawLines = $linesQuery->get();
+
+        // Kategori Map Human-Readable
+        $categoryLabels = [
+            'asset' => '1. Aset (Assets)',
+            'liability' => '2. Kewajiban (Liabilities)',
+            'equity' => '3. Ekuitas (Equity)',
+            'revenue' => '4. Pendapatan (Revenue)',
+            'cogs' => '5. Beban Pokok (COGS)',
+            'expense' => '6. Beban Operasional (Expenses)',
+        ];
+
+        // Tipe Sumber Transaksi Map Human-Readable
+        $sourceTypeLabels = [
+            'pos_sale' => 'Penjualan Kasir POS',
+            'manual_journal' => 'Jurnal Penyesuaian Manual',
+            'void_sale' => 'Pembatalan Transaksi POS',
+            'cash_handover' => 'Serah Terima Kasir Shift',
+            'cash_deposit' => 'Setoran Kas ke Bank/Pusat',
+            'closing_settlement' => 'Settlement Kas Harian',
+            'inventory_adjustment' => 'Penyesuaian Stok Gudang',
+        ];
+
+        // Build Distinct Columns & Rows
+        $matrix = [];
+        $columns = [];
+        $rows = [];
+
+        $grandTotalDebit = 0.0;
+        $grandTotalCredit = 0.0;
+        $grandTotalNet = 0.0;
+        $grandTotalCount = 0;
+
+        foreach ($rawLines as $line) {
+            $entry = $line->journalEntry;
+            $acc = $line->chartOfAccount;
+            if (! $entry || ! $acc) {
+                continue;
+            }
+
+            // Extract Row Key & Label
+            $rowKey = match ($rowDim) {
+                'account' => $acc->account_code,
+                'category' => (string) ($acc->account_category?->value ?? $acc->account_category),
+                'branch' => (string) ($entry->branch_id ?? '0'),
+                'source_type' => (string) ($entry->reference_type ?? 'manual_journal'),
+            };
+
+            $rowLabel = match ($rowDim) {
+                'account' => "[{$acc->account_code}] {$acc->account_name}",
+                'category' => $categoryLabels[(string) ($acc->account_category?->value ?? $acc->account_category)] ?? ucfirst((string) $acc->account_category),
+                'branch' => $entry->branch?->name ?? 'Kantor Pusat / Umum',
+                'source_type' => $sourceTypeLabels[(string) ($entry->reference_type ?? 'manual_journal')] ?? ucfirst(str_replace('_', ' ', (string) $entry->reference_type)),
+            };
+
+            // Extract Col Key & Label
+            $colKey = match ($colDim) {
+                'branch' => (string) ($entry->branch_id ?? '0'),
+                'month' => Carbon::parse($entry->entry_date)->format('Y-m'),
+                'category' => (string) ($acc->account_category?->value ?? $acc->account_category),
+                'source_type' => (string) ($entry->reference_type ?? 'manual_journal'),
+            };
+
+            $colLabel = match ($colDim) {
+                'branch' => $entry->branch?->name ?? 'Kantor Pusat / Umum',
+                'month' => Carbon::parse($entry->entry_date)->translatedFormat('M Y'),
+                'category' => $categoryLabels[(string) ($acc->account_category?->value ?? $acc->account_category)] ?? ucfirst((string) $acc->account_category),
+                'source_type' => $sourceTypeLabels[(string) ($entry->reference_type ?? 'manual_journal')] ?? ucfirst(str_replace('_', ' ', (string) $entry->reference_type)),
+            };
+
+            if (! isset($rows[$rowKey])) {
+                $rows[$rowKey] = [
+                    'key' => $rowKey,
+                    'label' => $rowLabel,
+                    'category' => (string) ($acc->account_category?->value ?? $acc->account_category),
+                    'total_debit' => 0.0,
+                    'total_credit' => 0.0,
+                    'total_net' => 0.0,
+                    'count' => 0,
+                ];
+            }
+
+            if (! isset($columns[$colKey])) {
+                $columns[$colKey] = [
+                    'key' => $colKey,
+                    'label' => $colLabel,
+                    'total_debit' => 0.0,
+                    'total_credit' => 0.0,
+                    'total_net' => 0.0,
+                    'count' => 0,
+                ];
+            }
+
+            if (! isset($matrix[$rowKey][$colKey])) {
+                $matrix[$rowKey][$colKey] = [
+                    'debit' => 0.0,
+                    'credit' => 0.0,
+                    'net' => 0.0,
+                    'count' => 0,
+                ];
+            }
+
+            $d = (float) $line->debit;
+            $c = (float) $line->credit;
+
+            // Perhitungan Net SAK:
+            // Untuk Aset, Beban Pokok (COGS), dan Beban: normal Debit (Debit - Kredit)
+            // Untuk Kewajiban, Ekuitas, Pendapatan: normal Kredit (Kredit - Debit)
+            $cat = (string) ($acc->account_category?->value ?? $acc->account_category);
+            $isDebitNormal = in_array($cat, ['asset', 'cogs', 'expense'], true);
+            $netMovement = $isDebitNormal ? ($d - $c) : ($c - $d);
+
+            $matrix[$rowKey][$colKey]['debit'] += $d;
+            $matrix[$rowKey][$colKey]['credit'] += $c;
+            $matrix[$rowKey][$colKey]['net'] += $netMovement;
+            $matrix[$rowKey][$colKey]['count']++;
+
+            $rows[$rowKey]['total_debit'] += $d;
+            $rows[$rowKey]['total_credit'] += $c;
+            $rows[$rowKey]['total_net'] += $netMovement;
+            $rows[$rowKey]['count']++;
+
+            $columns[$colKey]['total_debit'] += $d;
+            $columns[$colKey]['total_credit'] += $c;
+            $columns[$colKey]['total_net'] += $netMovement;
+            $columns[$colKey]['count']++;
+
+            $grandTotalDebit += $d;
+            $grandTotalCredit += $c;
+            $grandTotalNet += $netMovement;
+            $grandTotalCount++;
+        }
+
+        // Sort rows by key/code
+        ksort($rows);
+        ksort($columns);
+
+        // Ekspor ke CSV jika parameter format=csv
+        if ($request->input('format') === 'csv') {
+            $fileName = 'pivot_transaksi_akuntansi_'.$startDate.'_sd_'.$endDate.'.csv';
+            $headers = [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
+            ];
+
+            $callback = function () use ($rows, $columns, $matrix, $metric, $rowDim, $grandTotalDebit, $grandTotalCredit, $grandTotalNet): void {
+                $handle = fopen('php://output', 'w');
+                // BOM UTF-8 for Excel compatibility
+                fwrite($handle, "\xEF\xBB\xBF");
+
+                // Header Row
+                $csvHeaders = [ucwords(str_replace('_', ' ', $rowDim))];
+                foreach ($columns as $col) {
+                    $csvHeaders[] = $col['label'];
+                }
+                $csvHeaders[] = 'Total Debit (Rp)';
+                $csvHeaders[] = 'Total Kredit (Rp)';
+                $csvHeaders[] = 'Total Mutasi Netto (Rp)';
+                fputcsv($handle, $csvHeaders);
+
+                // Data Rows
+                foreach ($rows as $rKey => $row) {
+                    $rowVals = [$row['label']];
+                    foreach ($columns as $cKey => $col) {
+                        $cell = $matrix[$rKey][$cKey] ?? ['debit' => 0, 'credit' => 0, 'net' => 0];
+                        $val = match ($metric) {
+                            'debit' => $cell['debit'],
+                            'credit' => $cell['credit'],
+                            'net' => $cell['net'],
+                            default => "D: {$cell['debit']} | K: {$cell['credit']}",
+                        };
+                        $rowVals[] = is_numeric($val) ? number_format((float) $val, 2, ',', '.') : $val;
+                    }
+                    $rowVals[] = number_format($row['total_debit'], 2, ',', '.');
+                    $rowVals[] = number_format($row['total_credit'], 2, ',', '.');
+                    $rowVals[] = number_format($row['total_net'], 2, ',', '.');
+                    fputcsv($handle, $rowVals);
+                }
+
+                // Summary Row
+                $summaryRow = ['GRAND TOTAL'];
+                foreach ($columns as $col) {
+                    $colVal = match ($metric) {
+                        'debit' => $col['total_debit'],
+                        'credit' => $col['total_credit'],
+                        'net' => $col['total_net'],
+                        default => "D: {$col['total_debit']} | K: {$col['total_credit']}",
+                    };
+                    $summaryRow[] = is_numeric($colVal) ? number_format((float) $colVal, 2, ',', '.') : $colVal;
+                }
+                $summaryRow[] = number_format($grandTotalDebit, 2, ',', '.');
+                $summaryRow[] = number_format($grandTotalCredit, 2, ',', '.');
+                $summaryRow[] = number_format($grandTotalNet, 2, ',', '.');
+                fputcsv($handle, $summaryRow);
+
+                fclose($handle);
+            };
+
+            return response()->stream($callback, 200, $headers);
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'row_dim' => $rowDim,
+                'col_dim' => $colDim,
+                'metric' => $metric,
+                'columns' => array_values($columns),
+                'rows' => array_values($rows),
+                'matrix' => $matrix,
+                'summary' => [
+                    'grand_total_debit' => $grandTotalDebit,
+                    'grand_total_credit' => $grandTotalCredit,
+                    'grand_total_net' => $grandTotalNet,
+                    'grand_total_count' => $grandTotalCount,
+                ],
+            ]);
+        }
+
+        $branches = Branch::where('is_active', true)->orderBy('name')->get();
+
+        return view('admin.accounting.pivot', compact(
+            'startDate',
+            'endDate',
+            'selectedBranchId',
+            'selectedCategory',
+            'rowDim',
+            'colDim',
+            'metric',
+            'branches',
+            'categoryLabels',
+            'columns',
+            'rows',
+            'matrix',
+            'grandTotalDebit',
+            'grandTotalCredit',
+            'grandTotalNet',
+            'grandTotalCount'
+        ));
     }
 }

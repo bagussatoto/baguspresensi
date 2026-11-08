@@ -484,6 +484,18 @@ class AdminErpHubController extends Controller
                         'roles' => ['Super Admin', 'Owner', 'Auditor'],
                     ],
                     [
+                        'id' => 'mod-pivot-transaksi',
+                        'title' => 'Pivot Analisis Transaksi SAK',
+                        'code' => 'F-PVT',
+                        'desc' => 'Tabel matriks pivot multidimensi data transaksi jurnal SAK berdasarkan akun COA, cabang, periode, dan kategori.',
+                        'url' => route('admin.akuntansi.pivot'),
+                        'route_name' => 'admin.akuntansi.pivot',
+                        'icon' => '📊',
+                        'stat_badge' => 'Pivot Matrix SAK',
+                        'roles' => ['Super Admin', 'Finance', 'Auditor'],
+                        'is_featured' => true,
+                    ],
+                    [
                         'id' => 'mod-coa-chart',
                         'title' => 'Bagan Akun (Chart of Accounts / COA)',
                         'code' => 'F-COA',

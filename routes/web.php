@@ -295,6 +295,7 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::get('/akuntansi/neraca-saldo', [AdminAccountingController::class, 'neracaSaldoIndex'])->name('admin.akuntansi.neraca-saldo');
     Route::get('/akuntansi/laba-rugi', [AdminAccountingController::class, 'labaRugiIndex'])->name('admin.akuntansi.laba-rugi');
     Route::get('/akuntansi/neraca', [AdminAccountingController::class, 'neracaIndex'])->name('admin.akuntansi.neraca');
+    Route::get('/akuntansi/pivot', [AdminAccountingController::class, 'pivotIndex'])->name('admin.akuntansi.pivot');
 
     // Stok Limit & Ledger Inventaris Fisik Gudang
     Route::get('/stok-limit', [AdminStockController::class, 'index'])->name('admin.stok-limit');
