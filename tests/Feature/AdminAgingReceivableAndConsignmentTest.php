@@ -331,4 +331,26 @@ class AdminAgingReceivableAndConsignmentTest extends TestCase
         $consignResponse->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
         $this->assertStringContainsString('SALDO KONSINYASI MULTI-CABANG', $consignResponse->streamedContent());
     }
+
+    public function test_can_generate_and_send_whatsapp_invoice_reminder(): void
+    {
+        $invoice = SalesInvoice::where('invoice_number', 'INV-AGING-001')->first();
+        $this->assertNotNull($invoice);
+
+        $response = $this->postJson(route('admin.cabang.aging.whatsapp-reminder'), [
+            'invoice_id' => $invoice->id,
+            'source' => 'SalesInvoice',
+            'phone' => '081234567890',
+        ]);
+
+        $response->assertOk();
+        $data = $response->json();
+
+        $this->assertTrue($data['success']);
+        $this->assertEquals('6281234567890', $data['phone']);
+        $this->assertStringContainsString('https://api.whatsapp.com/send?phone=6281234567890', $data['wa_link']);
+        $this->assertStringContainsString('INV-AGING-001', $data['text_message']);
+        $this->assertStringContainsString('Toko Grosir Maju Jaya', $data['text_message']);
+        $this->assertStringContainsString('PT Maya Graha Kencana', $data['text_message']);
+    }
 }

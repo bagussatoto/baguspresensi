@@ -188,6 +188,85 @@
             </table>
         </div>
     </div>
+
+    <!-- TABEL RINCIAN FAKTUR PIUTANG & AKSI REMINDER WHATSAPP -->
+    <div class="data-table-container" style="background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; overflow: hidden; margin-bottom: 20px;">
+        <div style="padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+                <h3 style="font-size: 14px; font-weight: 700; color: #f8fafc; margin: 0; display: flex; align-items: center; gap: 8px;">
+                    <span>🧾</span> Rincian Faktur Piutang Aktif & Pengingat Tagihan WhatsApp
+                </h3>
+                <span style="font-size: 11.5px; color: #64748b;">Klik tombol WhatsApp untuk mengirimkan pengingat penagihan resmi otomatis ke pelanggan.</span>
+            </div>
+            <span style="font-size: 12px; color: #38bdf8; font-weight: 700;">{{ count($agingInvoices) }} Faktur Belum Lunas</span>
+        </div>
+
+        <div style="overflow-x: auto;">
+            <table class="inventory-table" style="width: 100%; border-collapse: collapse; font-size: 12.5px; text-align: left;">
+                <thead>
+                    <tr style="background: rgba(15, 23, 42, 0.7); border-bottom: 1px solid rgba(255,255,255,0.08); color: #94a3b8; font-size: 11px; text-transform: uppercase;">
+                        <th style="padding: 10px 14px;">No. Faktur</th>
+                        <th style="padding: 10px 14px;">Pelanggan & Cabang</th>
+                        <th style="padding: 10px 14px;">Tgl Faktur</th>
+                        <th style="padding: 10px 14px;">Jatuh Tempo</th>
+                        <th style="padding: 10px 14px;">Hari Terlewat (DPD)</th>
+                        <th style="padding: 10px 14px; text-align: right;">Total Tagihan</th>
+                        <th style="padding: 10px 14px; text-align: right;">Sisa Piutang</th>
+                        <th style="padding: 10px 14px; text-align: center;">Aksi Tagihan WA</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($agingInvoices as $inv)
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                            <td style="padding: 11px 14px; font-family: monospace; font-weight: 700; color: #38bdf8;">
+                                {{ $inv['invoice_number'] }}
+                                <div style="font-size: 10.5px; color: #64748b; font-weight: normal;">{{ $inv['source'] }}</div>
+                            </td>
+                            <td style="padding: 11px 14px;">
+                                <div style="font-weight: 600; color: #f8fafc;">{{ $inv['customer_name'] }}</div>
+                                <div style="font-size: 11px; color: #94a3b8;">🏢 {{ $inv['branch_name'] }} &bull; <span style="color: #38bdf8;">{{ $inv['customer_type'] }}</span></div>
+                            </td>
+                            <td style="padding: 11px 14px; color: #cbd5e1;">
+                                {{ $inv['invoice_date'] }}
+                            </td>
+                            <td style="padding: 11px 14px; color: #cbd5e1;">
+                                {{ $inv['due_date'] }}
+                            </td>
+                            <td style="padding: 11px 14px;">
+                                @if($inv['days_overdue'] > 60)
+                                    <span class="badge-aging-danger">{{ $inv['days_overdue'] }} Hari (Kritis)</span>
+                                @elseif($inv['days_overdue'] > 0)
+                                    <span class="badge-aging-warn">{{ $inv['days_overdue'] }} Hari Terlewat</span>
+                                @else
+                                    <span class="badge-aging-current">Lancar (Current)</span>
+                                @endif
+                            </td>
+                            <td style="padding: 11px 14px; text-align: right; font-family: monospace; color: #cbd5e1;">
+                                Rp {{ number_format($inv['total_amount'], 0, ',', '.') }}
+                            </td>
+                            <td style="padding: 11px 14px; text-align: right; font-family: monospace; font-weight: 700; color: #f43f5e;">
+                                Rp {{ number_format($inv['remaining_balance'], 0, ',', '.') }}
+                            </td>
+                            <td style="padding: 11px 14px; text-align: center;">
+                                <button type="button" 
+                                        onclick="openWaModal({{ json_encode($inv) }})" 
+                                        class="btn-action-sm btn-action-emerald" 
+                                        style="padding: 6px 12px; font-size: 11.5px; background: #059669; border: none; display: inline-flex; align-items: center; gap: 5px;">
+                                    <span>📲</span> Tagih WA
+                                </button>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="8" style="padding: 30px; text-align: center; color: #64748b;">
+                                ✓ Tidak ada rincian faktur piutang yang aktif.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
 <!-- SECTION 2: SALDO KONSINYASI MULTI-CABANG -->
@@ -468,7 +547,88 @@
     </div>
 </div>
 
+<!-- MODAL 3: PENGIRIMAN REMINDER WHATSAPP TAGIHAN -->
+<div id="waModal" class="modal-backdrop-custom">
+    <div class="modal-box-custom">
+        <div style="padding: 20px 24px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; background: rgba(5, 150, 105, 0.1);">
+            <h3 style="font-size: 16px; font-weight: 700; color: #34d399; margin: 0; display: flex; align-items: center; gap: 8px;">
+                <span>📲</span> Kirim Pengingat Tagihan WhatsApp (Penagihan Resmi)
+            </h3>
+            <button type="button" onclick="closeWaModal()" style="background: none; border: none; color: #94a3b8; font-size: 20px; cursor: pointer;">&times;</button>
+        </div>
+
+        <form action="{{ route('admin.cabang.aging.whatsapp-reminder') }}" method="POST" target="_blank" style="padding: 24px;">
+            @csrf
+            <input type="hidden" name="invoice_id" id="waInvoiceId">
+            <input type="hidden" name="source" id="waSource">
+
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                <div style="background: rgba(15, 23, 42, 0.6); padding: 14px; border-radius: 8px; border: 1px solid #334155;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span id="waInvoiceNumber" style="font-family: monospace; font-weight: 700; color: #38bdf8; font-size: 15px;">-</span>
+                        <span id="waDaysBadge" style="font-size: 11px; padding: 2px 8px; border-radius: 4px;">-</span>
+                    </div>
+                    <div id="waCustomerName" style="font-weight: 600; color: #f8fafc; font-size: 13px;">-</div>
+                    <div style="margin-top: 6px; font-size: 13px; color: #cbd5e1;">
+                        Sisa Piutang: <strong id="waRemainingBalance" style="color: #f43f5e; font-family: monospace; font-size: 15px;">Rp 0</strong>
+                    </div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">Nomor WhatsApp Tujuan (Pelanggan) *</label>
+                    <input type="text" name="phone" id="waPhoneInput" placeholder="Contoh: 081234567890 atau 6281234567890" required style="width: 100%; background: #0f172a; border: 1px solid #334155; color: #f8fafc; font-family: monospace; font-size: 14px; padding: 10px 14px; border-radius: 8px;">
+                    <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Nomor otomatis dinormalisasi ke format internasional (62xxx).</div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">Pratinjau Pesan Resmi Penagihan</label>
+                    <textarea id="waPreviewText" rows="6" readonly style="width: 100%; background: #0b1120; border: 1px solid #334155; color: #94a3b8; font-family: monospace; font-size: 11.5px; padding: 10px 14px; border-radius: 8px; line-height: 1.4;"></textarea>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.06);">
+                <button type="button" onclick="closeWaModal()" class="btn-action-sm" style="background: rgba(255,255,255,0.08); color: #cbd5e1;">Batal</button>
+                <button type="submit" class="btn-action-sm btn-action-emerald" style="padding: 10px 20px; font-size: 13px; background: #059669; border: none; display: flex; align-items: center; gap: 6px;">
+                    <span>📲</span> Buka di WhatsApp & Kirim
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
+    function openWaModal(inv) {
+        document.getElementById('waInvoiceId').value = inv.id;
+        document.getElementById('waSource').value = inv.source;
+        document.getElementById('waInvoiceNumber').innerText = inv.invoice_number;
+        document.getElementById('waCustomerName').innerText = inv.customer_name + ' (' + inv.branch_name + ')';
+        document.getElementById('waRemainingBalance').innerText = 'Rp ' + Number(inv.remaining_balance).toLocaleString('id-ID');
+
+        const badge = document.getElementById('waDaysBadge');
+        if (inv.days_overdue > 60) {
+            badge.innerText = inv.days_overdue + ' Hari Terlewat (Kritis)';
+            badge.style.cssText = 'background: rgba(244, 63, 94, 0.2); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.4);';
+        } else if (inv.days_overdue > 0) {
+            badge.innerText = inv.days_overdue + ' Hari Terlewat';
+            badge.style.cssText = 'background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4);';
+        } else {
+            badge.innerText = 'Lancar (Current)';
+            badge.style.cssText = 'background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);';
+        }
+
+        // Default template
+        const preview = `📋 PEMBERITAHUAN TAGIHAN & PENGINGAT PEMBAYARAN\nPT MAYA GRAHA KENCANA\n━━━━━━━━━━━━━━━━━━━━\nYth. Bapak/Ibu ${inv.customer_name},\n\nBerikut kami sampaikan rincian tagihan faktur atas transaksi kemitraan Anda:\n📄 No. Faktur: ${inv.invoice_number}\n🏢 Cabang: ${inv.branch_name}\n⏳ Jatuh Tempo: ${inv.due_date} (${inv.days_overdue > 0 ? inv.days_overdue + ' hari lalu' : 'Lancar'})\n📌 SISA TAGIHAN: Rp ${Number(inv.remaining_balance).toLocaleString('id-ID')}\n\nPembayaran dapat ditransfer melalui:\n🏦 Bank BCA: 018-889-9111 a/n PT Maya Graha Kencana.\n\nTerima kasih atas kerja sama dan kemitraannya. 🙏`;
+        document.getElementById('waPreviewText').value = preview;
+
+        // Ambil nomor pelanggan jika ada
+        document.getElementById('waPhoneInput').value = inv.customer_phone || '';
+        document.getElementById('waModal').classList.add('open');
+    }
+
+    function closeWaModal() {
+        document.getElementById('waModal').classList.remove('open');
+    }
+
     function openConsignmentModal() {
         document.getElementById('consignmentModal').classList.add('open');
     }
@@ -515,4 +675,5 @@
     }
 </script>
 @endsection
+
 

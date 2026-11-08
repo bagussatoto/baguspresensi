@@ -255,6 +255,7 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     // Master Cabang & Jaringan Distribusi (MDM Multi-Cabang Hub-and-Spoke)
     Route::get('/cabang/aging', [AdminAgingReceivableController::class, 'index'])->name('admin.cabang.aging');
     Route::get('/cabang/aging/export-ar', [AdminAgingReceivableController::class, 'exportAgingCsv'])->name('admin.cabang.aging.export-ar');
+    Route::post('/cabang/aging/whatsapp-reminder', [AdminAgingReceivableController::class, 'sendWhatsAppReminder'])->name('admin.cabang.aging.whatsapp-reminder');
     Route::post('/cabang/consignments', [AdminAgingReceivableController::class, 'storeConsignment'])->name('admin.cabang.consignments.store');
     Route::post('/cabang/consignments/{consignment}/settle', [AdminAgingReceivableController::class, 'settleConsignment'])->name('admin.cabang.consignments.settle');
     Route::get('/cabang/consignments/export', [AdminAgingReceivableController::class, 'exportConsignmentCsv'])->name('admin.cabang.consignments.export');

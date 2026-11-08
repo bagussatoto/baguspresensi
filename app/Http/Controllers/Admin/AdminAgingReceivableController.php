@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domains\Attendance\Services\EarlyWarningNotificationService;
 use App\Http\Controllers\Controller;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -29,7 +30,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class AdminAgingReceivableController extends Controller
 {
     public function __construct(
-        protected AutoJournalService $autoJournalService
+        protected AutoJournalService $autoJournalService,
+        protected EarlyWarningNotificationService $notificationService
     ) {}
 
     /**
@@ -423,6 +425,49 @@ class AdminAgingReceivableController extends Controller
     }
 
     /**
+     * Kirim Notifikasi / Reminder Tagihan Piutang via WhatsApp Gateway & Generate Link Direct WA.
+     */
+    public function sendWhatsAppReminder(Request $request): JsonResponse|RedirectResponse
+    {
+        $validated = $request->validate([
+            'invoice_id' => ['required', 'integer'],
+            'source' => ['required', 'in:SalesInvoice,CafeSale'],
+            'phone' => ['nullable', 'string', 'max:25'],
+        ]);
+
+        $invoice = $validated['source'] === 'SalesInvoice'
+            ? SalesInvoice::with(['customer', 'branch'])->find($validated['invoice_id'])
+            : CafeSale::with(['customer', 'branch'])->find($validated['invoice_id']);
+
+        if (! $invoice) {
+            $msg = 'Faktur tagihan tidak ditemukan.';
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 404);
+            }
+
+            return back()->with('error', $msg);
+        }
+
+        $res = $this->notificationService->sendInvoiceDueReminder($invoice, $validated['phone'] ?? null);
+
+        $msg = $res['success']
+            ? "Pemberitahuan tagihan faktur {$invoice->invoice_number} berhasil dikirim ke WhatsApp {$res['phone']}!"
+            : "Pesan tagihan faktur {$invoice->invoice_number} telah disiapkan untuk nomor {$res['phone']}.";
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $msg,
+                'phone' => $res['phone'],
+                'wa_link' => $res['wa_link'],
+                'text_message' => $res['message'],
+            ]);
+        }
+
+        return redirect()->away($res['wa_link']);
+    }
+
+    /**
      * Hitung Aging Faktur Piutang dari SalesInvoice & CafeSale.
      *
      * @return array<int, array<string, mixed>>
@@ -479,6 +524,7 @@ class AdminAgingReceivableController extends Controller
                 'branch_name' => $si->branch->name ?? 'Cabang Pusat',
                 'customer_id' => $si->customer_id,
                 'customer_name' => $si->customer->name ?? 'Pelanggan Umum',
+                'customer_phone' => $si->customer?->phone ?? '',
                 'customer_type' => strtoupper($typeLabel),
                 'invoice_date' => $si->invoice_date ? Carbon::parse($si->invoice_date)->format('d/m/Y') : '-',
                 'due_date' => $dueDate->format('d/m/Y'),
@@ -546,6 +592,7 @@ class AdminAgingReceivableController extends Controller
                 'branch_name' => $cs->branch->name ?? 'Outlet',
                 'customer_id' => $cs->customer_id,
                 'customer_name' => $cs->customer->name ?? $cs->customer_name,
+                'customer_phone' => $cs->customer?->phone ?? '',
                 'customer_type' => strtoupper($typeLabel),
                 'invoice_date' => $invDate->format('d/m/Y'),
                 'due_date' => $dueDate->format('d/m/Y'),

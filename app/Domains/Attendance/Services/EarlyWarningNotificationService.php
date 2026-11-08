@@ -7,9 +7,12 @@ namespace App\Domains\Attendance\Services;
 use App\Models\EmployeeRegistration;
 use App\Models\PasswordResetRequest;
 use App\Models\ShiftSalesSummary;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Modules\MasterData\Domain\Models\CafeSale;
 use Modules\MasterData\Domain\Models\Employee;
+use Modules\Penjualan\Domain\Models\SalesInvoice;
 
 /**
  * Service untuk mendistribusikan notifikasi peringatan dini (Early Warning Notification)
@@ -627,6 +630,85 @@ class EarlyWarningNotificationService
         }
 
         return $this->sendTelegramAlert($adminMessage);
+    }
+
+    /**
+     * Kirim notifikasi reminder tagihan piutang faktur ke nomor WhatsApp Pelanggan Grosir / B2B.
+     *
+     * @return array{success: bool, phone: string, message: string, wa_link: string}
+     */
+    public function sendInvoiceDueReminder(SalesInvoice|CafeSale $invoice, ?string $customPhone = null): array
+    {
+        $customer = $invoice->customer;
+        $custName = $customer?->name ?? ($invoice->customer_name ?? 'Pelanggan Terhormat');
+        $phone = $customPhone ?: ($customer?->phone ?? '');
+
+        $invNumber = $invoice->invoice_number;
+        $branchName = $invoice->branch->name ?? 'Kantor Pusat';
+
+        $totalAmount = (float) $invoice->net_amount;
+        $paidAmount = (float) ($invoice instanceof CafeSale ? $invoice->amount_paid : $invoice->paid_amount);
+        $remaining = max(0.0, $totalAmount - $paidAmount);
+
+        $invDate = $invoice->invoice_date ?? $invoice->created_at;
+        $invDateStr = $invDate ? Carbon::parse($invDate)->format('d/m/Y') : '-';
+
+        $dueDate = $invoice->due_date ?? null;
+        if (! $dueDate) {
+            $termDays = (int) ($customer?->payment_term_days ?? 30);
+            $dueDate = $invDate ? Carbon::parse($invDate)->addDays($termDays) : Carbon::today();
+        } else {
+            $dueDate = Carbon::parse($dueDate);
+        }
+        $dueDateStr = $dueDate->format('d/m/Y');
+
+        $isOverdue = Carbon::today()->greaterThan($dueDate);
+        $daysDiff = (int) abs(Carbon::today()->diffInDays($dueDate));
+
+        $statusKet = $isOverdue
+            ? "⚠️ *Status: Jatuh Tempo ({$daysDiff} hari yang lalu)*"
+            : "⏳ *Status: Jatuh Tempo dalam {$daysDiff} hari ke depan*";
+
+        $message = "📋 *PEMBERITAHUAN TAGIHAN & PENGINGAT PEMBAYARAN*\n"
+            ."*PT MAYA GRAHA KENCANA*\n"
+            ."━━━━━━━━━━━━━━━━━━━━\n"
+            ."Yth. Bapak/Ibu *{$custName}*,\n\n"
+            ."Semoga Bapak/Ibu senantiasa dalam keadaan sehat dan sukses.\n"
+            ."Bersama ini kami menginformasikan tagihan faktur atas transaksi kemitraan Anda:\n\n"
+            ."📄 *No. Faktur:* {$invNumber}\n"
+            ."🏢 *Cabang Penerbit:* {$branchName}\n"
+            ."📅 *Tanggal Faktur:* {$invDateStr}\n"
+            ."⏳ *Tanggal Jatuh Tempo:* {$dueDateStr}\n"
+            ."{$statusKet}\n\n"
+            .'💰 *Total Nilai Faktur:* Rp '.number_format($totalAmount, 0, ',', '.')."\n"
+            .'💵 *Sudah Terbayar:* Rp '.number_format($paidAmount, 0, ',', '.')."\n"
+            .'📌 *SISA TAGIHAN:* *Rp '.number_format($remaining, 0, ',', '.')."*\n\n"
+            ."━━━━━━━━━━━━━━━━━━━━\n"
+            ."Pembayaran dapat ditransfer melalui rekening resmi:\n"
+            ."🏦 *Bank BCA: 018-889-9111*\n"
+            ."A/N: *PT Maya Graha Kencana*\n\n"
+            ."Mohon mengonfirmasi atau mengirimkan bukti transfer setelah pembayaran dilakukan.\n"
+            ."Apabila pembayaran telah diselesaikan sebelum pesan ini diterima, mohon abaikan pemberitahuan ini.\n\n"
+            .'Terima kasih atas kerja sama dan kemitraan yang terjalin dengan baik. 🙏';
+
+        // Generate WA Web Direct Link
+        $cleanPhone = preg_replace('/[^0-9]/', '', (string) $phone);
+        if (str_starts_with($cleanPhone, '0')) {
+            $cleanPhone = '62'.substr($cleanPhone, 1);
+        }
+        $waLink = 'https://api.whatsapp.com/send?phone='.$cleanPhone.'&text='.rawurlencode($message);
+
+        $sent = false;
+        if (! empty($cleanPhone)) {
+            $sent = $this->sendWhatsApp($cleanPhone, $message);
+        }
+
+        return [
+            'success' => $sent,
+            'phone' => $cleanPhone,
+            'message' => $message,
+            'wa_link' => $waLink,
+        ];
     }
 
     /**
