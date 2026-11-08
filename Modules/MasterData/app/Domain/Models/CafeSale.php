@@ -36,9 +36,13 @@ class CafeSale extends Model
         'void_at',
         'discount_percent',
         'discount_authorized_by',
+        'is_locked',
+        'locked_at',
     ];
 
     protected $casts = [
+        'is_locked' => 'boolean',
+        'locked_at' => 'datetime',
         'total_billing' => 'float',
         'total_fnb' => 'float',
         'gross_amount' => 'float',

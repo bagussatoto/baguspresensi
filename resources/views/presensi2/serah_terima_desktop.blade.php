@@ -526,6 +526,15 @@
             <a href="{{ route('pos') }}" class="btn-nav-pill" title="Kembali ke Layar Penjualan POS Desktop">
                 <span>←</span> <strong>POS Desktop</strong>
             </a>
+            <button type="button" onclick="openPrevChecklistModal()" class="btn-nav-pill" style="color: #0369a1; border-color: #bae6fd; background: #f0f9ff;" title="Lihat Checklist Serah Terima Shift Sebelumnya">
+                <span>📋</span> Checklist Shift Lalu
+            </button>
+            <button type="button" onclick="openPrevSalesModal()" class="btn-nav-pill" style="color: #4338ca; border-color: #c7d2fe; background: #eef2ff;" title="Lihat Riwayat & Rincian Penjualan Shift Sebelumnya">
+                <span>🔍</span> Penjualan Shift Lalu
+            </button>
+            <button type="button" onclick="openDailySettlementModal()" class="btn-nav-pill" style="color: #0f766e; border-color: #99f6e4; background: #f0fdfa;" title="Lihat Closing Statement & Settlement Setoran Harian">
+                <span>📊</span> Settlement Harian ({{ $dailySettlement['settled_count'] ?? 0 }}/{{ $dailySettlement['total_shift_count'] ?? 4 }})
+            </button>
             <a href="{{ route('presensi2.rekap', ['summary_id' => $salesSummary?->id]) }}" class="btn-nav-pill" style="color: #0369a1; border-color: #bae6fd; background: #e0f2fe;" title="Buka Detail Rekapitulasi Lengkap">
                 <span>📊</span> Rekap Pendapatan
             </a>
@@ -1700,6 +1709,7 @@
             calcDenominations();
         });
     </script>
+    @include('presensi2.partials.modal_shift_history_and_settlement')
 </body>
 </html>
 

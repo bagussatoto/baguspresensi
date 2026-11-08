@@ -534,6 +534,15 @@
             <a href="{{ route('presensi2.stok') }}" class="btn-nav-pill" title="Cek Stok Fisik Shift">
                 <span>📦</span> Cek Stok
             </a>
+            <button type="button" onclick="openPrevChecklistModal()" class="btn-nav-pill" style="color: #0369a1; border-color: #bae6fd; background: #f0f9ff;" title="Lihat Checklist Serah Terima Shift Sebelumnya">
+                <span>📋</span> Checklist Shift Lalu
+            </button>
+            <button type="button" onclick="openPrevSalesModal()" class="btn-nav-pill" style="color: #4338ca; border-color: #c7d2fe; background: #eef2ff;" title="Lihat Riwayat & Rincian Penjualan Shift Sebelumnya">
+                <span>🔍</span> Penjualan Shift Lalu
+            </button>
+            <button type="button" onclick="openDailySettlementModal()" class="btn-nav-pill" style="color: #0f766e; border-color: #99f6e4; background: #f0fdfa;" title="Lihat Closing Statement & Settlement Setoran Harian">
+                <span>📊</span> Settlement Harian ({{ $dailySettlement['settled_count'] ?? 0 }}/{{ $dailySettlement['total_shift_count'] ?? 4 }})
+            </button>
             <a href="{{ route('presensi2.serah-terima') }}" class="btn-nav-pill" style="color: #b45309; border-color: #fcd34d; background: #fef3c7;" title="Tutup Shift & Serah Terima Kasir">
                 <span>🏁</span> Tutup Shift
             </a>
@@ -553,6 +562,24 @@
             </a>
         </div>
     </header>
+
+    {{-- LOCK STATUS ALERT: KETIKA REKAP SELESAI & PENJUALAN DIKUNCI --}}
+    @if (!empty($isSalesLocked))
+        <div style="background: linear-gradient(135deg, #fff1f2, #ffe4e6); border: 1px solid #f43f5e; color: #9f1239; padding: 12px 20px; margin: 0 20px 14px 20px; border-radius: 8px; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 4px rgba(244,63,94,0.1);">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 22px;">🔒</span>
+                <div>
+                    <div>TRANSAKSI PENJUALAN SHIFT INI TELAH DIKUNCI (REKAP SELESAI)</div>
+                    <div style="font-size: 11.5px; font-weight: 500; color: #be123c; margin-top: 2px;">
+                        Rekapitulasi shift kasir telah ditutup. Transaksi baru tidak dapat disimpan pada shift ini. Silakan buka shift baru untuk transaksi berikutnya.
+                    </div>
+                </div>
+            </div>
+            <span style="background: #e11d48; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 11px; text-transform: uppercase; font-weight: 800;">
+                Mode Kunci / Read-Only
+            </span>
+        </div>
+    @endif
 
     {{-- ALERT STATUS / NOTIFIKASI RESET --}}
     @if (session('status'))
@@ -807,8 +834,8 @@
                 <button type="button" class="btn-cart-clear" onclick="clearCart()" title="Bersihkan keranjang">
                     <span>🔄</span> clear
                 </button>
-                <button type="button" id="btn-save-pos-order" class="btn-cart-submit" onclick="submitPosOrder()" title="Simpan pesanan langsung tanpa harus cetak struk">
-                    Simpan Order Penjualan
+                <button type="button" id="btn-save-pos-order" class="btn-cart-submit" {{ !empty($isSalesLocked) ? 'disabled style=background:#94a3b8;cursor:not-allowed; title="Shift telah dikunci (rekap selesai)"' : 'onclick=submitPosOrder()' }}>
+                    {{ !empty($isSalesLocked) ? '🔒 Penjualan Dikunci (Rekap Selesai)' : 'Simpan Order Penjualan' }}
                 </button>
                 <button type="button" id="btn-print-last-receipt" class="btn-cart-clear" style="display: none; background: #0284c7; border: 1px solid #0369a1; color: #fff; width: auto; padding: 0 12px; font-weight: 700;" onclick="printLastReceipt()" title="Cetak struk pesanan terakhir yang baru saja disimpan">
                     <span>🖨️</span> Struk
@@ -1549,6 +1576,11 @@
 
         // 6. SIMPAN ORDER PENJUALAN
         async function submitPosOrder() {
+            if (@json(!empty($isSalesLocked))) {
+                alert('PERINGATAN: Transaksi penjualan shift ini telah DIKUNCI karena rekapitulasi shift telah selesai. Buka shift baru untuk melanjutkan transaksi kasir.');
+                return;
+            }
+
             const items = Object.values(posCart);
             if (items.length === 0) {
                 alert('Keranjang belanja masih kosong! Silakan pilih produk terlebih dahulu.');
@@ -2183,5 +2215,6 @@
             }
         });
     </script>
+    @include('presensi2.partials.modal_shift_history_and_settlement')
 </body>
 </html>

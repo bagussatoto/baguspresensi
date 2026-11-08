@@ -278,6 +278,15 @@
                 <button type="button" onclick="triggerRekapPrint('hardware')" class="btn" style="padding: 8px 14px; font-size: 12.5px; width: auto; background: linear-gradient(135deg, #059669, #10b981); color: #fff; border: 1px solid rgba(16, 185, 129, 0.5); font-weight: 700;">
                     <span>🖥️</span> Cetak Checklist Hardware
                 </button>
+                <button type="button" onclick="openPrevChecklistModal()" class="filter-chip" style="background: rgba(2, 132, 199, 0.15); color: #38bdf8; border-color: rgba(2, 132, 199, 0.4); cursor: pointer;" title="Lihat Checklist Serah Terima Shift Sebelumnya">
+                    <span>📋</span> Checklist Shift Lalu
+                </button>
+                <button type="button" onclick="openPrevSalesModal()" class="filter-chip" style="background: rgba(99, 102, 241, 0.15); color: #a5b4fc; border-color: rgba(99, 102, 241, 0.4); cursor: pointer;" title="Lihat Rincian Penjualan Shift Sebelumnya">
+                    <span>🔍</span> Penjualan Shift Lalu
+                </button>
+                <button type="button" onclick="openDailySettlementModal()" class="filter-chip" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.4); cursor: pointer;" title="Lihat Closing Statement & Settlement Setoran Harian">
+                    <span>📊</span> Settlement Harian ({{ $dailySettlement['settled_count'] ?? 0 }}/{{ $dailySettlement['total_shift_count'] ?? 4 }})
+                </button>
                 <a href="{{ route('presensi2.penjualan') }}" class="btn btn-emerald" style="padding: 8px 14px; font-size: 12.5px; width: auto; text-decoration: none;">
                     <span>🛒</span> Kasir Penjualan
                 </a>
@@ -327,6 +336,24 @@
             Waktu Server: <span style="color: #38bdf8; font-family: monospace;">{{ now()->format('d/m/Y H:i:s') }}</span>
         </div>
     </div>
+
+    {{-- STATUS KUNCI PENJUALAN KASIR SAAT REKAP --}}
+    @if (!empty($isSalesLocked))
+        <div class="no-print" style="background: rgba(244, 63, 94, 0.12); border: 1px solid rgba(244, 63, 94, 0.35); border-radius: 12px; padding: 12px 18px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 20px;">🔒</span>
+                <div>
+                    <strong style="color: #fb7185; font-size: 13px;">PENJUALAN SHIFT TELAH DIKUNCI</strong>
+                    <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
+                        Transaksi penjualan pada shift ini telah dikunci permanen karena proses rekapitulasi shift telah selesai.
+                    </div>
+                </div>
+            </div>
+            <span class="badge" style="background: rgba(244, 63, 94, 0.2); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4); font-size: 11px;">
+                Terkunci (Lock Active)
+            </span>
+        </div>
+    @endif
 
     {{-- LAPORAN TABEL CETAK RATA TENGAH (DISESUAIKAN DENGAN DATA PRINT KITA) --}}
     <div id="print-table-report" class="print-table-report">
@@ -1768,4 +1795,5 @@
         if (modal) modal.style.display = 'none';
     }
 </script>
+@include('presensi2.partials.modal_shift_history_and_settlement')
 @endsection

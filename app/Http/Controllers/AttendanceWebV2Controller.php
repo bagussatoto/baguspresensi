@@ -2234,6 +2234,31 @@ class AttendanceWebV2Controller extends Controller
             default => 'Serah Terima Estafet di Laci Kasir',
         };
 
+        // Rincian Riwayat Transaksi Penjualan Shift Sebelumnya
+        $prevShiftSales = CafeSale::with(['items.variant', 'employee'])
+            ->whereDate('created_at', $prevWorkDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->when($prevShift, function ($q) use ($prevShift) {
+                $q->whereTime('created_at', '>=', $prevShift->start_time)
+                    ->whereTime('created_at', '<=', $prevShift->end_time);
+            })
+            ->where('payment_status', '!=', 'cancelled')
+            ->latest('id')
+            ->get();
+
+        $prevFnbTotal = (float) $prevShiftSales->sum('total_fnb');
+        $prevBillingTotal = (float) $prevShiftSales->sum('total_billing');
+        if ($prevBillingTotal <= 0) {
+            $prevBillingTotal = $billingIncome;
+        }
+
+        $prevPrintItems = CafeSaleItem::whereIn('cafe_sale_id', $prevShiftSales->pluck('id'))
+            ->whereHas('variant.product.category', fn ($q) => $q->where('code', 'CAT-PAPER'))
+            ->get();
+        $prevPrintTotal = (float) $prevPrintItems->sum('subtotal');
+        $prevPrintPages = (int) $prevPrintItems->sum('qty');
+        $prevGrandTotal = $prevFnbTotal + $prevBillingTotal + $prevPrintTotal;
+
         return [
             'shift' => $prevShift,
             'name' => $prevShift?->name ?? 'Shift Sebelumnya',
@@ -2256,6 +2281,14 @@ class AttendanceWebV2Controller extends Controller
             'handover_notes' => $handoverNotes,
             'checklist' => $prevChecklist,
             'prev_checklist_time' => $prevChecklist?->completed_at ? $prevChecklist->completed_at->format('H:i') : null,
+            'summary' => $prevSummary,
+            'sales_list' => $prevShiftSales,
+            'sales_count' => $prevShiftSales->count(),
+            'fnb_total' => $prevFnbTotal,
+            'billing_total' => $prevBillingTotal,
+            'print_total' => $prevPrintTotal,
+            'print_pages' => $prevPrintPages,
+            'grand_total' => $prevGrandTotal,
         ];
     }
 
@@ -3226,6 +3259,9 @@ class AttendanceWebV2Controller extends Controller
             'totalPrintPages' => $totalPrintPages,
             'totalPrintIncome' => $totalPrintIncome,
             'customers' => $customers,
+            'isSalesLocked' => (bool) ($salesSummary?->is_sales_locked || $salesSummary?->status === 'closed'),
+            'prevShiftBilling' => $this->getPreviousShiftBillingData($now, $activeShift, $branchId),
+            'dailySettlement' => $this->getBillingIncomePerShift($workDate, $branchId, $activeShift),
         ];
     }
 
@@ -3564,6 +3600,25 @@ class AttendanceWebV2Controller extends Controller
 
         $type = (string) $request->input('transaction_type', 'fnb');
         $branchId = (int) ($employee->branch_id ?? Branch::value('id') ?? 1);
+
+        // Validasi Status Penguncian Penjualan Saat Rekap Shift (Freeze Closed Shift Sales)
+        $salesSummary = ShiftSalesSummary::whereDate('work_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+            ->latest('id')
+            ->first();
+
+        if ($salesSummary && ($salesSummary->is_sales_locked || $salesSummary->status === 'closed')) {
+            $lockMsg = 'Shift ini sudah direkapitulasi dan transaksi penjualan telah DIKUNCI. Buka shift baru untuk melanjutkan transaksi kasir.';
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $lockMsg,
+                ], 422);
+            }
+
+            return redirect()->back()->with('error', $lockMsg);
+        }
+
         $inv = 'INV-POS-'.date('Ymd').'-'.strtoupper(substr(uniqid(), -5));
 
         if ($type === 'fnb') {
@@ -3921,6 +3976,19 @@ class AttendanceWebV2Controller extends Controller
 
             return redirect()->route('admin.penjualan', ['q' => $sale->invoice_number])
                 ->with('warning', "Transaksi {$sale->invoice_number} sudah dalam status dibatalkan.");
+        }
+
+        // Cek jika transaksi telah terkunci karena rekapitulasi shift telah selesai
+        if ($sale->is_locked) {
+            $lockMsg = "Transaksi {$sale->invoice_number} telah DIKUNCI karena shift telah selesai direkapitulasi. Nota kasir yang terkunci tidak dapat dibatalkan.";
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $lockMsg,
+                ], 422);
+            }
+
+            return back()->with('error', $lockMsg);
         }
 
         $isAdmin = auth()->check() && (auth()->user()->role === 'admin' || auth()->user()->role === 'superadmin' || (method_exists(auth()->user(), 'isAdmin') && auth()->user()->isAdmin()));
@@ -5753,6 +5821,9 @@ BAT;
             'recentDeposits' => $recentSummaries,
             'shiftSummariesByDate' => $shiftSummariesByDate,
             'dateParam' => $dateParam,
+            'prevShiftBilling' => $this->getPreviousShiftBillingData($now, $activeShift, $branchId),
+            'dailySettlement' => $this->getBillingIncomePerShift($workDate, $branchId, $activeShift),
+            'isSalesLocked' => (bool) ($salesSummary?->is_sales_locked || $salesSummary?->status === 'closed'),
         ]);
     }
 
@@ -5852,7 +5923,7 @@ BAT;
         $actionType = $request->input('action_type');
         $isExplicitHandover = ($actionType === 'handover');
 
-        // Selalu catat serah terima shift
+        // Selalu catat serah terima shift dan kunci transaksi penjualan
         $summary->update([
             'handover_status' => 'completed',
             'handover_amount' => $depositedAmount,
@@ -5861,7 +5932,17 @@ BAT;
             'handover_by' => $employee->name,
             'handover_at' => $now,
             'handover_notes' => $handoverNotes,
+            'status' => 'closed',
+            'closed_at' => $summary->closed_at ?: $now,
+            'is_sales_locked' => true,
+            'locked_sales_amount' => $summary->total_fnb_sales ?: (float) CafeSale::whereDate('created_at', $workDate->toDateString())->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->where('payment_status', '!=', 'cancelled')->sum('net_amount'),
+            'locked_sales_at' => $now,
         ]);
+
+        // Kunci seluruh transaksi CafeSale pada shift ini
+        CafeSale::whereDate('created_at', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->update(['is_locked' => true, 'locked_at' => $now]);
 
         if ($isExplicitHandover) {
             // Langsung ke serah terima, jangan langsung ke setor
@@ -6314,6 +6395,9 @@ BAT;
             'cashDenominations' => $cashDenominations,
             'fnbItemSummary' => $fnbItemSummary,
             'useDesktop' => $useDesktop,
+            'prevShiftBilling' => $this->getPreviousShiftBillingData($now, $activeShift, $branchId),
+            'dailySettlement' => $this->getBillingIncomePerShift($workDate, $branchId, $activeShift),
+            'isSalesLocked' => (bool) ($salesSummary?->is_sales_locked || $salesSummary?->status === 'closed'),
         ]);
     }
 
@@ -6433,7 +6517,7 @@ BAT;
         $actionType = $request->input('action_type', 'handover');
         $isSetorAction = ($actionType === 'setor');
 
-        // Selalu perbarui informasi Serah Terima Shift
+        // Selalu perbarui informasi Serah Terima Shift dan kunci transaksi penjualan shift ini
         $summary->update([
             'handover_status' => 'completed',
             'handover_amount' => $depositedAmount,
@@ -6442,7 +6526,17 @@ BAT;
             'handover_by' => $employee->name,
             'handover_at' => $now,
             'handover_notes' => $handoverNotes,
+            'status' => 'closed',
+            'closed_at' => $summary->closed_at ?: $now,
+            'is_sales_locked' => true,
+            'locked_sales_amount' => $summary->total_fnb_sales ?: (float) CafeSale::whereDate('created_at', $workDate->toDateString())->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->where('payment_status', '!=', 'cancelled')->sum('net_amount'),
+            'locked_sales_at' => $now,
         ]);
+
+        // Kunci seluruh transaksi CafeSale pada shift ini
+        CafeSale::whereDate('created_at', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->update(['is_locked' => true, 'locked_at' => $now]);
 
         if ($request->filled('blind_cash_count')) {
             $blindCash = (float) $request->input('blind_cash_count');
