@@ -51,6 +51,7 @@ use Modules\MasterData\Domain\Models\PcStation;
 use Modules\MasterData\Domain\Models\ProductPricing;
 use Modules\MasterData\Domain\Models\ProductVariant;
 use Modules\MasterData\Domain\Models\StockInventory;
+use Modules\MasterData\Domain\Models\StockTransferDispatch;
 use Modules\MasterData\Domain\Models\Warehouse;
 use Modules\MasterData\Domain\Services\AutoStockTransferOrderService;
 use Symfony\Component\HttpFoundation\Response;
@@ -2120,6 +2121,14 @@ class AttendanceWebV2Controller extends Controller
             ->latest('id')
             ->first();
 
+        // Surat Jalan Transfer Masuk dari Distribution Center (DC) yang sedang In-Transit ke Toko ini
+        $storeWhIds = $branchId ? Warehouse::where('branch_id', $branchId)->pluck('id')->toArray() : (array) $warehouseId;
+        $pendingStoreTransfers = StockTransferDispatch::with(['fromWarehouse.branch', 'toWarehouse', 'variant.product'])
+            ->whereIn('to_warehouse_id', $storeWhIds)
+            ->where('status', 'in_transit')
+            ->latest('id')
+            ->get();
+
         return view('presensi2.stok', [
             'currentEmployee' => $employee,
             'activeShift' => $activeShift,
@@ -2134,6 +2143,8 @@ class AttendanceWebV2Controller extends Controller
             'prevShiftBilling' => $prevShiftBilling,
             'stockComparisons' => $stockComparisons,
             'existingChecklist' => $existingChecklist,
+            'pendingStoreTransfers' => $pendingStoreTransfers,
+            'pendingStoreTransfersCount' => $pendingStoreTransfers->count(),
         ]);
     }
 
@@ -3272,6 +3283,13 @@ class AttendanceWebV2Controller extends Controller
             ->orderBy('name')
             ->get(['id', 'code', 'name', 'customer_type', 'phone']);
 
+        $storeWhIds = $branchId ? Warehouse::where('branch_id', $branchId)->pluck('id')->toArray() : (array) $warehouseId;
+        $pendingStoreTransfers = StockTransferDispatch::with(['fromWarehouse.branch', 'toWarehouse', 'variant.product'])
+            ->whereIn('to_warehouse_id', $storeWhIds)
+            ->where('status', 'in_transit')
+            ->latest('id')
+            ->get();
+
         return [
             'currentEmployee' => $employee,
             'activeShift' => $activeShift,
@@ -3311,6 +3329,8 @@ class AttendanceWebV2Controller extends Controller
             'isSalesLocked' => (bool) ($salesSummary?->is_sales_locked || $salesSummary?->status === 'closed'),
             'prevShiftBilling' => $this->getPreviousShiftBillingData($now, $activeShift, $branchId),
             'dailySettlement' => $this->getBillingIncomePerShift($workDate, $branchId, $activeShift),
+            'pendingStoreTransfers' => $pendingStoreTransfers,
+            'pendingStoreTransfersCount' => $pendingStoreTransfers->count(),
         ];
     }
 
@@ -4224,6 +4244,109 @@ class AttendanceWebV2Controller extends Controller
 
         return redirect()->route('presensi2.penjualan')
             ->with('success', 'Permintaan stok barang ('.$request->input('item_name').') berhasil diajukan ke Gudang/Logistik!');
+    }
+
+    /**
+     * Konfirmasi Penerimaan Fisik Surat Jalan Transfer dari DC di Toko Cabang (Store Goods Receipt).
+     */
+    public function confirmReceiveTransfer(Request $request, int $id): JsonResponse|RedirectResponse
+    {
+        $employee = $this->getAuthenticatedEmployee();
+        if (! $employee) {
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Sesi login telah berakhir.'], 401);
+            }
+
+            return redirect()->route('presensi2.login');
+        }
+
+        $transfer = StockTransferDispatch::with(['toWarehouse', 'variant'])->find($id);
+        if (! $transfer) {
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Data transfer stok tidak ditemukan.'], 404);
+            }
+
+            return back()->with('error', 'Data transfer stok tidak ditemukan.');
+        }
+
+        if ($transfer->status === 'received') {
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Surat jalan ini sudah pernah diterima sebelumnya.'], 422);
+            }
+
+            return back()->with('error', 'Surat jalan ini sudah pernah diterima sebelumnya.');
+        }
+
+        $request->validate([
+            'qty_received' => ['nullable', 'integer', 'min:0'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $qtyDispatched = (int) $transfer->qty;
+        $qtyReceived = $request->filled('qty_received') ? (int) $request->input('qty_received') : $qtyDispatched;
+        $userNotes = (string) $request->input('notes', '');
+
+        try {
+            DB::beginTransaction();
+
+            $status = ($qtyReceived < $qtyDispatched) ? 'selisih' : 'received';
+            $fullNotes = trim(($transfer->operator_notes ? $transfer->operator_notes.' | ' : '')."Diterima oleh {$employee->name} (Qty diterima: {$qtyReceived} dari {$qtyDispatched})".($userNotes ? ': '.$userNotes : ''));
+
+            $transfer->update([
+                'status' => $status,
+                'received_at' => Carbon::now(),
+                'operator_notes' => $fullNotes,
+            ]);
+
+            // Tambah stok fisik di gudang toko tujuan
+            $destStock = StockInventory::firstOrCreate(
+                ['warehouse_id' => $transfer->to_warehouse_id, 'product_variant_id' => $transfer->product_variant_id],
+                ['qty_on_hand' => 0, 'safety_stock' => 10]
+            );
+            $destStock->increment('qty_on_hand', $qtyReceived);
+
+            // Jika ada ShiftStockRequest yang cocok di cabang ini dan belum fulfilled, ubah status menjadi fulfilled
+            $driver = DB::connection()->getDriverName();
+            $likeOp = $driver === 'pgsql' ? 'ilike' : 'like';
+
+            $stockReq = ShiftStockRequest::where('branch_id', $employee->branch_id)
+                ->whereIn('status', ['draft', 'pending', 'in_transit'])
+                ->where('item_name', $likeOp, "%{$transfer->variant?->name}%")
+                ->latest('id')
+                ->first();
+
+            if ($stockReq) {
+                $stockReq->update([
+                    'status' => 'fulfilled',
+                    'fulfilled_at' => Carbon::now(),
+                    'notes' => trim(($stockReq->notes ? $stockReq->notes.' | ' : '')."Dipenuhi via transfer {$transfer->transfer_code}"),
+                ]);
+            }
+
+            DB::commit();
+
+            $msg = "Penerimaan fisik barang transfer {$transfer->transfer_code} ({$transfer->variant?->name}) sebanyak {$qtyReceived} unit berhasil dikonfirmasi dan ditambahkan ke stok toko!";
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $msg,
+                    'transfer' => $transfer->fresh(),
+                    'new_stock_qty' => $destStock->fresh()->qty_on_hand,
+                ]);
+            }
+
+            return back()->with('success', $msg);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('Store transfer receipt error: '.$e->getMessage(), ['exception' => $e]);
+
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Gagal mengonfirmasi penerimaan transfer: '.$e->getMessage()], 500);
+            }
+
+            return back()->with('error', 'Gagal mengonfirmasi penerimaan transfer: '.$e->getMessage());
+        }
     }
 
     /**

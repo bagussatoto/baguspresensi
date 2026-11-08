@@ -118,6 +118,86 @@
         </div>
     </div>
 
+    {{-- KARTU NOTIFIKASI & PENERIMAAN TRANSFER DARI DC (STORE GOODS RECEIPT) --}}
+    @if(!empty($pendingStoreTransfers) && $pendingStoreTransfers->count() > 0)
+    <div class="glass-card" style="background: rgba(2, 132, 199, 0.12); border: 1.5px solid rgba(56, 189, 248, 0.5); padding: 18px 20px; margin-bottom: 20px; border-radius: 14px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; border-bottom: 1px solid rgba(56, 189, 248, 0.25); padding-bottom: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 24px;">🚚</span>
+                <div>
+                    <h3 style="font-size: 15px; font-weight: 800; color: #38bdf8; margin: 0;">
+                        Ada {{ $pendingStoreTransfers->count() }} Kiriman Pasokan Transfer dari DC Tiba (In-Transit)
+                    </h3>
+                    <div style="font-size: 11.5px; color: #bae6fd; margin-top: 2px;">
+                        Verifikasi kuantitas fisik kiriman dari Distribution Center (DC) untuk langsung dimasukkan ke inventaris rak toko Anda.
+                    </div>
+                </div>
+            </div>
+            <span style="background: #0284c7; color: #fff; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 6px;">
+                Cabang: {{ $currentEmployee->branch->name ?? 'Toko' }}
+            </span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+            @foreach($pendingStoreTransfers as $trf)
+                @php
+                    $bp = \Modules\MasterData\Domain\Models\BranchProduct::where('branch_id', $currentEmployee->branch_id)
+                        ->where('product_variant_id', $trf->product_variant_id)
+                        ->first();
+                    $binLocation = $bp->bin_location ?? 'Gudang Depan Toko';
+                @endphp
+                <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 10px; padding: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                        <div>
+                            <span style="font-size: 10.5px; color: #94a3b8; font-family: monospace;">No. Surat Jalan DC:</span>
+                            <strong style="font-family: monospace; color: #38bdf8; font-size: 13px; margin-left: 4px;">{{ $trf->transfer_code }}</strong>
+                            <div style="font-size: 11px; color: #cbd5e1; margin-top: 2px;">
+                                Pengirim: <strong>{{ $trf->fromWarehouse->branch->name ?? $trf->fromWarehouse->name ?? 'DC Pusat' }}</strong> • {{ $trf->dispatched_at ? $trf->dispatched_at->format('d/m/Y H:i') : '-' }} WIB
+                            </div>
+                        </div>
+                        <span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 4px;">
+                            In-Transit
+                        </span>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px; margin-bottom: 12px; font-size: 12px;">
+                        <div>
+                            <div style="font-weight: 700; color: #f8fafc; font-size: 13.5px;">{{ $trf->variant->name ?? 'Item Produk' }}</div>
+                            <div style="font-size: 11px; color: #94a3b8; font-family: monospace;">SKU: {{ $trf->variant->sku ?? '-' }}</div>
+                            <div style="margin-top: 3px; font-size: 11px; color: #38bdf8;">
+                                📍 Rak Penempatan Toko: <strong>{{ $binLocation }}</strong>
+                            </div>
+                        </div>
+                        <div style="text-align: right; background: rgba(30, 41, 59, 0.6); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(51, 65, 85, 0.5);">
+                            <div style="font-size: 10.5px; color: #94a3b8;">Kuantitas Dikirim:</div>
+                            <div style="font-size: 18px; font-weight: 800; font-family: monospace; color: #f8fafc;">
+                                {{ $trf->qty }} Unit
+                            </div>
+                        </div>
+                    </div>
+
+                    <form method="POST" action="{{ route('presensi2.transfer.terima', $trf->id) }}" style="display: grid; grid-template-columns: 140px 1fr auto; gap: 10px; align-items: flex-end; background: rgba(30, 41, 59, 0.8); padding: 10px; border-radius: 8px; border: 1px solid rgba(56, 189, 248, 0.2);">
+                        @csrf
+                        <div>
+                            <label style="font-size: 10.5px; font-weight: 700; color: #cbd5e1; display: block; margin-bottom: 3px;">Qty Diterima Fisik:</label>
+                            <input type="number" name="qty_received" value="{{ $trf->qty }}" min="0" required style="width: 100%; padding: 6px 8px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 4px; color: #fff; font-family: monospace; font-weight: bold; font-size: 12.5px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 10.5px; font-weight: 700; color: #cbd5e1; display: block; margin-bottom: 3px;">Catatan Kondisi Barang / Rak:</label>
+                            <input type="text" name="notes" placeholder="Kondisi baik, langsung simpan di {{ $binLocation }}" style="width: 100%; padding: 6px 8px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 4px; color: #fff; font-size: 11.5px;">
+                        </div>
+                        <div>
+                            <button type="submit" class="btn btn-emerald" style="padding: 7px 16px; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                <span>✅</span> Konfirmasi Masuk Rak
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            @endforeach
+        </div>
+    </div>
+    @endif
+
     <form action="{{ route('presensi2.stok.store') }}" method="POST">
         @csrf
 

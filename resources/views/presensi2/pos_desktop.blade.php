@@ -563,6 +563,14 @@
             <a href="{{ route('presensi2.stok') }}" class="btn-nav-pill" title="Cek Stok Fisik Shift">
                 <span>📦</span> Cek Stok
             </a>
+            <button type="button" onclick="openReceiveTransferModal()" class="btn-nav-pill" style="color: #0284c7; border-color: #7dd3fc; background: {{ ($pendingStoreTransfersCount ?? 0) > 0 ? '#e0f2fe' : '#f8fafc' }}; font-weight: 700;" title="Terima Kiriman Transfer Stok dari Distribution Center (DC)">
+                <span>🚚</span> Terima Transfer DC
+                @if(($pendingStoreTransfersCount ?? 0) > 0)
+                    <span style="background: #0284c7; color: #fff; border-radius: 10px; padding: 1px 6px; font-size: 10px; margin-left: 2px;">
+                        {{ $pendingStoreTransfersCount }}
+                    </span>
+                @endif
+            </button>
             <button type="button" onclick="openPrevChecklistModal()" class="btn-nav-pill" style="color: #0369a1; border-color: #bae6fd; background: #f0f9ff;" title="Lihat Checklist Serah Terima Shift Sebelumnya">
                 <span>📋</span> Checklist Shift Lalu
             </button>
@@ -1120,6 +1128,112 @@
                     <button type="submit" style="padding: 6px 16px; border: none; background: var(--pos-orange); color: #fff; font-weight: 700; border-radius: 3px; font-size: 12px;">Simpan</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    {{-- MODAL STORE GOODS RECEIPT: KONFIRMASI PENERIMAAN BARANG DARI DC --}}
+    <div id="modal-store-receive-transfer" class="pos-modal-overlay">
+        <div class="pos-modal-box" style="max-width: 680px;">
+            <div class="pos-modal-header" style="background: #0284c7; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 18px;">🚚</span>
+                    <span style="font-weight: 700;">Konfirmasi Penerimaan Transfer dari DC (Store Goods Receipt)</span>
+                </div>
+                <button type="button" onclick="closeReceiveTransferModal()" style="background: none; border: none; color: #fff; font-size: 16px; cursor: pointer;">✕</button>
+            </div>
+            <div style="padding: 16px; max-height: 75vh; overflow-y: auto;">
+                <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 10px 14px; margin-bottom: 14px; font-size: 11.5px; color: #0369a1; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <strong>Cabang Penerima:</strong> {{ $currentEmployee->branch->name ?? 'Toko Cabang' }}<br>
+                        Pastikan memeriksa kondisi fisik dan kuantitas barang sebelum mengonfirmasi masuk ke rak toko.
+                    </div>
+                    <span style="font-weight: 800; font-family: monospace; font-size: 13px; background: #0284c7; color: #fff; padding: 3px 8px; border-radius: 4px;">
+                        {{ $pendingStoreTransfersCount ?? 0 }} Surat Jalan In-Transit
+                    </span>
+                </div>
+
+                @if(!empty($pendingStoreTransfers) && $pendingStoreTransfers->count() > 0)
+                    <div style="display: flex; flex-direction: column; gap: 14px;">
+                        @foreach($pendingStoreTransfers as $transfer)
+                            @php
+                                $branchProduct = \Modules\MasterData\Domain\Models\BranchProduct::where('branch_id', $currentEmployee->branch_id)
+                                    ->where('product_variant_id', $transfer->product_variant_id)
+                                    ->first();
+                                $binLoc = $branchProduct->bin_location ?? 'Gudang Depan Toko';
+                            @endphp
+                            <div style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 8px;">
+                                    <div>
+                                        <div style="font-size: 11px; color: #64748b; font-family: monospace;">No. Surat Jalan DC:</div>
+                                        <strong style="font-family: monospace; font-size: 13px; color: #0284c7;">{{ $transfer->transfer_code }}</strong>
+                                        <div style="font-size: 11px; color: #475569; margin-top: 2px;">
+                                            Dari: <strong>{{ $transfer->fromWarehouse->branch->name ?? $transfer->fromWarehouse->name ?? 'DC Pusat' }}</strong>
+                                            ({{ $transfer->dispatched_at ? $transfer->dispatched_at->format('d/m/Y H:i') : '-' }} WIB)
+                                        </div>
+                                    </div>
+                                    <span style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px;">
+                                        🚚 Sedang Dikirim (In-Transit)
+                                    </span>
+                                </div>
+
+                                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 12px;">
+                                    <div>
+                                        <div style="font-size: 13.5px; font-weight: 700; color: #0f172a;">
+                                            {{ $transfer->variant->name ?? 'Produk' }}
+                                        </div>
+                                        <div style="font-size: 11px; color: #64748b; font-family: monospace;">
+                                            SKU: {{ $transfer->variant->sku ?? '-' }}
+                                        </div>
+                                        <div style="margin-top: 4px;">
+                                            <span style="font-size: 11px; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 2px 6px; border-radius: 4px; color: #334155;">
+                                                📍 Rak Penempatan Toko: <strong>{{ $binLoc }}</strong>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div style="text-align: right; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px;">
+                                        <div style="font-size: 10.5px; color: #64748b;">Kuantitas Dikirim DC:</div>
+                                        <div style="font-size: 18px; font-weight: 800; font-family: monospace; color: #0f172a;">
+                                            {{ $transfer->qty }} <span style="font-size: 11px; font-weight: normal; color: #64748b;">Unit</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <form method="POST" action="{{ route('presensi2.transfer.terima', $transfer->id) }}" onsubmit="submitReceiveTransferForm(event, this)">
+                                    @csrf
+                                    <div style="display: grid; grid-template-columns: 140px 1fr auto; gap: 10px; align-items: flex-end; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0;">
+                                        <div>
+                                            <label style="font-size: 11px; font-weight: 700; color: #334155; display: block; margin-bottom: 3px;">Qty Diterima Fisik:</label>
+                                            <input type="number" name="qty_received" value="{{ $transfer->qty }}" min="0" max="{{ $transfer->qty * 2 }}" required style="width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; font-family: monospace; font-weight: bold; color: #0f172a;">
+                                        </div>
+                                        <div>
+                                            <label style="font-size: 11px; font-weight: 700; color: #334155; display: block; margin-bottom: 3px;">Catatan Kondisi Barang / Rak:</label>
+                                            <input type="text" name="notes" placeholder="Contoh: Fisik lengkap, langsung susun di {{ $binLoc }}" style="width: 100%; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11.5px;">
+                                        </div>
+                                        <div>
+                                            <button type="submit" style="padding: 7px 16px; background: #16a34a; color: #fff; font-weight: 700; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; white-space: nowrap; display: flex; align-items: center; gap: 4px;">
+                                                <span>✅</span> Konfirmasi Terima
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        @endforeach
+                    </div>
+                @else
+                    <div style="text-align: center; padding: 36px 20px; color: #94a3b8;">
+                        <div style="font-size: 36px; margin-bottom: 8px;">📦</div>
+                        <div style="font-size: 14px; font-weight: 700; color: #475569;">Tidak Ada Kiriman In-Transit dari DC</div>
+                        <div style="font-size: 11.5px; color: #64748b; margin-top: 4px;">
+                            Semua surat jalan transfer stok dari Distribution Center menuju toko ini telah diterima dengan lengkap.
+                        </div>
+                    </div>
+                @endif
+            </div>
+            <div style="padding: 10px 16px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end;">
+                <button type="button" onclick="closeReceiveTransferModal()" style="padding: 6px 16px; background: #fff; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                    Tutup
+                </button>
+            </div>
         </div>
     </div>
 
@@ -1900,6 +2014,54 @@
         function closeReceiptModal() {
             const modal = document.getElementById('modal-receipt');
             if (modal) modal.style.display = 'none';
+        }
+
+        // 7b. MODAL PENERIMAAN TRANSFER DARI DC (STORE GOODS RECEIPT)
+        function openReceiveTransferModal() {
+            const m = document.getElementById('modal-store-receive-transfer');
+            if (m) m.style.display = 'flex';
+        }
+        function closeReceiveTransferModal() {
+            const m = document.getElementById('modal-store-receive-transfer');
+            if (m) m.style.display = 'none';
+        }
+
+        async function submitReceiveTransferForm(e, form) {
+            e.preventDefault();
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerText = 'Memproses...';
+            }
+
+            try {
+                const formData = new FormData(form);
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    },
+                    body: formData
+                });
+                const res = await response.json();
+                if (res.success) {
+                    alert('✓ ' + res.message);
+                    window.location.reload();
+                } else {
+                    alert('⚠️ Gagal: ' + (res.message || 'Terjadi kesalahan sistem.'));
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = '<span>✅</span> Konfirmasi Terima';
+                    }
+                }
+            } catch (err) {
+                alert('⚠️ Terjadi gangguan koneksi: ' + err.message);
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<span>✅</span> Konfirmasi Terima';
+                }
+            }
         }
 
         // TOGGLE & RUN MODE SIMULASI POS
