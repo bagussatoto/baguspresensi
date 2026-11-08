@@ -21,6 +21,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Modules\MasterData\Domain\Enums\BranchType;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\CafeSale;
 use Modules\MasterData\Domain\Models\CafeSaleItem;
@@ -29,6 +30,7 @@ use Modules\MasterData\Domain\Models\Employee;
 use Modules\MasterData\Domain\Models\ProductVariant;
 use Modules\MasterData\Domain\Models\StockInventory;
 use Modules\MasterData\Domain\Models\Warehouse;
+use Modules\MasterData\Domain\Services\StockTransferService;
 
 /**
  * Controller Admin Dashboard Terpadu Maya Graha Kencana.
@@ -364,38 +366,58 @@ class AdminDashboardController extends Controller
         $variant = ProductVariant::where('name', $likeOp, "%{$stockReq->item_name}%")
             ->first();
 
-        // Cari warehouse loker kasir dan gudang pusat
-        $toWarehouse = Warehouse::where('code', 'GDG-KSR')
-            ->orWhere('name', $likeOp, '%kasir%')
-            ->first() ?? Warehouse::first();
+        // Cari warehouse cabang tujuan dan Distribution Center (DC) pengirim
+        $branchWarehouse = $stockReq->branch?->warehouses()->first();
+        $toWarehouse = $branchWarehouse
+            ?? Warehouse::where('code', 'GDG-KSR')
+            ?? Warehouse::where('name', $likeOp, '%kasir%')->first()
+            ?? Warehouse::first();
 
-        $fromWarehouse = Warehouse::where('code', 'GDG-PST')
-            ->orWhere('name', $likeOp, '%pusat%')
-            ->first() ?? Warehouse::first();
+        // Cari gudang Distribution Center (DC) sebagai sumber pasokan
+        $dcBranch = Branch::where('type', BranchType::Dc)->where('is_active', true)->first();
+        $dcWarehouse = $dcBranch?->warehouses()->first();
 
-        $transferCode = 'TRF-REQ-'.date('Ymd').'-'.strtoupper(substr(uniqid(), -4));
+        $fromWarehouse = $dcWarehouse
+            ?? Warehouse::where('code', 'GDG-PST')
+            ?? Warehouse::where('name', $likeOp, '%pusat%')->first()
+            ?? Warehouse::where('id', '!=', $toWarehouse?->id)->first()
+            ?? $toWarehouse;
+
+        $transferCode = 'TRF-STO-'.date('Ymd').'-'.strtoupper(substr(uniqid(), -4));
 
         if ($variant && $toWarehouse && $fromWarehouse) {
-            DB::table('stock_transfer_dispatches')->insert([
-                'transfer_code' => $transferCode,
-                'from_warehouse_id' => $fromWarehouse->id,
-                'to_warehouse_id' => $toWarehouse->id,
-                'product_variant_id' => $variant->id,
-                'qty' => $qty,
-                'status' => 'received',
-                'dispatched_at' => Carbon::now(),
-                'received_at' => Carbon::now(),
-                'operator_notes' => 'Pemenuhan permintaan kasir '.$stockReq->request_number.' ('.$stockReq->item_name.')',
-                'created_at' => Carbon::now(),
-                'updated_at' => Carbon::now(),
-            ]);
+            $notes = 'Pemenuhan pasokan '.$stockReq->request_number.' ('.$stockReq->item_name.') dari '.$fromWarehouse->name.' ke '.$toWarehouse->name;
 
-            // Tambah stok fisik loker kasir
-            $destStock = StockInventory::firstOrCreate(
-                ['warehouse_id' => $toWarehouse->id, 'product_variant_id' => $variant->id],
-                ['qty_on_hand' => 0, 'safety_stock' => 10]
-            );
-            $destStock->increment('qty_on_hand', $qty);
+            // Jika gudang asal berbeda dengan tujuan, gunakan StockTransferService untuk mutasi dua sisi
+            if ($fromWarehouse->id !== $toWarehouse->id) {
+                app(StockTransferService::class)->transfer(
+                    $fromWarehouse->id,
+                    $toWarehouse->id,
+                    $variant->id,
+                    $qty,
+                    $notes
+                );
+            } else {
+                DB::table('stock_transfer_dispatches')->insert([
+                    'transfer_code' => $transferCode,
+                    'from_warehouse_id' => $fromWarehouse->id,
+                    'to_warehouse_id' => $toWarehouse->id,
+                    'product_variant_id' => $variant->id,
+                    'qty' => $qty,
+                    'status' => 'received',
+                    'dispatched_at' => Carbon::now(),
+                    'received_at' => Carbon::now(),
+                    'operator_notes' => $notes,
+                    'created_at' => Carbon::now(),
+                    'updated_at' => Carbon::now(),
+                ]);
+
+                $destStock = StockInventory::firstOrCreate(
+                    ['warehouse_id' => $toWarehouse->id, 'product_variant_id' => $variant->id],
+                    ['qty_on_hand' => 0, 'safety_stock' => 10]
+                );
+                $destStock->increment('qty_on_hand', $qty);
+            }
         }
 
         $stockReq->update([

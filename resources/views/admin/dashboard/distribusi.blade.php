@@ -150,17 +150,27 @@
                     </thead>
                     <tbody>
                         @forelse($stockRequests as $req)
-                        <tr>
-                            <td style="font-family: monospace; color: #38bdf8;">{{ $req->request_number }}</td>
+                        @php
+                            $isAutoRop = str_contains($req->notes ?? '', '[AUTO-ROP MDM]');
+                        @endphp
+                        <tr style="{{ $isAutoRop ? 'background: rgba(244, 63, 94, 0.04);' : '' }}">
+                            <td>
+                                <div style="font-family: monospace; color: #38bdf8; font-weight: 700;">{{ $req->request_number }}</div>
+                                @if($isAutoRop)
+                                    <span style="font-size: 10px; background: rgba(244, 63, 94, 0.2); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4); padding: 2px 6px; border-radius: 4px; font-weight: 700;">
+                                        🤖 AUTO-ROP DARI DC
+                                    </span>
+                                @endif
+                            </td>
                             <td><span class="badge-status badge-sky">{{ strtoupper($req->item_category) }}</span></td>
                             <td style="font-weight: 600; color: #fff;">
                                 {{ $req->item_name }}
                                 @if(!empty($req->notes))
-                                    <div style="font-size: 10.5px; color: var(--text-muted); margin-top: 2px;">💬 {{ $req->notes }}</div>
+                                    <div style="font-size: 10.5px; color: {{ $isAutoRop ? '#fca5a5' : 'var(--text-muted)' }}; margin-top: 2px;">💬 {{ $req->notes }}</div>
                                 @endif
                             </td>
-                            <td style="font-weight: 700; color: #fbbf24; font-family: 'Outfit';">{{ $req->qty_requested }} {{ $req->unit }}</td>
-                            <td>{{ $req->employee->name ?? 'Kasir' }}</td>
+                            <td style="font-weight: 700; color: #fbbf24; font-family: 'Outfit'; font-size: 14px;">{{ $req->qty_requested }} {{ $req->unit }}</td>
+                            <td>{{ $req->employee->name ?? 'Sistem Otomatis (ROP)' }}</td>
                             <td>
                                 <span class="badge-status {{ $req->urgency === 'urgent' ? 'badge-rose' : 'badge-sky' }}">
                                     {{ ucfirst($req->urgency) }}
@@ -175,8 +185,8 @@
                                 @if($req->status !== 'fulfilled')
                                     <form action="{{ route('admin.distribusi.penuhi', $req->id) }}" method="POST" style="display: inline;">
                                         @csrf
-                                        <button type="submit" class="btn-action-sm btn-action-emerald" onclick="return confirm('Penuhi permintaan restock kasir untuk {{ $req->item_name }} (+{{ $req->qty_requested }} {{ $req->unit }}) dan tambahkan ke stok kasir?')" title="Penuhi Permintaan & Tambahkan ke Stok Kasir">
-                                            <span>⚡</span> Penuhi & Kirim
+                                        <button type="submit" class="btn-action-sm btn-action-emerald" onclick="return confirm('Penuhi permintaan pasokan {{ $isAutoRop ? 'dari Distribution Center (DC)' : '' }} untuk {{ $req->item_name }} (+{{ $req->qty_requested }} {{ $req->unit }})?')" title="Penuhi Permintaan & Transfer Stok">
+                                            <span>⚡</span> {{ $isAutoRop ? 'Kirim dari DC' : 'Penuhi & Kirim' }}
                                         </button>
                                     </form>
                                 @else

@@ -52,6 +52,7 @@ use Modules\MasterData\Domain\Models\ProductPricing;
 use Modules\MasterData\Domain\Models\ProductVariant;
 use Modules\MasterData\Domain\Models\StockInventory;
 use Modules\MasterData\Domain\Models\Warehouse;
+use Modules\MasterData\Domain\Services\AutoStockTransferOrderService;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -3874,12 +3875,18 @@ class AttendanceWebV2Controller extends Controller
                             ->where('warehouse_id', $warehouseId)
                             ->first();
 
-                        $bp = BranchProduct::where('branch_id', $branchId)
-                            ->where('product_variant_id', $oi['variant']->id)
-                            ->first();
-
-                        if ($bp && $updatedInv && $bp->needsReorder((float) $updatedInv->qty_available)) {
-                            Log::info("MDM Alert ROP: Produk {$oi['variant']->name} di cabang ID {$branchId} mencapai ROP ({$bp->reorder_point} unit). Sisa stok: {$updatedInv->qty_available} unit.");
+                        if ($updatedInv) {
+                            try {
+                                app(AutoStockTransferOrderService::class)->evaluateAndCreateDraftSto(
+                                    $oi['variant'],
+                                    $branchId,
+                                    (float) $updatedInv->qty_available,
+                                    $employee->id,
+                                    $salesSummary?->shift_id
+                                );
+                            } catch (\Throwable $e) {
+                                Log::warning('Gagal auto-draft STO saat ROP: '.$e->getMessage());
+                            }
                         }
                     }
                 }
