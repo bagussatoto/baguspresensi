@@ -535,7 +535,10 @@
             <button type="button" onclick="openDailySettlementModal()" class="btn-nav-pill" style="color: #0f766e; border-color: #99f6e4; background: #f0fdfa;" title="Lihat Closing Statement & Settlement Setoran Harian">
                 <span>📊</span> Settlement Harian ({{ $dailySettlement['settled_count'] ?? 0 }}/{{ $dailySettlement['total_shift_count'] ?? 4 }})
             </button>
-            <a href="{{ route('presensi2.rekap', ['summary_id' => $salesSummary?->id]) }}" class="btn-nav-pill" style="color: #0369a1; border-color: #bae6fd; background: #e0f2fe;" title="Buka Detail Rekapitulasi Lengkap">
+            <a href="{{ Route::has('presensi2.serah-terima.v2.desktop') ? route('presensi2.serah-terima.v2.desktop') : (Route::has('serah-terima.v2.desktop') ? route('serah-terima.v2.desktop') : url('/bagus/presensi2/serah-terima-v2')) }}" class="btn-nav-pill" style="color: #b45309; border-color: #fcd34d; background: #fffbeb;" title="Buka Tampilan Serah Terima v2 (Tabel 3 Tingkat)">
+                <span>📋</span> Mode v2 (Tabel)
+            </a>
+            <a href="{{ Route::has('presensi2.rekap.desktop') ? route('presensi2.rekap.desktop', ['summary_id' => $salesSummary?->id]) : route('presensi2.rekap', ['summary_id' => $salesSummary?->id]) }}" class="btn-nav-pill" style="color: #0369a1; border-color: #bae6fd; background: #e0f2fe;" title="Buka Detail Rekapitulasi Lengkap">
                 <span>📊</span> Rekap Pendapatan
             </a>
             <a href="{{ route('presensi2.serah-terima', array_merge(request()->query(), ['view' => 'mobile'])) }}" class="btn-nav-pill" title="Buka Mode Tampilan HP">
@@ -648,7 +651,7 @@
         </div>
     @endif
 
-    {{-- FLASH MESSAGES --}}
+    {{-- FLASH MESSAGES & MOBILE CHECK-OUT NOTIFICATION --}}
     @if(session('success'))
         <div style="margin: 12px 20px 0 20px; padding: 10px 16px; background: #dcfce7; border: 1px solid #86efac; color: #166534; border-radius: 4px; font-weight: 600;">
             ✓ {{ session('success') }}
@@ -657,6 +660,21 @@
     @if(session('error'))
         <div style="margin: 12px 20px 0 20px; padding: 10px 16px; background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; border-radius: 4px; font-weight: 600;">
             ✕ {{ session('error') }}
+        </div>
+    @endif
+
+    @if(($salesSummary && ($salesSummary->status === 'closed' || $salesSummary->handover_status === 'completed')) || session('success'))
+        <div style="margin: 10px 20px 0 20px; padding: 14px 20px; border-radius: 6px; background: #eff6ff; border: 1.5px solid #3b82f6; color: #1e3a8a; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.1);">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 26px;">📱</span>
+                <div>
+                    <div style="font-weight: 800; font-size: 14px; color: #1d4ed8;">Silakan Lakukan Check-Out Presensi Pulang Melalui HP / Mobile</div>
+                    <div style="font-size: 12px; color: #3b82f6; margin-top: 2px;">Serah terima di PC Kasir telah tersimpan. Untuk validasi foto selfie & radius GPS lokasi presensi yang sah, silakan buka aplikasi di HP Anda untuk melakukan Clock-Out.</div>
+                </div>
+            </div>
+            <a href="{{ route('pos.login') }}" class="btn-primary" style="background: #2563eb; color: #fff; text-decoration: none; padding: 8px 16px; font-weight: 700; border-radius: 4px; font-size: 12px;">
+                <span>🔒</span> Kunci & Keluar PC Kasir
+            </a>
         </div>
     @endif
 
@@ -733,7 +751,7 @@
                         <button type="button" onclick="previewThermalReceipt()" class="btn-action-primary" style="justify-content: center; background: #00a65a; border-color: #008d4c; color: #ffffff; padding: 8px 12px; font-weight: 700; width: 100%;">
                             <span>🧾</span> Cetak Struk Serah Terima Kas
                         </button>
-                        <a href="{{ route('presensi2.rekap', ['summary_id' => $salesSummary?->id]) }}" class="btn-action-secondary" style="justify-content: center; background: #e0f2fe; color: #0369a1; border-color: #bae6fd; text-decoration: none; padding: 8px 12px; font-weight: 700; width: 100%;">
+                        <a href="{{ Route::has('presensi2.rekap.desktop') ? route('presensi2.rekap.desktop', ['summary_id' => $salesSummary?->id]) : route('presensi2.rekap', ['summary_id' => $salesSummary?->id]) }}" class="btn-action-secondary" style="justify-content: center; background: #e0f2fe; color: #0369a1; border-color: #bae6fd; text-decoration: none; padding: 8px 12px; font-weight: 700; width: 100%;">
                             <span>📊</span> Buka Tabel Rekap Penjualan (Z-Report)
                         </a>
                     </div>

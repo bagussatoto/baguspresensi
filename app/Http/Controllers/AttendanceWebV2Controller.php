@@ -2452,21 +2452,46 @@ class AttendanceWebV2Controller extends Controller
         $stockComparisons = $this->buildStockComparison($workDate, $employee);
         $prevShiftBilling = $this->getPreviousShiftBillingData($now, $activeShift, $employee->branch_id);
 
+        $paperPhysical = $request->input('paper_physical', []);
+        $drinkPhysical = $request->input('drink_physical', []);
+        $foodPhysical = $request->input('food_physical', []);
+
+        // Validasi fisik aktual kertas, minuman, dan makanan wajib diisi
+        foreach ($stockComparisons['kertas'] ?? [] as $k) {
+            $kId = $k['id'];
+            if (! isset($paperPhysical[$kId]) || $paperPhysical[$kId] === '') {
+                return back()->withInput()->with('error', 'Pemeriksaan belum lengkap! Mohon isi seluruh stok fisik kertas aktual di meja/laci.');
+            }
+        }
+        foreach ($stockComparisons['minuman'] ?? [] as $d) {
+            $vId = $d['variant_id'];
+            if (! isset($drinkPhysical[$vId]) || $drinkPhysical[$vId] === '') {
+                return back()->withInput()->with('error', 'Pemeriksaan belum lengkap! Mohon isi seluruh stok fisik minuman aktual di kulkas/rak.');
+            }
+        }
+        foreach ($stockComparisons['makanan'] ?? [] as $m) {
+            $vId = $m['variant_id'];
+            if (! isset($foodPhysical[$vId]) || $foodPhysical[$vId] === '') {
+                return back()->withInput()->with('error', 'Pemeriksaan belum lengkap! Mohon isi seluruh stok fisik makanan/snack aktual di rak/etalase.');
+            }
+        }
+
+        $paperA4Physical = isset($paperPhysical['kertas-a4']) && $paperPhysical['kertas-a4'] !== '' ? (int) $paperPhysical['kertas-a4'] : 0;
+        $paperF4Physical = isset($paperPhysical['kertas-f4']) && $paperPhysical['kertas-f4'] !== '' ? (int) $paperPhysical['kertas-f4'] : 0;
+
         $paperA4 = $request->boolean('paper_a4', true);
-        $paperA4Qty = (int) $request->input('paper_a4_qty', $stockComparisons['kertas'][0]['sebelumnya'] ?? 500);
+        $paperA4Qty = $paperA4Physical;
         $paperF4 = $request->boolean('paper_f4', true);
-        $paperF4Qty = (int) $request->input('paper_f4_qty', $stockComparisons['kertas'][1]['sebelumnya'] ?? 500);
+        $paperF4Qty = $paperF4Physical;
 
         $drinkFreeChecked = true;
         $drinkItems = $request->input('drink_items');
         $drinkStockInitial = $request->input('drink_stock_initial', []);
-        $drinkPhysical = $request->input('drink_physical', []);
         $drinkNotes = $request->input('drink_notes');
 
         $foodFreeChecked = true;
         $foodItems = $request->input('food_items');
         $foodStockInitial = $request->input('food_stock_initial', []);
-        $foodPhysical = $request->input('food_physical', []);
         $foodNotes = $request->input('food_notes');
 
         // Susun payload detail stok fisik & rekonsiliasi selisih minuman
@@ -2582,8 +2607,58 @@ class AttendanceWebV2Controller extends Controller
             ]
         );
 
-        return redirect()->route('pos')
-            ->with('success', 'Checklist stok barang, hardware & billing shift berhasil dicatat! Selamat datang di Dashboard POS Desktop.');
+        $employeeId = session('presensi2_employee_id');
+        if ($employeeId) {
+            rescue(fn () => AuditLog::create([
+                'user_id' => Auth::id(),
+                'auditable_type' => Employee::class,
+                'auditable_id' => $employeeId,
+                'action' => 'stok_completed_mobile_logout',
+                'new_values' => [
+                    'message' => 'Pemeriksaan fisik di HP selesai. Sesi HP otomatis keluar untuk beralih ke PC Kasir Desktop.',
+                    'logout_at' => now()->toDateTimeString(),
+                ],
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+                'user_agent' => $request->userAgent() ?? 'Web Portal Presensi v2',
+                'created_at' => now(),
+            ]));
+        }
+
+        // Opsi 2 (Logout Total): Sesi presensi di HP otomatis keluar agar kasir beralih ke PC Kasir Desktop
+        $request->session()->forget('presensi2_employee_id');
+
+        $noticeMsg = 'Pemeriksaan fisik di HP selesai. Selanjutnya simpan HP Anda dan masukkan PIN Kasir Anda di Komputer Meja Kasir (PC Desktop) untuk mulai bertransaksi.';
+
+        return redirect()->route('presensi2.login')
+            ->with('stok_selesai_notice', $noticeMsg);
+    }
+
+    /**
+     * Halaman Konfirmasi Selesai Cek Fisik di HP (Petunjuk Beralih ke PC Kasir Desktop).
+     */
+    public function stokSelesaiIndex(Request $request): View|RedirectResponse
+    {
+        $employee = $this->getAuthenticatedEmployee();
+        if (! $employee) {
+            return redirect()->route('presensi2.login');
+        }
+
+        $now = Carbon::now();
+        $activeShift = $this->shiftResolverService->resolveShift(null, $now);
+        $workDate = $this->shiftResolverService->determineWorkDate($activeShift, $now);
+
+        $checklist = ShiftHandoverChecklist::whereDate('check_date', $workDate->toDateString())
+            ->where('employee_id', $employee->id)
+            ->latest('id')
+            ->first();
+
+        return view('presensi2.stok_selesai', [
+            'currentEmployee' => $employee,
+            'activeShift' => $activeShift,
+            'workDate' => $workDate,
+            'checklist' => $checklist,
+            'now' => $now,
+        ]);
     }
 
     /**
@@ -2648,8 +2723,8 @@ class AttendanceWebV2Controller extends Controller
                 'terjual' => $paperA4Used,
                 'terpakai' => $paperA4Used,
                 'sesudahnya' => $kertasA4Remaining,
-                'physical_stock' => $kertasA4Remaining,
-                'discrepancy' => 0,
+                'physical_stock' => 0,
+                'discrepancy' => 0 - $kertasA4Remaining,
                 'rim_info' => $paperA4StockRim.' Rim di Loker',
                 'rim_stock' => $paperA4StockRim,
                 'is_critical' => ($paperA4StockRim < 3 && $kertasA4Remaining < 100),
@@ -2665,8 +2740,8 @@ class AttendanceWebV2Controller extends Controller
                 'terjual' => $paperF4Used,
                 'terpakai' => $paperF4Used,
                 'sesudahnya' => $kertasF4Remaining,
-                'physical_stock' => $kertasF4Remaining,
-                'discrepancy' => 0,
+                'physical_stock' => 0,
+                'discrepancy' => 0 - $kertasF4Remaining,
                 'rim_info' => $paperF4StockRim.' Rim di Loker',
                 'rim_stock' => $paperF4StockRim,
                 'is_critical' => ($paperF4StockRim < 3 && $kertasF4Remaining < 100),
@@ -2728,7 +2803,7 @@ class AttendanceWebV2Controller extends Controller
 
             // Sisa stok saat ini selalu merefleksikan stok fisik aktual di inventaris kasir
             $makananRemaining = $currentStock;
-            $physicalStock = $savedPhysical ?? $makananRemaining;
+            $physicalStock = 0;
 
             $makanan[] = [
                 'variant_id' => $food->id,
@@ -2740,8 +2815,8 @@ class AttendanceWebV2Controller extends Controller
                 'prev_diff' => $prevFoodDiff,
                 'terjual' => $soldToday,
                 'sesudahnya' => $makananRemaining,
-                'physical_stock' => $physicalStock,
-                'discrepancy' => $physicalStock - $makananRemaining,
+                'physical_stock' => 0,
+                'discrepancy' => 0 - $makananRemaining,
                 'price' => (float) $food->base_price,
                 'is_critical' => ($makananRemaining <= 5),
             ];
@@ -2800,7 +2875,7 @@ class AttendanceWebV2Controller extends Controller
 
             // Sisa stok saat ini selalu merefleksikan stok fisik aktual di inventaris kasir
             $minumanRemaining = $currentStock;
-            $physicalStock = $savedPhysical ?? $minumanRemaining;
+            $physicalStock = 0;
 
             $minuman[] = [
                 'variant_id' => $drink->id,
@@ -2812,8 +2887,8 @@ class AttendanceWebV2Controller extends Controller
                 'prev_diff' => $prevDrinkDiff,
                 'terjual' => $soldToday,
                 'sesudahnya' => $minumanRemaining,
-                'physical_stock' => $physicalStock,
-                'discrepancy' => $physicalStock - $minumanRemaining,
+                'physical_stock' => 0,
+                'discrepancy' => 0 - $minumanRemaining,
                 'price' => (float) $drink->base_price,
                 'is_critical' => ($minumanRemaining <= 5),
             ];
@@ -5100,9 +5175,28 @@ class AttendanceWebV2Controller extends Controller
                 return back()->with('error', $msg);
             }
 
-            // Anti-fraud: Kasir biasa dilarang memanipulasi override angka print manual ke 0
-            if (! $employee->canApproveBillingAdjustment() && $request->has('locked_print_pages') && (int) $request->input('locked_print_pages') === 0 && (float) $request->input('locked_print_amount') === 0.0) {
-                $msg = 'Akses ditolak: Operator tidak boleh memanipulasi angka print manual menjadi 0.';
+            // Hitung data riil cetak sistem shift ini (POS + Hardware Spooler)
+            $printSalesItems = CafeSaleItem::whereDate('created_at', $workDate->toDateString())
+                ->whereHas('sale', fn ($q) => $q->where('payment_status', '!=', 'cancelled')
+                    ->when($employee->branch_id, fn ($sq) => $sq->where('branch_id', $employee->branch_id)))
+                ->whereHas('variant.product.category', fn ($q) => $q->where('code', 'CAT-PAPER'))
+                ->get();
+            $autoPrintPages = (int) $printSalesItems->sum('qty');
+
+            $realHardwarePages = (int) PrinterPrintJob::whereDate('work_date', $workDate->toDateString())
+                ->when($employee->branch_id, fn ($q) => $q->where('branch_id', $employee->branch_id))
+                ->sum('pages');
+
+            $actualSystemPages = max($autoPrintPages, $realHardwarePages);
+
+            // Anti-fraud: Kasir biasa HANYA dilarang memanipulasi override angka print ke 0 JIKA sistem riil mencatat ada lembar cetak (> 0).
+            // Jika memang riil tidak ada pelanggan yang print (0 lembar / Rp 0), kasir BISA langsung mengunci tanpa kendala.
+            if (! $employee->canApproveBillingAdjustment()
+                && $actualSystemPages > 0
+                && $request->has('locked_print_pages')
+                && (int) $request->input('locked_print_pages') === 0
+                && (float) $request->input('locked_print_amount') === 0.0) {
+                $msg = "Akses ditolak: Sistem mendeteksi riil ada {$actualSystemPages} lembar print. Operator dilarang mengubah manual menjadi 0.";
                 if ($request->wantsJson() || $request->ajax()) {
                     return response()->json(['success' => false, 'message' => $msg], 403);
                 }
@@ -5970,7 +6064,10 @@ BAT;
             }
         }
 
-        return view('presensi2.rekap', [
+        $useDesktop = $request->is('*rekap-desktop*') || $request->input('view') === 'desktop';
+        $viewName = $useDesktop ? 'presensi2.rekap_desktop' : 'presensi2.rekap';
+
+        return view($viewName, [
             'currentEmployee' => $employee,
             'activeShift' => $activeShift,
             'nextShiftLabel' => $nextShiftLabel,
@@ -6016,6 +6113,16 @@ BAT;
             'dailySettlement' => $this->getBillingIncomePerShift($workDate, $branchId, $activeShift),
             'isSalesLocked' => (bool) ($salesSummary?->is_sales_locked || $salesSummary?->status === 'closed'),
         ]);
+    }
+
+    /**
+     * Tampilan Khusus Rekapitulasi Penjualan & Laporan Shift untuk Desktop PC (Widescreen).
+     */
+    public function rekapDesktopIndex(Request $request): View|RedirectResponse
+    {
+        $request->merge(['view' => 'desktop']);
+
+        return $this->rekapIndex($request);
     }
 
     /**
@@ -6548,18 +6655,22 @@ BAT;
         $isMobile = preg_match('/(android|iphone|ipad|mobile|phone|ipod)/i', (string) $request->userAgent());
         $requestedView = $request->input('view');
 
-        $useDesktop = false;
-        if ($requestedView === 'desktop') {
+        if ($request->is('*serah-terima-v2*') || $requestedView === 'desktop_v2') {
+            $viewName = 'presensi2.serah_terima_v2_desktop';
+            $useDesktop = true;
+        } elseif ($requestedView === 'desktop') {
+            $viewName = 'presensi2.serah_terima_desktop';
             $useDesktop = true;
         } elseif ($requestedView === 'mobile') {
+            $viewName = 'presensi2.serah_terima';
             $useDesktop = false;
         } elseif ($request->is('*serah-terima-desktop*') || $request->is('*pos*')) {
+            $viewName = 'presensi2.serah_terima_desktop';
             $useDesktop = true;
         } else {
             $useDesktop = ! $isMobile;
+            $viewName = $useDesktop ? 'presensi2.serah_terima_desktop' : 'presensi2.serah_terima';
         }
-
-        $viewName = $useDesktop ? 'presensi2.serah_terima_desktop' : 'presensi2.serah_terima';
 
         $branchEmployees = Employee::where('is_active', true)
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
@@ -6625,6 +6736,16 @@ BAT;
             'dailySettlement' => $this->getBillingIncomePerShift($workDate, $branchId, $activeShift),
             'isSalesLocked' => (bool) ($salesSummary?->is_sales_locked || $salesSummary?->status === 'closed'),
         ]);
+    }
+
+    /**
+     * Tampilan Khusus Serah Terima Shift v2 untuk Desktop PC (Layout Tabel 3 Tingkat: Serah Terima, Siap Setor, History).
+     */
+    public function serahTerimaV2DesktopIndex(Request $request): View|RedirectResponse
+    {
+        $request->merge(['view' => 'desktop_v2']);
+
+        return $this->serahTerimaIndex($request);
     }
 
     /**

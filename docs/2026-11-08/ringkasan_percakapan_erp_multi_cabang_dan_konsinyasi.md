@@ -172,3 +172,4 @@ Semua perubahan telah di-commit dan otomatis ter-push ke repositori GitHub `http
 
 ---
 *Dokumentasi ini dibuat otomatis sebagai rekaman resmi arsitektur sistem ERP PT Maya Graha Kencana.*
+

@@ -57,7 +57,72 @@
             bottom: 0;
             left: 0;
             z-index: 100;
-            transition: all 0.3s ease;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* COLLAPSED STATE (DESKTOP) */
+        body.sidebar-collapsed .admin-sidebar {
+            transform: translateX(-100%);
+        }
+
+        body.sidebar-collapsed .admin-main-wrapper {
+            margin-left: 0;
+        }
+
+        /* BUTTON TOGGLE SIDEBAR */
+        .btn-sidebar-toggle {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid var(--border-glass);
+            color: #38bdf8;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.2s ease;
+            outline: none;
+            flex-shrink: 0;
+        }
+
+        .btn-sidebar-toggle:hover {
+            background: rgba(56, 189, 248, 0.2);
+            color: #ffffff;
+            border-color: rgba(56, 189, 248, 0.5);
+            transform: scale(1.05);
+        }
+
+        .btn-close-sidebar-mobile {
+            display: none;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 24px;
+            line-height: 1;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: all 0.15s ease;
+        }
+
+        .btn-close-sidebar-mobile:hover {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* BACKDROP FOR MOBILE */
+        .sidebar-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(11, 17, 32, 0.8);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            z-index: 95;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
         }
 
         .sidebar-brand {
@@ -261,6 +326,32 @@
             display: flex;
             flex-direction: column;
             min-height: 100vh;
+            transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @media (max-width: 992px) {
+            .admin-sidebar {
+                transform: translateX(-100%);
+                z-index: 1000;
+                box-shadow: 0 0 35px rgba(0, 0, 0, 0.85);
+            }
+
+            .admin-main-wrapper {
+                margin-left: 0 !important;
+            }
+
+            .btn-close-sidebar-mobile {
+                display: block;
+            }
+
+            body.sidebar-mobile-open .admin-sidebar {
+                transform: translateX(0);
+            }
+
+            body.sidebar-mobile-open .sidebar-backdrop {
+                display: block;
+                opacity: 1;
+            }
         }
 
         /* TOPBAR */
@@ -825,11 +916,14 @@
     <!-- SIDEBAR UTAMA ADMIN -->
     <aside class="admin-sidebar">
         <div class="sidebar-brand">
-            <div class="brand-logo-icon">🏢</div>
-            <div>
-                <div class="brand-text-title">Maya Graha Kencana</div>
-                <div class="brand-text-sub">ADMIN ERP TERPADU</div>
+            <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+                <div class="brand-logo-icon">🏢</div>
+                <div>
+                    <div class="brand-text-title">Maya Graha Kencana</div>
+                    <div class="brand-text-sub">ADMIN ERP TERPADU</div>
+                </div>
             </div>
+            <button type="button" class="btn-close-sidebar-mobile" onclick="toggleSidebar()" title="Tutup Menu Sidebar">&times;</button>
         </div>
 
         <div class="sidebar-user">
@@ -1008,11 +1102,17 @@
         </div>
     </aside>
 
+    <!-- BACKDROP MOBILE UNTUK SIDEBAR -->
+    <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="toggleSidebar()"></div>
+
     <!-- WRAPPER UTAMA -->
     <div class="admin-main-wrapper">
         <!-- TOPBAR -->
         <header class="admin-topbar">
             <div class="topbar-left">
+                <button type="button" id="btnSidebarToggle" class="btn-sidebar-toggle" onclick="toggleSidebar()" title="Sembunyikan / Tampilkan Sidebar (Geser Kiri/Kanan)">
+                    <span class="toggle-icon">☰</span>
+                </button>
                 <div class="page-badge-location">
                     <span>Cabang:</span>
                     <strong>{{ $profileData['branch_name'] ?? 'MGK Pusat' }} ({{ $profileData['branch_code'] ?? 'MGK-PST' }})</strong>
@@ -1177,6 +1277,28 @@
     @yield('modals')
 
     <script>
+        // Sidebar Toggle Handler with LocalStorage Persistence
+        function toggleSidebar() {
+            const isMobile = window.innerWidth <= 992;
+            if (isMobile) {
+                document.body.classList.toggle('sidebar-mobile-open');
+            } else {
+                const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
+                try {
+                    localStorage.setItem('admin_sidebar_collapsed', isCollapsed ? '1' : '0');
+                } catch(e) {}
+            }
+        }
+
+        // Restore sidebar state on load
+        (function() {
+            try {
+                if (window.innerWidth > 992 && localStorage.getItem('admin_sidebar_collapsed') === '1') {
+                    document.body.classList.add('sidebar-collapsed');
+                }
+            } catch(e) {}
+        })();
+
         function openErpModal(id) {
             const modal = document.getElementById(id);
             if (modal) modal.classList.add('active');

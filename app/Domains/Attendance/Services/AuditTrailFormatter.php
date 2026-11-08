@@ -101,6 +101,23 @@ class AuditTrailFormatter
         'reorder_point' => ['id' => 'Batas Minimum Pesan Ulang (ROP)', 'en' => 'Reorder Point (ROP)'],
         'is_sales_locked' => ['id' => 'Status Kunci Penjualan', 'en' => 'Sales Lock Status'],
         'cash_balance' => ['id' => 'Saldo Kas Fisik', 'en' => 'Physical Cash Balance'],
+
+        // Jam Kerja, Izin & Lembur
+        'in_time' => ['id' => 'Jam Masuk', 'en' => 'Check-In Time'],
+        'out_time' => ['id' => 'Jam Keluar', 'en' => 'Check-Out Time'],
+        'start_time' => ['id' => 'Waktu Mulai', 'en' => 'Start Time'],
+        'end_time' => ['id' => 'Waktu Selesai', 'en' => 'End Time'],
+        'total_hours' => ['id' => 'Total Jam Kerja', 'en' => 'Total Working Hours'],
+        'approval_status' => ['id' => 'Status Persetujuan', 'en' => 'Approval Status'],
+        'approved_by' => ['id' => 'Disetujui Oleh', 'en' => 'Approved By'],
+        'approved_at' => ['id' => 'Waktu Persetujuan', 'en' => 'Approval Timestamp'],
+        'rejected_by' => ['id' => 'Ditolak Oleh', 'en' => 'Rejected By'],
+        'rejected_at' => ['id' => 'Waktu Penolakan', 'en' => 'Rejection Timestamp'],
+        'leave_type' => ['id' => 'Jenis Cuti / Izin', 'en' => 'Leave Type'],
+        'overtime_hours' => ['id' => 'Jumlah Jam Lembur', 'en' => 'Overtime Hours'],
+        'overtime_amount' => ['id' => 'Nominal Upah Lembur', 'en' => 'Overtime Pay Amount'],
+        'late_minutes' => ['id' => 'Keterlambatan (Menit)', 'en' => 'Late Duration (Minutes)'],
+        'early_leave_minutes' => ['id' => 'Pulang Cepat (Menit)', 'en' => 'Early Leave (Minutes)'],
     ];
 
     /**
@@ -113,6 +130,24 @@ class AuditTrailFormatter
     public static function formatPayload(?array $payload, string $lang = 'id'): array
     {
         return self::formatEntries($payload, $lang);
+    }
+
+    /**
+     * Konversi payload menjadi string terstruktur satu baris dalam bahasa baku.
+     */
+    public static function formatToString(?array $payload, string $lang = 'id'): string
+    {
+        $entries = self::formatEntries($payload, $lang);
+        if (empty($entries)) {
+            return $lang === 'id' ? 'Tidak Ada' : 'None';
+        }
+
+        $parts = [];
+        foreach ($entries as $e) {
+            $parts[] = $e['label'].': '.$e['value'];
+        }
+
+        return implode(' • ', $parts);
     }
 
     /**

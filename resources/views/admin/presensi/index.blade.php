@@ -903,7 +903,7 @@
                                         <tr style="border-bottom: 1px solid #f1f5f9;">
                                             <td style="padding: 6px; white-space: nowrap;">${new Date(l.created_at).toLocaleString('id-ID')}</td>
                                             <td style="padding: 6px;"><span class="badge" style="background:#e0e7ff;color:#3730a3;">${l.action}</span></td>
-                                            <td style="padding: 6px; font-family: monospace; font-size: 10px; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${JSON.stringify(l.new_values || {})}</td>
+                                            <td style="padding: 6px; font-size: 11px; max-width: 320px; line-height: 1.4; color: #1e293b;">${l.formatted_new_values_text || (l.new_values ? Object.entries(l.new_values).map(([k, v]) => `${k}: ${v}`).join('; ') : '-')}</td>
                                             <td style="padding: 6px; color: #64748b;">${l.ip_address || '-'}</td>
                                         </tr>
                                     `).join('')}

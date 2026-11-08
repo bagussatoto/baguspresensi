@@ -550,6 +550,86 @@
             filter: brightness(0.96);
             box-shadow: 0 2px 4px rgba(0,0,0,0.08);
         }
+
+        /* SLIDE-OVER DRAWER OPERASIONAL SHIFT */
+        .pos-shift-drawer-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            z-index: 9990;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.25s ease;
+        }
+        .pos-shift-drawer-backdrop.active {
+            display: block;
+            opacity: 1;
+        }
+
+        .pos-shift-drawer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 340px;
+            max-width: 90vw;
+            background: #ffffff;
+            z-index: 9995;
+            box-shadow: 4px 0 25px rgba(0, 0, 0, 0.25);
+            display: flex;
+            flex-direction: column;
+            transform: translateX(-100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .pos-shift-drawer.active {
+            transform: translateX(0);
+        }
+
+        .pos-shift-drawer-header {
+            padding: 16px 20px;
+            background: #0284c7;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .pos-shift-drawer-body {
+            padding: 16px;
+            overflow-y: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: #f8fafc;
+        }
+
+        .drawer-action-btn {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            padding: 12px 14px;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1e293b;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.15s ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+            text-align: left;
+        }
+        .drawer-action-btn:hover {
+            transform: translateX(3px);
+            border-color: #0284c7;
+            background: #f0f9ff;
+            color: #0369a1;
+        }
     </style>
 </head>
 <body>
@@ -557,31 +637,19 @@
     {{-- TOP POS HEADER: Centered "Orderan POS" & Right "penjualan > 1;" --}}
     <header class="pos-top-header">
         <div class="pos-header-left">
+            <button type="button" onclick="openPosShiftDrawer()" class="btn-nav-pill" style="color: #0284c7; border-color: #7dd3fc; background: #e0f2fe; font-weight: 700;" title="Buka Menu Operasional Shift (Transfer DC, Serah Terima & Settlement)">
+                <span>☰</span> Menu Operasional
+                @if(($pendingStoreTransfersCount ?? 0) > 0)
+                    <span style="background: #e11d48; color: #fff; border-radius: 10px; padding: 1px 6px; font-size: 10px; margin-left: 2px;">
+                        {{ $pendingStoreTransfersCount }}
+                    </span>
+                @endif
+            </button>
             <a href="{{ route('presensi2.penjualan') }}" class="btn-nav-pill" title="Buka Versi Tampilan Mobile / HP">
                 <span>📱</span> Versi HP
             </a>
             <a href="{{ route('presensi2.stok') }}" class="btn-nav-pill" title="Cek Stok Fisik Shift">
                 <span>📦</span> Cek Stok
-            </a>
-            <button type="button" onclick="openReceiveTransferModal()" class="btn-nav-pill" style="color: #0284c7; border-color: #7dd3fc; background: {{ ($pendingStoreTransfersCount ?? 0) > 0 ? '#e0f2fe' : '#f8fafc' }}; font-weight: 700;" title="Terima Kiriman Transfer Stok dari Distribution Center (DC)">
-                <span>🚚</span> Terima Transfer DC
-                @if(($pendingStoreTransfersCount ?? 0) > 0)
-                    <span style="background: #0284c7; color: #fff; border-radius: 10px; padding: 1px 6px; font-size: 10px; margin-left: 2px;">
-                        {{ $pendingStoreTransfersCount }}
-                    </span>
-                @endif
-            </button>
-            <button type="button" onclick="openPrevChecklistModal()" class="btn-nav-pill" style="color: #0369a1; border-color: #bae6fd; background: #f0f9ff;" title="Lihat Checklist Serah Terima Shift Sebelumnya">
-                <span>📋</span> Checklist Shift Lalu
-            </button>
-            <button type="button" onclick="openPrevSalesModal()" class="btn-nav-pill" style="color: #4338ca; border-color: #c7d2fe; background: #eef2ff;" title="Lihat Riwayat & Rincian Penjualan Shift Sebelumnya">
-                <span>🔍</span> Penjualan Shift Lalu
-            </button>
-            <button type="button" onclick="openDailySettlementModal()" class="btn-nav-pill" style="color: #0f766e; border-color: #99f6e4; background: #f0fdfa;" title="Lihat Closing Statement & Settlement Setoran Harian">
-                <span>📊</span> Settlement Harian ({{ $dailySettlement['settled_count'] ?? 0 }}/{{ $dailySettlement['total_shift_count'] ?? 4 }})
-            </button>
-            <a href="{{ route('presensi2.serah-terima') }}" class="btn-nav-pill" style="color: #b45309; border-color: #fcd34d; background: #fef3c7;" title="Tutup Shift & Serah Terima Kasir">
-                <span>🏁</span> Tutup Shift
             </a>
             <button type="button" onclick="togglePosSimulation()" class="btn-nav-pill" style="color: #7c3aed; border-color: #c4b5fd; background: #f5f3ff;" title="Buka / Tutup Panel Uji Coba Transaksi">
                 <span>🧪</span> <span id="btn-toggle-sim-label">Mode Simulasi</span>
@@ -655,21 +723,6 @@
             </div>
 
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                {{-- PRESET 1: AQUA 600ML TUNAI --}}
-                <button type="button" onclick="runPosSimulation('aqua_cash')" class="btn-pos-preset" style="background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 6px 11px; border-radius: 6px; font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px;" title="Langsung checkout 1 Aqua 600ml tunai dan cetak struk">
-                    <span>⚡ 1. Beli Aqua (Tunai)</span>
-                </button>
-
-                {{-- PRESET 2: PRINT A4 + MINUMAN QRIS --}}
-                <button type="button" onclick="runPosSimulation('print_qris')" class="btn-pos-preset" style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 6px 11px; border-radius: 6px; font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px;" title="Langsung checkout 2 Lembar Print + 1 Minuman via QRIS">
-                    <span>⚡ 2. Print + Minum (QRIS)</span>
-                </button>
-
-                {{-- PRESET 3: ISI KERANJANG SAJA --}}
-                <button type="button" onclick="runPosSimulation('fill_cart')" class="btn-pos-preset" style="background: #faf5ff; border: 1px solid #e9d5ff; color: #6b21a8; padding: 6px 11px; border-radius: 6px; font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px;" title="Hanya isi 2 produk ke keranjang untuk dicoba kasir manual">
-                    <span>🛒 3. Isi Keranjang Uji Coba</span>
-                </button>
-
                 {{-- RESET TRANSAKSI TESTING HARI INI --}}
                 <a href="{{ request()->fullUrlWithQuery(['action' => 'reset_sales']) }}"
                    onclick="return confirm('PERINGATAN UJI COBA:\n\nApakah Anda yakin ingin me-reset seluruh transaksi penjualan shift hari ini?\n\n• Seluruh transaksi testing hari ini akan dihapus dari sistem\n• Stok barang di gudang/kulkas akan dikembalikan utuh\n• Rekap omset shift akan kembali bersih Rp 0')"
@@ -881,9 +934,7 @@
                 <button type="button" id="btn-save-pos-order" class="btn-cart-submit" {{ !empty($isSalesLocked) ? 'disabled style=background:#94a3b8;cursor:not-allowed; title="Shift telah dikunci (rekap selesai)"' : 'onclick=submitPosOrder()' }}>
                     {{ !empty($isSalesLocked) ? '🔒 Penjualan Dikunci (Rekap Selesai)' : 'Simpan Order Penjualan' }}
                 </button>
-                <button type="button" id="btn-print-last-receipt" class="btn-cart-clear" style="display: none; background: #0284c7; border: 1px solid #0369a1; color: #fff; width: auto; padding: 0 12px; font-weight: 700;" onclick="printLastReceipt()" title="Cetak struk pesanan terakhir yang baru saja disimpan">
-                    <span>🖨️</span> Struk
-                </button>
+            
             </div>
 
         </section>
@@ -2493,9 +2544,25 @@
             }
         }
 
+        // DRAWER OPERASIONAL SHIFT
+        function openPosShiftDrawer() {
+            const drawer = document.getElementById('pos-shift-drawer');
+            const backdrop = document.getElementById('pos-shift-drawer-backdrop');
+            if (drawer) drawer.classList.add('active');
+            if (backdrop) backdrop.classList.add('active');
+        }
+
+        function closePosShiftDrawer() {
+            const drawer = document.getElementById('pos-shift-drawer');
+            const backdrop = document.getElementById('pos-shift-drawer-backdrop');
+            if (drawer) drawer.classList.remove('active');
+            if (backdrop) backdrop.classList.remove('active');
+        }
+
         // KEYBOARD SHORTCUTS
         window.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
+                closePosShiftDrawer();
                 closeReceiptModal();
                 closeModalPenyesuaianBilling();
                 closeModalPenyesuaianPrint();
@@ -2514,6 +2581,94 @@
             }
         });
     </script>
+
+    <!-- BACKDROP & DRAWER OPERASIONAL SHIFT KASIR -->
+    <div id="pos-shift-drawer-backdrop" class="pos-shift-drawer-backdrop" onclick="closePosShiftDrawer()"></div>
+    <aside id="pos-shift-drawer" class="pos-shift-drawer">
+        <div class="pos-shift-drawer-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 20px;">📋</span>
+                <div>
+                    <h3 style="font-size: 15px; font-weight: 700; margin: 0; line-height: 1.2;">Menu Operasional Shift</h3>
+                    <div style="font-size: 11px; opacity: 0.9; margin-top: 2px;">Serah terima, audit & mutasi stok</div>
+                </div>
+            </div>
+            <button type="button" onclick="closePosShiftDrawer()" style="background: rgba(255,255,255,0.2); border: none; color: #ffffff; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 14px; font-weight: bold;">✕</button>
+        </div>
+        <div class="pos-shift-drawer-body">
+            <!-- 1. Terima Transfer DC -->
+            <button type="button" onclick="closePosShiftDrawer(); openReceiveTransferModal();" class="drawer-action-btn" style="color: #0284c7; border-left: 4px solid #0284c7;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 18px;">🚚</span>
+                    <div>
+                        <div>Terima Transfer DC</div>
+                        <div style="font-size: 11px; font-weight: normal; color: #64748b;">Kiriman stok dari Distribution Center</div>
+                    </div>
+                </div>
+                @if(($pendingStoreTransfersCount ?? 0) > 0)
+                    <span style="background: #0284c7; color: #fff; border-radius: 10px; padding: 2px 8px; font-size: 11px; font-weight: 700;">
+                        {{ $pendingStoreTransfersCount }}
+                    </span>
+                @else
+                    <span style="color: #94a3b8; font-size: 14px;">➔</span>
+                @endif
+            </button>
+
+            <!-- 2. Checklist Shift Lalu -->
+            <button type="button" onclick="closePosShiftDrawer(); openPrevChecklistModal();" class="drawer-action-btn" style="color: #0369a1; border-left: 4px solid #0369a1;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 18px;">📋</span>
+                    <div>
+                        <div>Checklist Shift Lalu</div>
+                        <div style="font-size: 11px; font-weight: normal; color: #64748b;">Verifikasi fisik kertas, F&B & PC</div>
+                    </div>
+                </div>
+                <span style="color: #94a3b8; font-size: 14px;">➔</span>
+            </button>
+
+            <!-- 3. Riwayat Penjualan Shift Lalu -->
+            <button type="button" onclick="closePosShiftDrawer(); openPrevSalesModal();" class="drawer-action-btn" style="color: #4338ca; border-left: 4px solid #4338ca;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 18px;">🔍</span>
+                    <div>
+                        <div>Riwayat Penjualan Shift Lalu</div>
+                        <div style="font-size: 11px; font-weight: normal; color: #64748b;">Omset, rincian nota & transaksi kasir</div>
+                    </div>
+                </div>
+                <span style="color: #94a3b8; font-size: 14px;">➔</span>
+            </button>
+
+            <!-- 4. Settlement Setoran Harian (0/4) -->
+            <button type="button" onclick="closePosShiftDrawer(); openDailySettlementModal();" class="drawer-action-btn" style="color: #0f766e; border-left: 4px solid #0f766e;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 18px;">📊</span>
+                    <div>
+                        <div>Settlement Setoran Harian</div>
+                        <div style="font-size: 11px; font-weight: normal; color: #64748b;">Closing statement shift 1 s/d 4</div>
+                    </div>
+                </div>
+                <span style="background: #ccfbf1; color: #0f766e; border-radius: 6px; padding: 2px 7px; font-size: 11px; font-weight: 700;">
+                    {{ $dailySettlement['settled_count'] ?? 0 }}/{{ $dailySettlement['total_shift_count'] ?? 4 }}
+                </span>
+            </button>
+
+            <!-- 5. Tutup Shift & Serah Terima Kas -->
+            <a href="{{ route('presensi2.serah-terima') }}" class="drawer-action-btn" style="color: #b45309; border-left: 4px solid #f59e0b; background: #fffbeb;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 18px;">🏁</span>
+                    <div>
+                        <div>Tutup Shift & Serah Terima Kas</div>
+                        <div style="font-size: 11px; font-weight: normal; color: #92400e;">Hitung kas laci & handover kasir</div>
+                    </div>
+                </div>
+                <span style="color: #b45309; font-size: 14px;">➔</span>
+            </a>
+        </div>
+        <div style="padding: 12px 16px; background: #ffffff; border-top: 1px solid #e2e8f0; font-size: 11px; color: #64748b; text-align: center;">
+            Operator: <strong>{{ $currentEmployee->name }}</strong> &bull; Shift {{ $activeShift?->id ?? 1 }}
+        </div>
+    </aside>
+
     @include('presensi2.partials.modal_shift_history_and_settlement')
 </body>
 </html>

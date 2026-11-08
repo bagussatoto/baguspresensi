@@ -220,7 +220,7 @@
                 </div>
 
                 {{-- TAB TAHAP 2 --}}
-                <div id="step-tab-2" onclick="goToStep2(false)" style="cursor: pointer; padding: 12px 16px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); border: 1.5px solid rgba(255, 255, 255, 0.1); display: flex; align-items: center; gap: 12px; transition: all 0.2s;">
+                <div id="step-tab-2" onclick="goToStep2(true)" style="cursor: pointer; padding: 12px 16px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); border: 1.5px solid rgba(255, 255, 255, 0.1); display: flex; align-items: center; gap: 12px; transition: all 0.2s;">
                     <div id="step-tab-2-icon" style="width: 36px; height: 36px; border-radius: 8px; background: rgba(255, 255, 255, 0.12); color: #94a3b8; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; flex-shrink: 0;">
                         2
                     </div>
@@ -324,7 +324,7 @@
                                 <th style="padding: 8px 10px; text-align: center;">Sisa Stok Sistem</th>
                                 <th style="padding: 8px 10px; text-align: center; color: #38bdf8;">Fisik Aktual (Laci/Meja)</th>
                                 <th style="padding: 8px 10px; text-align: center;">Selisih</th>
-                                <th style="padding: 8px 10px; text-align: right;">Status & Tindakan</th>
+                                <th style="padding: 8px 10px; text-align: center;">Status</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -332,7 +332,7 @@
                             @php 
                                 $isCrit = (bool) ($k['is_critical'] ?? false); 
                                 $kId = $k['id'];
-                                $physVal = old('paper_physical.'.$kId, $k['physical_stock'] ?? $k['sesudahnya']);
+                                $physVal = old('paper_physical.'.$kId, 0);
                                 $diffVal = (int) $physVal - (int) $k['sesudahnya'];
                             @endphp
                             <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
@@ -366,8 +366,9 @@
                                            data-target-diff="kertas-diff-{{ $kId }}"
                                            data-target-status="kertas-status-{{ $kId }}"
                                            value="{{ $physVal }}" 
+                                           autocomplete="off"
                                            min="0" step="1"
-                                           style="width: 75px; padding: 4px 6px; text-align: center; font-weight: 700; font-size: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 6px; color: #fff; outline: none;"
+                                           style="width: 75px; padding: 4px 6px; text-align: center; font-weight: 700; font-size: 12px; background: {{ $diffVal < 0 ? 'rgba(239, 68, 68, 0.15)' : ($diffVal === 0 ? 'rgba(16, 185, 129, 0.08)' : 'rgba(56, 189, 248, 0.15)') }}; border: 1px solid {{ $diffVal < 0 ? '#ef4444' : ($diffVal === 0 ? 'rgba(16, 185, 129, 0.5)' : '#38bdf8') }}; border-radius: 6px; color: {{ $diffVal < 0 ? '#fca5a5' : ($diffVal === 0 ? '#34d399' : '#bae6fd') }}; outline: none;"
                                            oninput="recalculateStockRow(this)">
                                 </td>
                                 <td style="padding: 6px 10px; text-align: center;">
@@ -381,25 +382,20 @@
                                         @endif
                                     </span>
                                 </td>
-                                <td style="padding: 10px; text-align: right;">
-                                    <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+                                <td style="padding: 10px; text-align: center;">
+                                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
                                         <span id="kertas-status-{{ $kId }}">
                                             @if($diffVal < 0)
                                                 <span class="badge" style="background: rgba(239, 68, 68, 0.25); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.5); font-size: 10px; font-weight: 700;">⚠️ Selisih Kurang</span>
                                             @elseif($diffVal > 0)
                                                 <span class="badge" style="background: rgba(59, 130, 246, 0.25); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.5); font-size: 10px; font-weight: 700;">ℹ️ Selisih Lebih</span>
                                             @else
-                                                <span class="badge {{ $isCrit ? '' : 'badge-present' }}" style="{{ $isCrit ? 'background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4);' : 'background: rgba(16, 185, 129, 0.15); color: #34d399;' }} font-size: 10px;">
-                                                    {{ $isCrit ? '⚠️ Kritis' : '✓ Aman (Cocok)' }}
-                                                </span>
+                                                <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); font-size: 10px; font-weight: 700;">✓ Aman (Cocok)</span>
                                             @endif
                                         </span>
                                         <span class="badge" style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); color: #94a3b8; font-size: 10px;">
                                             {{ $k['rim_info'] }}
                                         </span>
-                                        <button type="button" onclick="openQuickRestockModal('kertas', '{{ $k['name'] }}', 5, 'Rim', '{{ $isCrit ? 'high' : 'normal' }}')" class="btn" style="padding: 4px 9px; font-size: 10.5px; font-weight: 700; background: {{ $isCrit ? 'rgba(239, 68, 68, 0.25)' : 'rgba(14, 165, 233, 0.2)' }}; border: 1px solid {{ $isCrit ? 'rgba(239, 68, 68, 0.5)' : 'rgba(14, 165, 233, 0.4)' }}; color: {{ $isCrit ? '#fca5a5' : '#38bdf8' }}; border-radius: 6px; cursor: pointer;">
-                                            ⚡ Restock
-                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -426,7 +422,7 @@
                                 <th style="padding: 8px 10px; text-align: center;">Sisa Stok Sistem</th>
                                 <th style="padding: 8px 10px; text-align: center; color: #38bdf8;">Fisik Aktual (Kulkas/Rak)</th>
                                 <th style="padding: 8px 10px; text-align: center;">Selisih</th>
-                                <th style="padding: 8px 10px; text-align: right;">Status & Tindakan</th>
+                                <th style="padding: 8px 10px; text-align: center;">Status</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -434,7 +430,7 @@
                             @php 
                                 $isCrit = (bool) ($d['is_critical'] ?? ($d['sesudahnya'] <= 5)); 
                                 $dId = $d['variant_id'];
-                                $physVal = old('drink_physical.'.$dId, $d['physical_stock'] ?? $d['sesudahnya']);
+                                $physVal = old('drink_physical.'.$dId, 0);
                                 $diffVal = (int) $physVal - (int) $d['sesudahnya'];
                             @endphp
                             <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
@@ -471,8 +467,9 @@
                                            data-target-diff="drink-diff-{{ $dId }}"
                                            data-target-status="drink-status-{{ $dId }}"
                                            value="{{ $physVal }}" 
+                                           autocomplete="off"
                                            min="0" step="1"
-                                           style="width: 70px; padding: 4px 6px; text-align: center; font-weight: 700; font-size: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 6px; color: #fff; outline: none;"
+                                           style="width: 70px; padding: 4px 6px; text-align: center; font-weight: 700; font-size: 12px; background: {{ $diffVal < 0 ? 'rgba(239, 68, 68, 0.15)' : ($diffVal === 0 ? 'rgba(16, 185, 129, 0.08)' : 'rgba(56, 189, 248, 0.15)') }}; border: 1px solid {{ $diffVal < 0 ? '#ef4444' : ($diffVal === 0 ? 'rgba(16, 185, 129, 0.5)' : '#38bdf8') }}; border-radius: 6px; color: {{ $diffVal < 0 ? '#fca5a5' : ($diffVal === 0 ? '#34d399' : '#bae6fd') }}; outline: none;"
                                            oninput="recalculateStockRow(this)">
                                 </td>
                                 <td style="padding: 6px 10px; text-align: center;">
@@ -486,24 +483,17 @@
                                         @endif
                                     </span>
                                 </td>
-                                <td style="padding: 9px 10px; text-align: right;">
-                                    <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
+                                <td style="padding: 9px 10px; text-align: center;">
+                                    <div style="display: flex; align-items: center; justify-content: center;">
                                         <span id="drink-status-{{ $dId }}">
                                             @if($diffVal < 0)
                                                 <span class="badge" style="background: rgba(239, 68, 68, 0.25); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.5); font-size: 10px; font-weight: 700;">⚠️ Selisih Kurang</span>
                                             @elseif($diffVal > 0)
                                                 <span class="badge" style="background: rgba(59, 130, 246, 0.25); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.5); font-size: 10px; font-weight: 700;">ℹ️ Selisih Lebih</span>
                                             @else
-                                                @if($isCrit)
-                                                    <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); font-size: 10px;">⚠️ Kritis</span>
-                                                @else
-                                                    <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 10px;">✓ Aman (Cocok)</span>
-                                                @endif
+                                                <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); font-size: 10px; font-weight: 700;">✓ Aman (Cocok)</span>
                                             @endif
                                         </span>
-                                        <button type="button" onclick="openQuickRestockModal('minuman', '{{ $d['name'] }}', 1, 'Dus', '{{ $isCrit ? 'high' : 'normal' }}')" class="btn" style="padding: 3px 8px; font-size: 10px; font-weight: 700; background: {{ $isCrit ? 'rgba(239,68,68,0.25)' : 'rgba(59,130,246,0.18)' }}; border: 1px solid {{ $isCrit ? 'rgba(239,68,68,0.5)' : 'rgba(59,130,246,0.35)' }}; color: {{ $isCrit ? '#fca5a5' : '#93c5fd' }}; border-radius: 5px; cursor: pointer;">
-                                            ⚡ Restock
-                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -529,7 +519,7 @@
                                 <th style="padding: 8px 10px; text-align: center;">Sisa Stok Sistem</th>
                                 <th style="padding: 8px 10px; text-align: center; color: #38bdf8;">Fisik Aktual (Rak/Etalase)</th>
                                 <th style="padding: 8px 10px; text-align: center;">Selisih</th>
-                                <th style="padding: 8px 10px; text-align: right;">Status & Tindakan</th>
+                                <th style="padding: 8px 10px; text-align: center;">Status</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -537,7 +527,7 @@
                             @php 
                                 $isCrit = (bool) ($m['is_critical'] ?? ($m['sesudahnya'] <= 5)); 
                                 $mId = $m['variant_id'];
-                                $physVal = old('food_physical.'.$mId, $m['physical_stock'] ?? $m['sesudahnya']);
+                                $physVal = old('food_physical.'.$mId, 0);
                                 $diffVal = (int) $physVal - (int) $m['sesudahnya'];
                             @endphp
                             <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
@@ -574,8 +564,9 @@
                                            data-target-diff="food-diff-{{ $mId }}"
                                            data-target-status="food-status-{{ $mId }}"
                                            value="{{ $physVal }}" 
+                                           autocomplete="off"
                                            min="0" step="1"
-                                           style="width: 70px; padding: 4px 6px; text-align: center; font-weight: 700; font-size: 12px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 6px; color: #fff; outline: none;"
+                                           style="width: 70px; padding: 4px 6px; text-align: center; font-weight: 700; font-size: 12px; background: {{ $diffVal < 0 ? 'rgba(239, 68, 68, 0.15)' : ($diffVal === 0 ? 'rgba(16, 185, 129, 0.08)' : 'rgba(56, 189, 248, 0.15)') }}; border: 1px solid {{ $diffVal < 0 ? '#ef4444' : ($diffVal === 0 ? 'rgba(16, 185, 129, 0.5)' : '#38bdf8') }}; border-radius: 6px; color: {{ $diffVal < 0 ? '#fca5a5' : ($diffVal === 0 ? '#34d399' : '#bae6fd') }}; outline: none;"
                                            oninput="recalculateStockRow(this)">
                                 </td>
                                 <td style="padding: 6px 10px; text-align: center;">
@@ -589,24 +580,17 @@
                                         @endif
                                     </span>
                                 </td>
-                                <td style="padding: 9px 10px; text-align: right;">
-                                    <div style="display: flex; align-items: center; justify-content: flex-end; gap: 6px;">
+                                <td style="padding: 9px 10px; text-align: center;">
+                                    <div style="display: flex; align-items: center; justify-content: center;">
                                         <span id="food-status-{{ $mId }}">
                                             @if($diffVal < 0)
                                                 <span class="badge" style="background: rgba(239, 68, 68, 0.25); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.5); font-size: 10px; font-weight: 700;">⚠️ Selisih Kurang</span>
                                             @elseif($diffVal > 0)
                                                 <span class="badge" style="background: rgba(59, 130, 246, 0.25); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.5); font-size: 10px; font-weight: 700;">ℹ️ Selisih Lebih</span>
                                             @else
-                                                @if($isCrit)
-                                                    <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); font-size: 10px;">⚠️ Kritis</span>
-                                                @else
-                                                    <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 10px;">✓ Aman (Cocok)</span>
-                                                @endif
+                                                <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); font-size: 10px; font-weight: 700;">✓ Aman (Cocok)</span>
                                             @endif
                                         </span>
-                                        <button type="button" onclick="openQuickRestockModal('makanan', '{{ $m['name'] }}', 1, 'Dus', '{{ $isCrit ? 'high' : 'normal' }}')" class="btn" style="padding: 3px 8px; font-size: 10px; font-weight: 700; background: {{ $isCrit ? 'rgba(239,68,68,0.25)' : 'rgba(59,130,246,0.18)' }}; border: 1px solid {{ $isCrit ? 'rgba(239,68,68,0.5)' : 'rgba(59,130,246,0.35)' }}; color: {{ $isCrit ? '#fca5a5' : '#93c5fd' }}; border-radius: 5px; cursor: pointer;">
-                                            ⚡ Restock
-                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -666,9 +650,9 @@
                         <span>🔒</span>
                         <span>Selisih yang dilaporkan akan tercatat atas nama Shift Sebelumnya tanpa memotong ganti rugi kasir shift ini.</span>
                     </div>
-                    <button type="button" id="btn-confirm-stock-handover" onclick="confirmStockHandoverAndProceed()" class="btn" style="padding: 10px 20px; font-size: 12.5px; font-weight: 700; background: linear-gradient(135deg, #059669, #10b981); color: #fff; border: 1px solid rgba(16, 185, 129, 0.5); border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
-                        <span id="btn-confirm-stock-icon">✅</span>
-                        <span id="btn-confirm-stock-text">Konfirmasi Serah Terima Stok & Lanjut ke Cek Kas Laci ⬇️</span>
+                    <button type="button" id="btn-confirm-stock-handover" onclick="confirmStockHandoverAndProceed()" disabled class="btn" style="padding: 10px 20px; font-size: 12.5px; font-weight: 700; background: linear-gradient(135deg, #475569, #64748b); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.4); border-radius: 8px; cursor: not-allowed; display: flex; align-items: center; gap: 8px; opacity: 0.6;">
+                        <span id="btn-confirm-stock-icon">🔒</span>
+                        <span id="btn-confirm-stock-text">🔒 Kunci: Kolom Fisik Belum Diisi</span>
                     </button>
                 </div>
             </div>
@@ -834,7 +818,7 @@
                         Pastikan seluruh fisik kertas print, kulkas minuman, etalase makanan, dan kelayakan 15 PC telah diverifikasi sebelum melanjutkan ke tahap penghitungan uang kas laci.
                     </span>
                 </div>
-                <button type="button" onclick="goToStep2(true)" id="btn-next-to-step2" class="btn btn-emerald" style="padding: 15px 32px; font-size: 15px; font-weight: 800; width: 100%; max-width: 520px; margin: 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 6px 20px rgba(16, 185, 129, 0.35); cursor: pointer;">
+                <button type="button" onclick="goToStep2(true)" id="btn-next-to-step2" disabled class="btn btn-emerald" style="padding: 15px 32px; font-size: 15px; font-weight: 800; width: 100%; max-width: 520px; margin: 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 10px; cursor: not-allowed; opacity: 0.5; filter: grayscale(0.7);" title="Harap isi seluruh kolom fisik aktual terlebih dahulu">
                     <span>Lanjut ke Tahap 2: Konfirmasi Kas & Serah Terima Laci</span>
                     <span style="font-size: 18px;">➡️</span>
                 </button>
@@ -912,6 +896,11 @@
                         </div>
                         <div style="font-size: 11px; color: var(--text-sub); margin-top: 2px;">
                             Operator Penyerah: <strong style="color: #c4b5fd;">{{ $prevShiftBilling['operator_name'] }}</strong>
+                        </div>
+                        <div style="margin-top: 8px;">
+                            <button type="button" onclick="openPrevSalesModal()" style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 8px; background: rgba(99, 102, 241, 0.2); border: 1px solid rgba(99, 102, 241, 0.5); color: #c7d2fe; font-size: 11.5px; font-weight: 700; cursor: pointer; transition: all 0.2s;" title="Lihat Riwayat & Rincian Penjualan Shift Sebelumnya">
+                                <span>🔍</span> Lihat Rincian Penjualan Shift Lalu ({{ count($prevShiftBilling['sales_list'] ?? []) }} Nota)
+                            </button>
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -1207,14 +1196,14 @@
                     <button type="button" onclick="goToStep1()" class="btn" style="padding: 15px 24px; font-size: 14px; font-weight: 700; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); color: #cbd5e1; border-radius: 8px; cursor: pointer;">
                         ⬅️ Kembali ke Tahap 1 (Cek Stok)
                     </button>
-                    <button type="submit" id="btn-submit-stok" class="btn btn-emerald" style="padding: 15px 32px; font-size: 15px; font-weight: 800; min-width: 300px; box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4); cursor: pointer;">
-                        <span>🚀</span> 6. Selesai & Buka POS Kasir Desktop
+                    <button type="submit" id="btn-submit-stok" disabled class="btn btn-emerald" style="padding: 15px 32px; font-size: 15px; font-weight: 800; min-width: 300px; box-shadow: none; cursor: not-allowed; opacity: 0.5; filter: grayscale(0.8);" title="Harap isi seluruh kolom fisik aktual terlebih dahulu">
+                        <span>✅</span> 6. Selesai Cek Fisik & Siap Tugas di PC Kasir
                     </button>
                 </div>
 
-                <div style="margin-top: 14px; font-size: 11px; color: var(--text-sub); display: flex; align-items: center; justify-content: center; gap: 6px;">
-                    <span>🔒</span>
-                    <span>Untuk <strong>Check Out Presensi Pulang</strong> nanti dilakukan setelah pergantian shift di Halaman Penjualan.</span>
+                <div style="margin-top: 14px; font-size: 12px; color: #c7d2fe; display: flex; align-items: center; justify-content: center; gap: 8px; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 8px; padding: 12px 16px; text-align: center; line-height: 1.4;">
+                    <span style="font-size: 18px;">💡</span>
+                    <span>Pemeriksaan fisik di HP selesai. Selanjutnya simpan HP Anda dan <strong>masukkan PIN Kasir Anda di Komputer Meja Kasir (PC Desktop)</strong> untuk mulai bertransaksi.</span>
                 </div>
             </div>
         </div>
@@ -1298,6 +1287,8 @@
         </div>
     </div>
 </div>
+
+@include('presensi2.partials.modal_shift_history_and_settlement')
 @endsection
 
 @push('scripts')
@@ -1412,21 +1403,39 @@
         const targetStatusId = inputEl.getAttribute('data-target-status');
         const category = inputEl.getAttribute('data-category') || 'minuman';
 
-        let physicalQty = parseInt(inputEl.value);
+        const diffEl = document.getElementById(targetDiffId);
+        const statusEl = document.getElementById(targetStatusId);
+
+        const rawVal = inputEl.value !== undefined ? String(inputEl.value).trim() : '';
+        if (rawVal === '') {
+            if (diffEl) {
+                diffEl.innerHTML = `<span class="badge" style="background: rgba(148, 163, 184, 0.1); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.25); font-size: 10.5px; padding: 2px 7px;">Belum Diperiksa</span>`;
+            }
+            if (statusEl) {
+                statusEl.innerHTML = `<span class="badge" style="background: rgba(51, 65, 85, 0.6); color: #fde047; border: 1px solid rgba(234, 179, 8, 0.35); font-size: 10px; font-weight: 600;">⏳ Belum Diperiksa</span>`;
+            }
+            inputEl.style.borderColor = 'rgba(59, 130, 246, 0.4)';
+            inputEl.style.background = 'rgba(15, 23, 42, 0.8)';
+            inputEl.style.color = '#fff';
+
+            updateDiscrepancySummary(category);
+            updateOverallStockHandoverSummary();
+            return;
+        }
+
+        let physicalQty = parseInt(rawVal);
         if (isNaN(physicalQty) || physicalQty < 0) {
             physicalQty = 0;
         }
 
         const diff = physicalQty - systemQty;
-        const diffEl = document.getElementById(targetDiffId);
-        const statusEl = document.getElementById(targetStatusId);
 
         if (diffEl) {
             if (diff === 0) {
                 diffEl.innerHTML = `<span class="badge" style="background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 10.5px; padding: 2px 7px;">0 ${unit}</span>`;
-                inputEl.style.borderColor = 'rgba(59, 130, 246, 0.4)';
-                inputEl.style.background = 'rgba(15, 23, 42, 0.8)';
-                inputEl.style.color = '#fff';
+                inputEl.style.borderColor = 'rgba(16, 185, 129, 0.5)';
+                inputEl.style.background = 'rgba(16, 185, 129, 0.08)';
+                inputEl.style.color = '#34d399';
             } else if (diff < 0) {
                 diffEl.innerHTML = `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.45); font-size: 10.5px; padding: 2px 7px; font-weight: 800;">${diff} ${unit}</span>`;
                 inputEl.style.borderColor = '#ef4444';
@@ -1446,11 +1455,7 @@
             } else if (diff > 0) {
                 statusEl.innerHTML = `<span class="badge" style="background: rgba(59, 130, 246, 0.25); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.5); font-size: 10px; font-weight: 700;">ℹ️ Selisih Lebih</span>`;
             } else {
-                if (physicalQty <= isCritThreshold) {
-                    statusEl.innerHTML = `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); font-size: 10px;">⚠️ Kritis</span>`;
-                } else {
-                    statusEl.innerHTML = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 10px;">✓ Aman (Cocok)</span>`;
-                }
+                statusEl.innerHTML = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); font-size: 10px; font-weight: 700;">✓ Aman (Cocok)</span>`;
             }
         }
 
@@ -1461,14 +1466,27 @@
     function updateOverallStockHandoverSummary() {
         const inputs = document.querySelectorAll('.stock-physical-input');
         let totalItems = inputs.length;
+        let emptyCount = 0;
         let matchCount = 0;
         let minusCount = 0;
         let plusCount = 0;
+        let totalPhysicalQty = 0;
+        let totalSystemQty = 0;
 
         inputs.forEach(input => {
+            const raw = input.value !== undefined ? String(input.value).trim() : '';
             const sys = parseInt(input.getAttribute('data-system')) || 0;
-            let phys = parseInt(input.value);
+            totalSystemQty += sys;
+
+            if (raw === '') {
+                emptyCount++;
+                return;
+            }
+
+            let phys = parseInt(raw);
             if (isNaN(phys) || phys < 0) phys = 0;
+            totalPhysicalQty += phys;
+
             const diff = phys - sys;
             if (diff === 0) {
                 matchCount++;
@@ -1488,42 +1506,161 @@
         const btnIcon = document.getElementById('btn-confirm-stock-icon');
         const btnEl = document.getElementById('btn-confirm-stock-handover');
         const boxEl = document.getElementById('stock-handover-summary-box');
+        const submitBtn = document.getElementById('btn-submit-stok');
+        const nextStep2Btn = document.getElementById('btn-next-to-step2');
 
         if (statTotal) statTotal.innerText = totalItems;
         if (statMatch) statMatch.innerText = matchCount;
         if (statMinus) statMinus.innerText = minusCount;
         if (statPlus) statPlus.innerText = plusCount;
 
+        const isAllZeroUncounted = (emptyCount === 0 && totalPhysicalQty === 0 && totalSystemQty > 0);
+
         if (badgeEl && btnText && btnEl) {
-            if (minusCount > 0) {
-                badgeEl.innerHTML = `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.45); font-size: 11px; padding: 4px 10px; font-weight: 700;">⚠️ ${minusCount} Item Kurang (Dilaporkan ke Admin)</span>`;
-                btnIcon.innerText = '⚠️';
-                btnText.innerText = `Laporkan Selisih (${minusCount} Item) & Lanjut ke Cek Hardware ⬇️`;
-                btnEl.style.background = 'linear-gradient(135deg, #d97706, #f59e0b)';
-                btnEl.style.borderColor = 'rgba(245, 158, 11, 0.6)';
-                btnEl.style.boxShadow = '0 4px 12px rgba(245, 158, 11, 0.35)';
-                if (boxEl) boxEl.style.borderColor = 'rgba(245, 158, 11, 0.4)';
-            } else if (plusCount > 0) {
-                badgeEl.innerHTML = `<span class="badge" style="background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.45); font-size: 11px; padding: 4px 10px; font-weight: 700;">ℹ️ ${plusCount} Item Lebih (Sesuai)</span>`;
-                btnIcon.innerText = 'ℹ️';
-                btnText.innerText = 'Konfirmasi Serah Terima Stok & Lanjut ke Cek Hardware ⬇️';
-                btnEl.style.background = 'linear-gradient(135deg, #2563eb, #3b82f6)';
-                btnEl.style.borderColor = 'rgba(59, 130, 246, 0.6)';
-                btnEl.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.35)';
-                if (boxEl) boxEl.style.borderColor = 'rgba(59, 130, 246, 0.4)';
+            if (emptyCount > 0) {
+                badgeEl.innerHTML = `<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #fde68a; border: 1px solid rgba(245, 158, 11, 0.45); font-size: 11px; padding: 4px 10px; font-weight: 700;">🔒 ${emptyCount} Kolom Fisik Belum Diisi</span>`;
+                btnIcon.innerText = '🔒';
+                btnText.innerText = `🔒 Terkunci (${emptyCount} Kolom Fisik Belum Diisi)`;
+                btnEl.disabled = true;
+                btnEl.style.opacity = '0.6';
+                btnEl.style.cursor = 'not-allowed';
+                btnEl.style.background = 'linear-gradient(135deg, #475569, #64748b)';
+                btnEl.style.borderColor = 'rgba(148, 163, 184, 0.4)';
+                btnEl.style.boxShadow = 'none';
+                if (boxEl) boxEl.style.borderColor = 'rgba(148, 163, 184, 0.3)';
+
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.style.opacity = '0.45';
+                    submitBtn.style.cursor = 'not-allowed';
+                    submitBtn.style.filter = 'grayscale(0.8)';
+                    submitBtn.style.boxShadow = 'none';
+                    submitBtn.title = `Terkunci: Masih ada ${emptyCount} kolom fisik aktual yang belum diisi.`;
+                }
+                if (nextStep2Btn) {
+                    nextStep2Btn.disabled = true;
+                    nextStep2Btn.style.opacity = '0.5';
+                    nextStep2Btn.style.cursor = 'not-allowed';
+                    nextStep2Btn.style.filter = 'grayscale(0.7)';
+                    nextStep2Btn.style.boxShadow = 'none';
+                    nextStep2Btn.title = `Terkunci: Masih ada ${emptyCount} kolom fisik aktual yang belum diisi.`;
+                }
+            } else if (isAllZeroUncounted) {
+                badgeEl.innerHTML = `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.45); font-size: 11px; padding: 4px 10px; font-weight: 700;">🔒 Seluruh Fisik Masih 0 (Harap Cek Kulkas/Rak)</span>`;
+                btnIcon.innerText = '🔒';
+                btnText.innerText = `🔒 Terkunci: Fisik Masih 0 (Harap Cek Kulkas/Rak)`;
+                btnEl.disabled = true;
+                btnEl.style.opacity = '0.6';
+                btnEl.style.cursor = 'not-allowed';
+                btnEl.style.background = 'linear-gradient(135deg, #475569, #64748b)';
+                btnEl.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+                btnEl.style.boxShadow = 'none';
+                if (boxEl) boxEl.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.style.opacity = '0.45';
+                    submitBtn.style.cursor = 'not-allowed';
+                    submitBtn.style.filter = 'grayscale(0.8)';
+                    submitBtn.style.boxShadow = 'none';
+                    submitBtn.title = 'Terkunci: Seluruh stok fisik masih bernilai 0. Harap periksa kulkas, rak & laci meja lalu masukkan fisik riil.';
+                }
+                if (nextStep2Btn) {
+                    nextStep2Btn.disabled = true;
+                    nextStep2Btn.style.opacity = '0.5';
+                    nextStep2Btn.style.cursor = 'not-allowed';
+                    nextStep2Btn.style.filter = 'grayscale(0.7)';
+                    nextStep2Btn.style.boxShadow = 'none';
+                    nextStep2Btn.title = 'Terkunci: Seluruh stok fisik masih bernilai 0. Harap periksa kulkas, rak & laci meja lalu masukkan fisik riil.';
+                }
             } else {
-                badgeEl.innerHTML = `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); font-size: 11px; padding: 4px 10px; font-weight: 700;">✓ Semua Fisik Sesuai Sistem</span>`;
-                btnIcon.innerText = '✅';
-                btnText.innerText = 'Konfirmasi Serah Terima Stok & Lanjut ke Cek Hardware ⬇️';
-                btnEl.style.background = 'linear-gradient(135deg, #059669, #10b981)';
-                btnEl.style.borderColor = 'rgba(16, 185, 129, 0.6)';
-                btnEl.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.35)';
-                if (boxEl) boxEl.style.borderColor = 'rgba(16, 185, 129, 0.35)';
+                btnEl.disabled = false;
+                btnEl.style.opacity = '1';
+                btnEl.style.cursor = 'pointer';
+
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.style.opacity = '1';
+                    submitBtn.style.cursor = 'pointer';
+                    submitBtn.style.filter = 'none';
+                    submitBtn.style.boxShadow = '0 6px 20px rgba(16, 185, 129, 0.4)';
+                    submitBtn.title = '';
+                }
+                if (nextStep2Btn) {
+                    nextStep2Btn.disabled = false;
+                    nextStep2Btn.style.opacity = '1';
+                    nextStep2Btn.style.cursor = 'pointer';
+                    nextStep2Btn.style.filter = 'none';
+                    nextStep2Btn.style.boxShadow = '0 6px 20px rgba(16, 185, 129, 0.35)';
+                    nextStep2Btn.title = '';
+                }
+
+                if (minusCount > 0) {
+                    badgeEl.innerHTML = `<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.45); font-size: 11px; padding: 4px 10px; font-weight: 700;">⚠️ ${minusCount} Item Kurang (Dilaporkan ke Admin)</span>`;
+                    btnIcon.innerText = '⚠️';
+                    btnText.innerText = `Laporkan Selisih (${minusCount} Item) & Lanjut ke Cek Hardware ⬇️`;
+                    btnEl.style.background = 'linear-gradient(135deg, #d97706, #f59e0b)';
+                    btnEl.style.borderColor = 'rgba(245, 158, 11, 0.6)';
+                    btnEl.style.boxShadow = '0 4px 12px rgba(245, 158, 11, 0.35)';
+                    if (boxEl) boxEl.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+                } else if (plusCount > 0) {
+                    badgeEl.innerHTML = `<span class="badge" style="background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.45); font-size: 11px; padding: 4px 10px; font-weight: 700;">ℹ️ ${plusCount} Item Lebih (Sesuai)</span>`;
+                    btnIcon.innerText = 'ℹ️';
+                    btnText.innerText = 'Konfirmasi Serah Terima Stok & Lanjut ke Cek Hardware ⬇️';
+                    btnEl.style.background = 'linear-gradient(135deg, #2563eb, #3b82f6)';
+                    btnEl.style.borderColor = 'rgba(59, 130, 246, 0.6)';
+                    btnEl.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.35)';
+                    if (boxEl) boxEl.style.borderColor = 'rgba(59, 130, 246, 0.4)';
+                } else {
+                    badgeEl.innerHTML = `<span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); font-size: 11px; padding: 4px 10px; font-weight: 700;">✓ Semua Fisik Sesuai Sistem</span>`;
+                    btnIcon.innerText = '✅';
+                    btnText.innerText = 'Konfirmasi Serah Terima Stok & Lanjut ke Cek Hardware ⬇️';
+                    btnEl.style.background = 'linear-gradient(135deg, #059669, #10b981)';
+                    btnEl.style.borderColor = 'rgba(16, 185, 129, 0.6)';
+                    btnEl.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.35)';
+                    if (boxEl) boxEl.style.borderColor = 'rgba(16, 185, 129, 0.35)';
+                }
             }
         }
     }
 
     function confirmStockHandoverAndProceed() {
+        // 0. Cek apakah ada input fisik yang masih kosong
+        const emptyInputs = Array.from(document.querySelectorAll('.stock-physical-input')).filter(i => (i.value === undefined || String(i.value).trim() === ''));
+        if (emptyInputs.length > 0) {
+            const firstEmpty = emptyInputs[0];
+            const cat = firstEmpty.getAttribute('data-category');
+            showIncompleteModal(
+                'Pemeriksaan Fisik Belum Lengkap!',
+                `Masih ada ${emptyInputs.length} item stok fisik yang belum dihitung / diisi. Harap periksa dan ketik kuantitas fisik riil di meja/kulkas sebelum melanjutkan!`
+            );
+            if (cat === 'kertas') {
+                switchStokAwalTab('tab-awal-kertas', document.querySelectorAll('.btn-stok-awal-tab')[0]);
+            } else if (cat === 'minuman') {
+                switchStokAwalTab('tab-awal-minuman', document.querySelectorAll('.btn-stok-awal-tab')[1]);
+            } else if (cat === 'makanan') {
+                switchStokAwalTab('tab-awal-makanan', document.querySelectorAll('.btn-stok-awal-tab')[2]);
+            }
+            firstEmpty.focus();
+            firstEmpty.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+        }
+
+        // Cek jika seluruh fisik masih bernilai 0 padahal ada stok di sistem
+        let totalPhys = 0;
+        let totalSys = 0;
+        document.querySelectorAll('.stock-physical-input').forEach(i => {
+            totalPhys += parseInt(i.value) || 0;
+            totalSys += parseInt(i.getAttribute('data-system')) || 0;
+        });
+        if (totalPhys === 0 && totalSys > 0) {
+            showIncompleteModal(
+                'Pemeriksaan Stok Belum Dilakukan!',
+                'Seluruh stok fisik masih bernilai 0. Harap periksa kulkas, rak, dan laci meja lalu masukkan kuantitas fisik riil sebelum melanjutkan!'
+            );
+            return;
+        }
+
         // 1. Cek apakah ada barang minuman yang kurang tapi belum diberi catatan
         const drinkMinus = Array.from(document.querySelectorAll('.stock-physical-input[data-category="minuman"]')).some(i => {
             const s = parseInt(i.getAttribute('data-system')) || 0;
@@ -1560,17 +1697,8 @@
             return;
         }
 
-        // Berikan visual feedback bahwa rekonsiliasi stok sudah dikonfirmasi
-        const toast = document.getElementById('stok-toast');
-        if (toast) {
-            document.getElementById('stok-toast-msg').innerText = 'Pemeriksaan stok fisik telah diverifikasi! Melanjutkan ke kelayakan hardware & kas...';
-            document.getElementById('stok-toast-icon').innerText = '📋';
-            toast.style.background = '#059669';
-            toast.style.display = 'block';
-            setTimeout(() => { toast.style.display = 'none'; }, 2500);
-        }
-
-        // Scroll mulus ke Seksi 4 (Hardware) atau tombol Lanjut ke Tahap 2
+        // Jika semua lengkap, scroll halus ke Seksi Hardware atau tombol Lanjut ke Tahap 2
+        showStokToast('Pemeriksaan stok fisik telah terverifikasi! Silakan periksa hardware & kas laci.');
         const nextSection = document.querySelector('select[name="hardware_status"]')?.closest('.glass-card') 
             || document.getElementById('btn-next-to-step2');
         if (nextSection) {
@@ -1584,6 +1712,44 @@
 
     function goToStep2(validate = false) {
         if (validate) {
+            // 0. Cek apakah ada kolom stok fisik yang masih kosong
+            const emptyInputs = Array.from(document.querySelectorAll('.stock-physical-input')).filter(i => (i.value === undefined || String(i.value).trim() === ''));
+            if (emptyInputs.length > 0) {
+                const firstEmpty = emptyInputs[0];
+                const cat = firstEmpty.getAttribute('data-category');
+                showIncompleteModal(
+                    'Pemeriksaan Stok Belum Lengkap!',
+                    `Masih ada ${emptyInputs.length} item stok fisik yang belum dihitung / diisi. Harap periksa dan ketik kuantitas fisik riil di meja/kulkas sebelum melanjutkan!`
+                );
+                goToStep1();
+                if (cat === 'kertas') {
+                    switchStokAwalTab('tab-awal-kertas', document.querySelectorAll('.btn-stok-awal-tab')[0]);
+                } else if (cat === 'minuman') {
+                    switchStokAwalTab('tab-awal-minuman', document.querySelectorAll('.btn-stok-awal-tab')[1]);
+                } else if (cat === 'makanan') {
+                    switchStokAwalTab('tab-awal-makanan', document.querySelectorAll('.btn-stok-awal-tab')[2]);
+                }
+                firstEmpty.focus();
+                firstEmpty.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return false;
+            }
+
+            // Cek jika seluruh fisik masih bernilai 0 padahal ada stok di sistem
+            let totalPhys = 0;
+            let totalSys = 0;
+            document.querySelectorAll('.stock-physical-input').forEach(i => {
+                totalPhys += parseInt(i.value) || 0;
+                totalSys += parseInt(i.getAttribute('data-system')) || 0;
+            });
+            if (totalPhys === 0 && totalSys > 0) {
+                showIncompleteModal(
+                    'Pemeriksaan Stok Belum Dilakukan!',
+                    'Seluruh stok fisik masih bernilai 0. Harap periksa kulkas, rak, dan laci meja lalu masukkan kuantitas fisik riil sebelum melanjutkan ke tahap kas laci!'
+                );
+                goToStep1();
+                return false;
+            }
+
             // 1. Cek Catatan jika ada barang minuman yang kurang
             const drinkMinus = Array.from(document.querySelectorAll('.stock-physical-input[data-category="minuman"]')).some(i => {
                 const s = parseInt(i.getAttribute('data-system')) || 0;
@@ -1731,8 +1897,10 @@
         let plusCount = 0;
 
         inputs.forEach(input => {
+            const raw = input.value !== undefined ? String(input.value).trim() : '';
+            if (raw === '') return;
             const sys = parseInt(input.getAttribute('data-system')) || 0;
-            let phys = parseInt(input.value);
+            let phys = parseInt(raw);
             if (isNaN(phys) || phys < 0) phys = 0;
             const diff = phys - sys;
             if (diff < 0) {
@@ -1822,6 +1990,45 @@
         if (!stokForm) return;
 
         stokForm.addEventListener('submit', function(e) {
+            // 0. Cek apakah ada barang fisik yang belum diisi
+            const emptyInputs = Array.from(document.querySelectorAll('.stock-physical-input')).filter(i => (i.value === undefined || String(i.value).trim() === ''));
+            if (emptyInputs.length > 0) {
+                e.preventDefault();
+                const firstEmpty = emptyInputs[0];
+                const cat = firstEmpty.getAttribute('data-category');
+                showIncompleteModal(
+                    'Pemeriksaan Stok Belum Lengkap!',
+                    `Masih ada ${emptyInputs.length} item stok fisik yang belum dihitung / diisi. Harap masukkan kuantitas fisik riil di meja/kulkas sebelum menyimpan serah terima!`
+                );
+                if (cat === 'kertas') {
+                    switchStokAwalTab('tab-awal-kertas', document.querySelectorAll('.btn-stok-awal-tab')[0]);
+                } else if (cat === 'minuman') {
+                    switchStokAwalTab('tab-awal-minuman', document.querySelectorAll('.btn-stok-awal-tab')[1]);
+                } else if (cat === 'makanan') {
+                    switchStokAwalTab('tab-awal-makanan', document.querySelectorAll('.btn-stok-awal-tab')[2]);
+                }
+                firstEmpty.focus();
+                firstEmpty.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return false;
+            }
+
+            // Cek jika seluruh fisik masih bernilai 0 padahal ada stok di sistem
+            let totalPhys = 0;
+            let totalSys = 0;
+            document.querySelectorAll('.stock-physical-input').forEach(i => {
+                totalPhys += parseInt(i.value) || 0;
+                totalSys += parseInt(i.getAttribute('data-system')) || 0;
+            });
+            if (totalPhys === 0 && totalSys > 0) {
+                e.preventDefault();
+                showIncompleteModal(
+                    'Pemeriksaan Stok Belum Dilakukan!',
+                    'Seluruh stok fisik masih bernilai 0. Harap periksa kulkas, rak, dan laci meja lalu masukkan kuantitas fisik riil sebelum menyimpan data serah terima!'
+                );
+                goToStep1();
+                return false;
+            }
+
             // 1. Cek Catatan jika ada barang minuman yang kurang
             const drinkMinus = Array.from(document.querySelectorAll('.stock-physical-input[data-category="minuman"]')).some(i => {
                 const s = parseInt(i.getAttribute('data-system')) || 0;
@@ -1920,6 +2127,14 @@
                 document.getElementById('cash_handover_notes')?.focus();
                 document.getElementById('cash_handover_notes')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return false;
+            }
+
+            // 7. Indikator tombol submit dan transisi keluar sesi
+            const btnSubmit = document.getElementById('btn-submit-stok');
+            if (btnSubmit) {
+                btnSubmit.disabled = true;
+                btnSubmit.style.opacity = '0.7';
+                btnSubmit.innerHTML = '<span>⏳</span> Menyimpan & Keluar Sesi HP...';
             }
         });
     });

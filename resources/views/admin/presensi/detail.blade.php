@@ -143,7 +143,23 @@
                                 <tr style="border-bottom: 1px solid #f1f5f9;">
                                     <td style="padding: 6px;">{{ $log->created_at->format('d/m/Y H:i:s') }}</td>
                                     <td style="padding: 6px;"><span class="badge" style="background:#e0e7ff;color:#3730a3;">{{ $log->action }}</span></td>
-                                    <td style="padding: 6px; font-family: monospace;">{{ json_encode($log->new_values) }}</td>
+                                    <td style="padding: 6px; font-size: 11px;">
+                                        @php
+                                            $entries = $log->formattedNewValues('id');
+                                        @endphp
+                                        @if(!empty($entries))
+                                            <div style="display: flex; flex-direction: column; gap: 2px;">
+                                                @foreach($entries as $ent)
+                                                    <div>
+                                                        <span style="color: #64748b; font-weight: 600;">{{ $ent['label'] }}:</span>
+                                                        <strong style="color: #0f172a;">{{ $ent['value'] }}</strong>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        @else
+                                            <span style="color: #94a3b8; font-style: italic;">Tidak Ada</span>
+                                        @endif
+                                    </td>
                                     <td style="padding: 6px; color: #64748b;">{{ $log->ip_address }}</td>
                                 </tr>
                             @endforeach

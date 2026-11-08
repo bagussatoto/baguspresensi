@@ -241,6 +241,9 @@
                                 ⏳ Shift Sedang Berjalan
                             </span>
                         @endif
+                        <a href="{{ Route::has('presensi2.rekap.desktop') ? route('presensi2.rekap.desktop', array_filter(['date' => request('date'), 'shift' => request('shift'), 'summary_id' => request('summary_id')])) : url('/bagus/presensi2/rekap-desktop') }}" class="badge" style="background: rgba(14, 165, 233, 0.2); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.4); font-size: 10px; text-decoration: none; padding: 3px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+                            🖥️ Versi Desktop
+                        </a>
                     </div>
                     <h2 style="font-size: 19px; font-weight: 700; color: #fff; margin-top: 3px;">
                         Laporan Rekapitulasi Penjualan

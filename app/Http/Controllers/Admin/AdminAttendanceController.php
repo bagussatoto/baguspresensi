@@ -165,6 +165,12 @@ class AdminAttendanceController extends Controller
             ->limit(10)
             ->get();
 
+        $auditLang = (string) $request->input('lang', 'id');
+        $auditLogs->each(function (AuditLog $log) use ($auditLang): void {
+            $log->formatted_new_values_text = $log->formattedNewValuesString($auditLang);
+            $log->formatted_old_values_text = $log->formattedOldValuesString($auditLang);
+        });
+
         $maxRadius = (float) ($record->branch?->radius_meters ?? 100.0);
         $distance = $record->clock_in_distance_meters !== null ? (float) $record->clock_in_distance_meters : null;
         $isGeofenceValid = $distance !== null ? ($distance <= $maxRadius) : null;

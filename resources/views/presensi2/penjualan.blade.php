@@ -114,6 +114,9 @@
                 </div>
             </div>
             <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <button type="button" onclick="openPrevSalesModal()" class="btn" style="padding: 8px 14px; font-size: 13px; font-weight: 700; background: linear-gradient(135deg, #4f46e5, #6366f1); color: #fff; box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4); border-radius: 10px; width: auto; display: inline-flex; align-items: center; gap: 6px; border: none; cursor: pointer;" title="Lihat Rincian Penjualan Shift Sebelumnya">
+                    <span>🔍</span> SHIFT LALU
+                </button>
                 <a href="{{ route('presensi2.rekap') }}" class="btn" style="padding: 8px 16px; font-size: 13px; font-weight: 700; background: linear-gradient(135deg, #0284c7, #0ea5e9); color: #fff; box-shadow: 0 4px 14px rgba(14, 165, 233, 0.4); border-radius: 10px; width: auto; display: inline-flex; align-items: center; gap: 6px; text-decoration: none;">
                     <span>📊</span> REKAP
                 </a>
@@ -153,6 +156,24 @@
 
     {{-- TOAST NOTIFIKASI POS --}}
     <div id="pos-toast" style="display: none; position: fixed; top: 24px; right: 24px; z-index: 999999; max-width: 420px; padding: 14px 18px; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: fadeInDown 0.3s ease;"></div>
+
+    {{-- STATUS LOCK KASIR --}}
+    @if (!empty($isSalesLocked))
+        <div style="background: linear-gradient(135deg, rgba(244, 63, 94, 0.15), rgba(225, 29, 72, 0.25)); border: 1px solid #f43f5e; color: #fecdd3; padding: 12px 18px; margin-bottom: 16px; border-radius: 12px; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 22px;">🔒</span>
+                <div>
+                    <div>TRANSAKSI PENJUALAN SHIFT INI TELAH DIKUNCI (REKAP SELESAI)</div>
+                    <div style="font-size: 11.5px; font-weight: normal; opacity: 0.9; margin-top: 2px;">
+                        Rekapitulasi shift kasir telah ditutup. Transaksi baru tidak dapat disimpan pada shift ini.
+                    </div>
+                </div>
+            </div>
+            <span class="badge" style="background: #e11d48; color: #fff; font-size: 10.5px; padding: 4px 10px; border-radius: 6px;">
+                Terkunci
+            </span>
+        </div>
+    @endif
 
     {{-- 1. ORDERAN POS KASIR OPERASIONAL --}}
     <div class="glass-card" style="padding: 20px; margin-bottom: 16px; border-color: rgba(0, 166, 90, 0.35);">
@@ -434,10 +455,8 @@
                     </button>
 
                     {{-- Tombol Simpan Order Penjualan (Dark Green) --}}
-                    <button type="button" id="btn-submit-pos" onclick="submitPosOrder()" 
-                            style="background: #008d4c; color: #ffffff; border: 1px solid rgba(255,255,255,0.25); padding: 8px 20px; font-size: 12px; font-weight: 700; border-radius: 3px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.25); transition: filter 0.15s;"
-                            onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">
-                        <span id="btn-submit-pos-text">Simpan Order Penjualan</span>
+                    <button type="button" id="btn-submit-pos" {{ !empty($isSalesLocked) ? 'disabled style=background:#64748b;color:#e2e8f0;cursor:not-allowed;padding:8px_20px;font-size:12px;font-weight:700;border-radius:3px;border:none;' : 'onclick=submitPosOrder() style=background:#008d4c;color:#ffffff;border:1px_solid_rgba(255,255,255,0.25);padding:8px_20px;font-size:12px;font-weight:700;border-radius:3px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0_1px_3px_rgba(0,0,0,0.25);transition:filter_0.15s; onmouseover=this.style.filter=\'brightness(1.1)\' onmouseout=this.style.filter=\'none\'' }}>
+                        <span id="btn-submit-pos-text">{{ !empty($isSalesLocked) ? '🔒 Penjualan Dikunci (Rekap Selesai)' : 'Simpan Order Penjualan' }}</span>
                     </button>
                 </div>
 
@@ -2643,6 +2662,11 @@
     }
 
     async function submitPosOrder() {
+        if (@json(!empty($isSalesLocked))) {
+            showPosToast('PERINGATAN: Transaksi penjualan shift ini telah DIKUNCI karena rekapitulasi shift telah selesai. Buka shift baru untuk melanjutkan transaksi kasir.', false);
+            return;
+        }
+
         const cartItems = Object.values(posCart);
         if (cartItems.length === 0) {
             showPosToast('Keranjang masih kosong! Silakan pilih minimal 1 menu F&B terlebih dahulu.', false);
@@ -3028,4 +3052,5 @@
     }
 </script>
 @endpush
+@include('presensi2.partials.modal_shift_history_and_settlement')
 @endsection

@@ -900,6 +900,32 @@
         </div>
 
         <!-- Flash Notifications -->
+        @if(session('stok_selesai_notice'))
+            <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(14, 165, 233, 0.15)); border: 1.5px solid rgba(16, 185, 129, 0.5); border-radius: 14px; padding: 16px; margin-bottom: 18px; text-align: left; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.15);">
+                <div style="display: flex; align-items: flex-start; gap: 12px;">
+                    <div style="width: 42px; height: 42px; border-radius: 10px; background: rgba(16, 185, 129, 0.25); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; color: #34d399;">
+                        🖥️
+                    </div>
+                    <div style="flex: 1;">
+                        <strong style="color: #34d399; font-size: 14.5px; display: block; margin-bottom: 4px;">
+                            Pemeriksaan Fisik di HP Selesai!
+                        </strong>
+                        <div style="font-size: 12.5px; color: #e2e8f0; line-height: 1.5;">
+                            {{ session('stok_selesai_notice') }}
+                        </div>
+                        <div style="margin-top: 10px; font-size: 11px; color: #94a3b8; background: rgba(0, 0, 0, 0.25); border-radius: 6px; padding: 8px 10px; line-height: 1.4;">
+                            📱 Sesi HP Anda telah otomatis keluar demi keamanan. Nanti saat jam pulang & serah terima kas PC selesai, silakan login kembali di HP ini untuk melakukan <strong>Clock-Out Presensi Pulang (Foto Selfie GPS)</strong>.
+                        </div>
+                        <div style="margin-top: 10px; text-align: right;">
+                            <a href="{{ route('pos.login') }}" style="display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; color: #38bdf8; text-decoration: none; padding: 5px 12px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px;">
+                                <span>🖥️</span> Buka Layar Login PC Kasir &rarr;
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endif
+
         @if(session('registration_submitted'))
             @php $regInfo = session('registration_submitted'); @endphp
             <div style="background: rgba(16, 185, 129, 0.1); border: 1.5px solid rgba(16, 185, 129, 0.35); border-radius: 16px; padding: 16px; margin-bottom: 18px; text-align: left; box-shadow: 0 4px 18px rgba(16, 185, 129, 0.12);">

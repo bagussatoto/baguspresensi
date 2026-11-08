@@ -91,4 +91,20 @@ class AuditLog extends Model
     {
         return AuditTrailFormatter::formatEntries($this->new_values, $lang);
     }
+
+    /**
+     * Konversi data new_values ke format teks satu baris bahasa baku.
+     */
+    public function formattedNewValuesString(string $lang = 'id'): string
+    {
+        return AuditTrailFormatter::formatToString($this->new_values, $lang);
+    }
+
+    /**
+     * Konversi data old_values ke format teks satu baris bahasa baku.
+     */
+    public function formattedOldValuesString(string $lang = 'id'): string
+    {
+        return AuditTrailFormatter::formatToString($this->old_values, $lang);
+    }
 }

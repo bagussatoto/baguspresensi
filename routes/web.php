@@ -117,6 +117,7 @@ Route::prefix('presensi2')->name('presensi2.')->group(function () {
     // Halaman Stok Barang (Checklist Serah Terima Shift)
     Route::get('/stok', [AttendanceWebV2Controller::class, 'stokIndex'])->name('stok');
     Route::post('/stok', [AttendanceWebV2Controller::class, 'stokStore'])->name('stok.store');
+    Route::get('/stok-selesai', [AttendanceWebV2Controller::class, 'stokSelesaiIndex'])->name('stok.selesai');
 
     // Halaman Penjualan (Kasir F&B, Pendapatan Internet, Permintaan Stok, & Check Out Presensi)
     Route::get('/penjualan', [AttendanceWebV2Controller::class, 'penjualanIndex'])->name('penjualan');
@@ -141,12 +142,14 @@ Route::prefix('presensi2')->name('presensi2.')->group(function () {
 
     // Halaman Rekap (Rekapitulasi Penjualan, Pendapatan Billing, Audit Stok & Kasir Selesai Shift)
     Route::get('/rekap', [AttendanceWebV2Controller::class, 'rekapIndex'])->name('rekap');
+    Route::get('/rekap-desktop', [AttendanceWebV2Controller::class, 'rekapDesktopIndex'])->name('rekap.desktop');
     Route::post('/rekap/setor', [AttendanceWebV2Controller::class, 'rekapStoreSetor'])->name('rekap.setor');
     Route::get('/closing/print', [AttendanceWebV2Controller::class, 'closingPrint'])->name('closing.print');
 
     // Halaman Serah Terima Shift (Handover Kas Laci, Sisa Stok Fisik & Penyerahan ke Kasir Berikutnya)
     Route::get('/serah-terima', [AttendanceWebV2Controller::class, 'serahTerimaIndex'])->name('serah-terima');
     Route::get('/serah-terima-desktop', [AttendanceWebV2Controller::class, 'serahTerimaDesktopIndex'])->name('serah-terima.desktop');
+    Route::get('/serah-terima-v2', [AttendanceWebV2Controller::class, 'serahTerimaV2DesktopIndex'])->name('serah-terima.v2.desktop');
     Route::post('/serah-terima', [AttendanceWebV2Controller::class, 'serahTerimaStore'])->name('serah-terima.store');
 
     // Portal Login Khusus Layanan & Presensi Tambahan (GC, Meeting, BO/Training, Ambil Stok)
@@ -191,6 +194,7 @@ Route::get('/pos', [AttendanceWebV2Controller::class, 'posDesktopIndex'])->name(
 Route::get('/bagus/pos', [AttendanceWebV2Controller::class, 'posDesktopIndex'])->name('bagus.pos');
 Route::get('/presensi2/pos', [AttendanceWebV2Controller::class, 'posDesktopIndex'])->name('presensi2.pos');
 Route::get('/bagus/presensi2/pos', [AttendanceWebV2Controller::class, 'posDesktopIndex'])->name('bagus.presensi2.pos');
+Route::get('/presensi2/pos-desktop', [AttendanceWebV2Controller::class, 'posDesktopIndex'])->name('presensi2.pos.desktop');
 Route::get('/pos/login', [AttendanceWebV2Controller::class, 'posDesktopShowLogin'])->name('pos.login');
 Route::post('/pos/login', [AttendanceWebV2Controller::class, 'posDesktopLogin'])->name('pos.login.post');
 Route::get('/bagus/pos/login', [AttendanceWebV2Controller::class, 'posDesktopShowLogin'])->name('bagus.pos.login');
@@ -201,12 +205,21 @@ Route::get('/bagus/presensi2/pos/login', [AttendanceWebV2Controller::class, 'pos
 Route::post('/bagus/presensi2/pos/login', [AttendanceWebV2Controller::class, 'posDesktopLogin']);
 Route::get('/bagus/presensi2/penjualan', [AttendanceWebV2Controller::class, 'penjualanIndex']);
 Route::get('/bagus/presensi2/rekap', [AttendanceWebV2Controller::class, 'rekapIndex']);
+Route::get('/bagus/presensi2/rekap-desktop', [AttendanceWebV2Controller::class, 'rekapDesktopIndex']);
+Route::get('/bagus/rekap-desktop', [AttendanceWebV2Controller::class, 'rekapDesktopIndex']);
+Route::get('/rekap-desktop', [AttendanceWebV2Controller::class, 'rekapDesktopIndex']);
 Route::get('/bagus/presensi2/serah-terima', [AttendanceWebV2Controller::class, 'serahTerimaIndex']);
 Route::get('/bagus/presensi2/serah-terima-desktop', [AttendanceWebV2Controller::class, 'serahTerimaDesktopIndex']);
+Route::get('/bagus/presensi2/serah-terima-v2', [AttendanceWebV2Controller::class, 'serahTerimaV2DesktopIndex']);
 Route::get('/bagus/serah-terima', [AttendanceWebV2Controller::class, 'serahTerimaIndex']);
 Route::get('/bagus/serah-terima-desktop', [AttendanceWebV2Controller::class, 'serahTerimaDesktopIndex']);
+Route::get('/bagus/serah-terima-v2', [AttendanceWebV2Controller::class, 'serahTerimaV2DesktopIndex']);
 Route::get('/serah-terima-desktop', [AttendanceWebV2Controller::class, 'serahTerimaDesktopIndex']);
+Route::get('/serah-terima-v2', [AttendanceWebV2Controller::class, 'serahTerimaV2DesktopIndex'])->name('serah-terima.v2.desktop');
 Route::get('/bagus/presensi2/scan', [AttendanceWebV2Controller::class, 'scan']);
+Route::get('/bagus/presensi2/stok-selesai', [AttendanceWebV2Controller::class, 'stokSelesaiIndex']);
+Route::get('/bagus/stok-selesai', [AttendanceWebV2Controller::class, 'stokSelesaiIndex']);
+Route::get('/stok-selesai', [AttendanceWebV2Controller::class, 'stokSelesaiIndex']);
 Route::post('/bagus/presensi2/clock-in', [AttendanceWebV2Controller::class, 'submitClockIn']);
 Route::post('/bagus/presensi2/clock-out', [AttendanceWebV2Controller::class, 'submitClockOut']);
 
