@@ -142,3 +142,4 @@ Sesi pengembangan hari ini berfokus pada penyempurnaan alur operasional kasir ca
    - Memastikan data serah terima shift, rekonsiliasi kas laci, dan selisih stok fisik terlaporkan dengan akurat ke panel Admin ERP.
 3. **Penyempurnaan Tambahan**:
    - Penyesuaian fitur operasional kasir atau laporan setoran jika terdapat masukan baru dari pengelola cabang.
+
