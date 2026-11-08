@@ -338,7 +338,10 @@
             </div>
         </div>
 
-        <div style="padding: 12px 20px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end;">
+        <div style="padding: 12px 20px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+            <a href="{{ route('presensi2.closing.print', ['date' => isset($workDate) ? (is_object($workDate) ? $workDate->toDateString() : (string)$workDate) : date('Y-m-d')]) }}" target="_blank" style="padding: 7px 16px; background: #0284c7; color: #fff; border: none; border-radius: 6px; font-weight: 700; font-size: 12px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;" title="Cetak Berita Acara Rekonsiliasi & Settlement Kas Harian">
+                <span>🖨️</span> Cetak Berita Acara Closing (BA)
+            </a>
             <button type="button" onclick="closeDailySettlementModal()" style="padding: 7px 18px; background: #0f766e; color: #fff; border: none; border-radius: 6px; font-weight: 700; font-size: 12px; cursor: pointer;">
                 Tutup Settlement
             </button>

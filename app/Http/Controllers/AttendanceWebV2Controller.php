@@ -3904,7 +3904,7 @@ class AttendanceWebV2Controller extends Controller
                         'success' => true,
                         'message' => 'Penjualan F&B senilai Rp '.number_format($netAmount, 0, ',', '.').' berhasil dicatat!',
                         'invoice_number' => $sale->invoice_number,
-                        'sale' => $sale->load(['items.variant', 'employee', 'customer']),
+                        'sale' => $sale->load(['items.variant', 'employee', 'customer', 'branch']),
                         'total_fnb' => $netAmount,
                     ]);
                 }
@@ -6106,6 +6106,41 @@ BAT;
         $nextShift = $shifts->get($nextIndex);
 
         return 'Kasir '.($nextShift->name ?? 'Shift Selanjutnya');
+    }
+
+    /**
+     * Cetak Berita Acara Closing Kasir & Settlement Harian (Daily Cash Settlement).
+     */
+    public function closingPrint(Request $request): View|RedirectResponse
+    {
+        $employee = $this->getAuthenticatedEmployee();
+        if (! $employee) {
+            return redirect()->route('presensi2.login');
+        }
+
+        $now = Carbon::now();
+        $dateParam = $request->input('date');
+        $workDate = $dateParam ? Carbon::parse($dateParam) : $now;
+        $branchId = $employee->branch_id;
+        $branch = $employee->branch ?? ($branchId ? Branch::find($branchId) : null);
+
+        $dailySettlement = $this->getBillingIncomePerShift($workDate, $branchId, null);
+
+        $salesQuery = CafeSale::whereDate('created_at', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId));
+
+        $saleStats = [
+            'total_transactions' => (clone $salesQuery)->count(),
+            'total_fnb' => (float) (clone $salesQuery)->sum('total_fnb'),
+            'total_billing' => (float) (clone $salesQuery)->sum('total_billing'),
+            'gross_amount' => (float) (clone $salesQuery)->sum('gross_amount'),
+            'discount_amount' => (float) (clone $salesQuery)->sum('discount_amount'),
+            'net_amount' => (float) (clone $salesQuery)->sum('net_amount'),
+            'cash_amount' => (float) (clone $salesQuery)->where('payment_method', 'cash')->sum('net_amount'),
+            'qris_amount' => (float) (clone $salesQuery)->where('payment_method', 'qris')->sum('net_amount'),
+        ];
+
+        return view('presensi2.closing_print', compact('employee', 'workDate', 'branch', 'dailySettlement', 'saleStats'));
     }
 
     /**

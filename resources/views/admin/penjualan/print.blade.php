@@ -13,13 +13,23 @@
 
         body {
             font-family: 'Courier New', Courier, monospace;
-            font-size: 12px;
+            font-size: 11px;
             color: #000000;
             background: #ffffff;
-            padding: 15px;
+            padding: 10px;
             width: 100%;
-            max-width: 320px;
+            max-width: 280px;
             margin: 0 auto;
+        }
+
+        body.paper-58mm {
+            max-width: 220px;
+            font-size: 10px;
+        }
+
+        body.paper-80mm {
+            max-width: 320px;
+            font-size: 12px;
         }
 
         .header {
@@ -110,24 +120,43 @@
 
         @media print {
             .no-print {
-                display: none;
+                display: none !important;
             }
             body {
-                padding: 0;
-                max-width: 100%;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            body.paper-58mm {
+                width: 48mm !important;
+                max-width: 48mm !important;
+                font-size: 10px !important;
+            }
+            body.paper-80mm {
+                width: 72mm !important;
+                max-width: 72mm !important;
+                font-size: 12px !important;
+            }
+            @page {
+                size: auto;
+                margin: 0mm;
             }
         }
     </style>
 </head>
-<body>
-    <div class="no-print">
+<body class="paper-58mm" id="receipt-body">
+    <div class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px;">
+        <div style="display: flex; gap: 4px;">
+            <button type="button" id="btn-58" onclick="setPaper('58mm')" style="background: #0284c7; color: #fff; border: 1px solid #0369a1; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: bold;">58mm</button>
+            <button type="button" id="btn-80" onclick="setPaper('80mm')" style="background: #e2e8f0; color: #334155; border: 1px solid #cbd5e1; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: bold;">80mm</button>
+        </div>
         <button class="btn-print" onclick="window.print()">🖨️ Cetak Struk (Ctrl + P)</button>
     </div>
 
     <div class="header">
         <div class="company-name">MAYA GRAHA KENCANA</div>
-        <div class="company-sub">Jl. Boulevard Kelapa Gading Blok M No. 18</div>
-        <div class="company-sub">Telp: 021-45879900 • Jakarta Utara</div>
+        <div class="company-sub">Cabang {{ $sale->branch->name ?? $sale->employee->branch->name ?? 'Pusat' }}</div>
+        <div class="company-sub">{{ $sale->branch->address ?? 'Jl. Boulevard Kelapa Gading Blok M No. 18' }}</div>
+        <div class="company-sub">Telp: {{ $sale->branch->phone ?? '021-45879900' }}</div>
     </div>
 
     <table class="meta-table">
@@ -221,6 +250,24 @@
     </div>
 
     <script>
+        function setPaper(size) {
+            const body = document.getElementById('receipt-body');
+            const btn58 = document.getElementById('btn-58');
+            const btn80 = document.getElementById('btn-80');
+            if (size === '80mm') {
+                body.className = 'paper-80mm';
+                btn80.style.background = '#0284c7';
+                btn80.style.color = '#fff';
+                btn58.style.background = '#e2e8f0';
+                btn58.style.color = '#334155';
+            } else {
+                body.className = 'paper-58mm';
+                btn58.style.background = '#0284c7';
+                btn58.style.color = '#fff';
+                btn80.style.background = '#e2e8f0';
+                btn80.style.color = '#334155';
+            }
+        }
         window.addEventListener('load', function() {
             // Uncomment jika ingin auto-print saat halaman dibuka
             // window.print();

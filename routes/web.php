@@ -138,6 +138,7 @@ Route::prefix('presensi2')->name('presensi2.')->group(function () {
     // Halaman Rekap (Rekapitulasi Penjualan, Pendapatan Billing, Audit Stok & Kasir Selesai Shift)
     Route::get('/rekap', [AttendanceWebV2Controller::class, 'rekapIndex'])->name('rekap');
     Route::post('/rekap/setor', [AttendanceWebV2Controller::class, 'rekapStoreSetor'])->name('rekap.setor');
+    Route::get('/closing/print', [AttendanceWebV2Controller::class, 'closingPrint'])->name('closing.print');
 
     // Halaman Serah Terima Shift (Handover Kas Laci, Sisa Stok Fisik & Penyerahan ke Kasir Berikutnya)
     Route::get('/serah-terima', [AttendanceWebV2Controller::class, 'serahTerimaIndex'])->name('serah-terima');

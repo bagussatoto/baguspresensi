@@ -470,7 +470,7 @@
             font-size: 14px;
         }
 
-        /* THERMAL RECEIPT PRINT AREA */
+        /* THERMAL RECEIPT PRINT AREA & STANDARISASI UKURAN 58MM / 80MM */
         .thermal-slip {
             width: 280px;
             margin: 0 auto;
@@ -481,11 +481,24 @@
             padding: 10px;
             border: 1px dashed #cbd5e1;
             text-align: left;
-            line-height: 1.3;
+            line-height: 1.35;
+            transition: width 0.2s ease;
+        }
+        .thermal-slip.paper-58mm {
+            width: 220px;
+            font-size: 10px;
+            padding: 6px;
+        }
+        .thermal-slip.paper-80mm {
+            width: 300px;
+            font-size: 12px;
+            padding: 12px;
         }
         .thermal-center { text-align: center; }
         .thermal-divider { border-bottom: 1px dashed #000; margin: 5px 0; }
-        .thermal-row { display: flex; justify-content: space-between; margin: 2px 0; }
+        .thermal-row { display: flex; justify-content: space-between; margin: 2px 0; align-items: flex-start; }
+        .thermal-item-detail { font-size: 9px; color: #444; margin-top: 1px; }
+        .thermal-slip.paper-80mm .thermal-item-detail { font-size: 10px; }
 
         @media print {
             body * { visibility: hidden !important; }
@@ -496,8 +509,24 @@
                 position: absolute !important;
                 left: 0 !important;
                 top: 0 !important;
-                width: 100% !important;
                 border: none !important;
+                box-shadow: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            #printable-thermal-area.paper-58mm {
+                width: 48mm !important;
+                max-width: 48mm !important;
+                font-size: 10px !important;
+            }
+            #printable-thermal-area.paper-80mm {
+                width: 72mm !important;
+                max-width: 72mm !important;
+                font-size: 12px !important;
+            }
+            @page {
+                size: auto;
+                margin: 0mm;
             }
         }
 
@@ -961,17 +990,24 @@
         </div>
     </div>
 
-    {{-- MODAL 1: PREVIEW & CETAK STRUK THERMAL --}}
+    {{-- MODAL 1: PREVIEW & CETAK STRUK THERMAL (58MM & 80MM) --}}
     <div id="modal-receipt" class="pos-modal-overlay">
-        <div class="pos-modal-box" style="max-width: 360px;">
-            <div class="pos-modal-header" style="background: var(--pos-green);">
-                <span>🧾 Struk Transaksi Kasir</span>
+        <div class="pos-modal-box" style="max-width: 380px;">
+            <div class="pos-modal-header" style="background: var(--pos-green); display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span>🧾 Struk Transaksi Kasir</span>
+                    <div style="display: flex; gap: 4px; background: rgba(0,0,0,0.2); padding: 2px 4px; border-radius: 4px;">
+                        <button type="button" id="btn-size-58mm" onclick="switchReceiptPaperSize('58mm')" style="background: #fff; color: #166534; border: none; padding: 2px 6px; font-size: 10px; font-weight: 800; border-radius: 3px; cursor: pointer;">58mm</button>
+                        <button type="button" id="btn-size-80mm" onclick="switchReceiptPaperSize('80mm')" style="background: transparent; color: #fff; border: none; padding: 2px 6px; font-size: 10px; font-weight: 800; border-radius: 3px; cursor: pointer;">80mm</button>
+                    </div>
+                </div>
                 <button type="button" onclick="closeReceiptModal()" style="background: none; border: none; color: #fff; font-size: 16px; cursor: pointer;">✕</button>
             </div>
-            <div style="padding: 16px; background: #f8fafc; text-align: center;">
-                <div id="printable-thermal-area" class="thermal-slip">
-                    <div class="thermal-center" style="font-weight: bold; font-size: 13px;">MAYA GRAHA KENCANA</div>
-                    <div class="thermal-center" style="font-size: 10px;">Cabang {{ $currentEmployee->branch->name ?? 'Pusat' }}</div>
+            <div style="padding: 16px; background: #f8fafc; text-align: center; max-height: 75vh; overflow-y: auto;">
+                <div id="printable-thermal-area" class="thermal-slip paper-58mm">
+                    <div class="thermal-center" style="font-weight: bold; font-size: 13px; letter-spacing: 0.5px;">MAYA GRAHA KENCANA</div>
+                    <div id="receipt-branch-name" class="thermal-center" style="font-size: 10px; font-weight: bold;">Cabang {{ $currentEmployee->branch->name ?? 'Pusat' }}</div>
+                    <div id="receipt-branch-address" class="thermal-center" style="font-size: 8.5px; color: #555;">{{ $currentEmployee->branch->address ?? 'MGK Internet Cafe Network' }}</div>
                     <div class="thermal-divider"></div>
                     <div class="thermal-row">
                         <span>Invoice:</span>
@@ -992,7 +1028,15 @@
                     <div class="thermal-divider"></div>
                     <div id="receipt-items-list" style="margin: 4px 0;"></div>
                     <div class="thermal-divider"></div>
-                    <div class="thermal-row" style="font-weight: bold; font-size: 12px;">
+                    <div class="thermal-row" id="receipt-gross-row" style="display: none;">
+                        <span>Subtotal:</span>
+                        <span id="receipt-gross">Rp 0</span>
+                    </div>
+                    <div class="thermal-row" id="receipt-discount-row" style="display: none;">
+                        <span>Diskon:</span>
+                        <span id="receipt-discount" style="font-weight: bold;">-Rp 0</span>
+                    </div>
+                    <div class="thermal-row" style="font-weight: bold; font-size: 12px; margin-top: 3px;">
                         <span>TOTAL:</span>
                         <span id="receipt-total">Rp 0</span>
                     </div>
@@ -1009,19 +1053,27 @@
                         <span id="receipt-change">Rp 0</span>
                     </div>
                     <div class="thermal-divider"></div>
-                    <div class="thermal-center" style="font-size: 10px; margin-top: 6px;">
+                    <div class="thermal-center" style="margin: 6px 0 2px 0;">
+                        {{-- Barcode dekoratif invoice --}}
+                        <div style="font-family: monospace; letter-spacing: 3px; font-size: 9px; font-weight: bold;" id="receipt-barcode-code">||||| ||| ||||||| |||| ||</div>
+                    </div>
+                    <div class="thermal-center" style="font-size: 9.5px; margin-top: 4px; line-height: 1.35;">
                         Terima Kasih Atas Kunjungan Anda<br>
-                        *** MGK POS System ***
+                        <em>Simpan struk ini sbg bukti sah pembayaran.</em><br>
+                        *** MGK POS Network ***
                     </div>
                 </div>
             </div>
-            <div style="padding: 10px 16px; background: #ffffff; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 8px;">
-                <button type="button" onclick="closeReceiptModal()" style="padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 3px; font-size: 12px; cursor: pointer;">
-                    Tutup (Esc)
-                </button>
-                <button type="button" onclick="printReceipt()" style="padding: 6px 16px; border: none; background: var(--pos-green); color: #fff; font-weight: 700; border-radius: 3px; cursor: pointer;">
-                    🖨️ Cetak Struk (Enter)
-                </button>
+            <div style="padding: 10px 16px; background: #ffffff; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 11px; color: #64748b;" id="receipt-paper-label">Format: <strong>58mm Thermal</strong></span>
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" onclick="closeReceiptModal()" style="padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 3px; font-size: 12px; cursor: pointer;">
+                        Tutup (Esc)
+                    </button>
+                    <button type="button" onclick="printReceipt()" style="padding: 6px 16px; border: none; background: var(--pos-green); color: #fff; font-weight: 700; border-radius: 3px; cursor: pointer;">
+                        🖨️ Cetak Struk (Enter)
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -1735,31 +1787,108 @@
             }
         }
 
-        // 7. STRUK THERMAL MODAL
+        // 7. STRUK THERMAL MODAL (58MM & 80MM STANDAR MULTI-CABANG)
+        function switchReceiptPaperSize(size) {
+            const area = document.getElementById('printable-thermal-area');
+            const btn58 = document.getElementById('btn-size-58mm');
+            const btn80 = document.getElementById('btn-size-80mm');
+            const label = document.getElementById('receipt-paper-label');
+            if (!area) return;
+
+            if (size === '80mm') {
+                area.classList.remove('paper-58mm');
+                area.classList.add('paper-80mm');
+                if (btn80) { btn80.style.background = '#fff'; btn80.style.color = '#166534'; }
+                if (btn58) { btn58.style.background = 'transparent'; btn58.style.color = '#fff'; }
+                if (label) label.innerHTML = 'Format: <strong>80mm Thermal (Lebar)</strong>';
+                localStorage.setItem('pos_receipt_paper_size', '80mm');
+            } else {
+                area.classList.remove('paper-80mm');
+                area.classList.add('paper-58mm');
+                if (btn58) { btn58.style.background = '#fff'; btn58.style.color = '#166534'; }
+                if (btn80) { btn80.style.background = 'transparent'; btn80.style.color = '#fff'; }
+                if (label) label.innerHTML = 'Format: <strong>58mm Thermal (Kecil)</strong>';
+                localStorage.setItem('pos_receipt_paper_size', '58mm');
+            }
+        }
+
         function showReceiptModal(sale, cashReceived) {
             const modal = document.getElementById('modal-receipt');
             if (!modal) return;
 
+            // Load saved preference for paper size
+            const savedSize = localStorage.getItem('pos_receipt_paper_size') || '58mm';
+            switchReceiptPaperSize(savedSize);
+
+            // Informasi Cabang
+            if (sale.branch && sale.branch.name) {
+                document.getElementById('receipt-branch-name').innerText = 'Cabang ' + sale.branch.name;
+                if (sale.branch.address) {
+                    document.getElementById('receipt-branch-address').innerText = sale.branch.address;
+                }
+            }
+
             document.getElementById('receipt-invoice-num').innerText = sale.invoice_number || '-';
             document.getElementById('receipt-date').innerText = (new Date()).toLocaleString('id-ID');
             document.getElementById('receipt-customer').innerText = sale.customer_name || 'Umum';
-            document.getElementById('receipt-total').innerText = 'Rp ' + Number(sale.total_fnb || 0).toLocaleString('id-ID');
+            if (sale.employee && sale.employee.name) {
+                document.getElementById('receipt-cashier').innerText = sale.employee.name;
+            }
+
+            // Total & Diskon
+            const netTotal = Number(sale.net_amount > 0 ? sale.net_amount : (sale.total_fnb || 0));
+            const grossTotal = Number(sale.gross_amount || sale.total_fnb || netTotal);
+            const discountVal = Number(sale.discount_amount || 0);
+
+            const grossRow = document.getElementById('receipt-gross-row');
+            const discountRow = document.getElementById('receipt-discount-row');
+            if (discountVal > 0) {
+                if (grossRow) {
+                    grossRow.style.display = 'flex';
+                    document.getElementById('receipt-gross').innerText = 'Rp ' + grossTotal.toLocaleString('id-ID');
+                }
+                if (discountRow) {
+                    discountRow.style.display = 'flex';
+                    document.getElementById('receipt-discount').innerText = '-Rp ' + discountVal.toLocaleString('id-ID');
+                }
+            } else {
+                if (grossRow) grossRow.style.display = 'none';
+                if (discountRow) discountRow.style.display = 'none';
+            }
+
+            document.getElementById('receipt-total').innerText = 'Rp ' + netTotal.toLocaleString('id-ID');
             document.getElementById('receipt-method').innerText = (sale.payment_method || 'CASH').toUpperCase();
 
-            const cashVal = cashReceived || Number(sale.total_fnb || 0);
-            const changeVal = Math.max(0, cashVal - Number(sale.total_fnb || 0));
+            const cashVal = cashReceived || Number(sale.amount_paid || netTotal);
+            const changeVal = Math.max(0, cashVal - netTotal);
             document.getElementById('receipt-cash').innerText = 'Rp ' + cashVal.toLocaleString('id-ID');
             document.getElementById('receipt-change').innerText = 'Rp ' + changeVal.toLocaleString('id-ID');
 
+            // Barcode text placeholder
+            const barcodeElem = document.getElementById('receipt-barcode-code');
+            if (barcodeElem && sale.invoice_number) {
+                barcodeElem.innerText = '*' + sale.invoice_number + '*';
+            }
+
+            // Rincian Item Penjualan
             const itemsContainer = document.getElementById('receipt-items-list');
             itemsContainer.innerHTML = '';
             if (sale.items && sale.items.length > 0) {
                 sale.items.forEach(item => {
                     const div = document.createElement('div');
-                    div.className = 'thermal-row';
+                    div.style.marginBottom = '3px';
+
+                    const binText = item.bin_location || (item.variant && item.variant.bin_location) ? `[${item.bin_location || item.variant.bin_location}] ` : '';
+                    const unitPrice = item.unit_price ? Number(item.unit_price).toLocaleString('id-ID') : '';
+
                     div.innerHTML = `
-                        <span>${item.qty}x ${item.item_name}</span>
-                        <span>Rp ${Number(item.subtotal || 0).toLocaleString('id-ID')}</span>
+                        <div class="thermal-row">
+                            <span style="font-weight: 600;">${binText}${item.item_name}</span>
+                            <span>Rp ${Number(item.subtotal || 0).toLocaleString('id-ID')}</span>
+                        </div>
+                        <div class="thermal-item-detail">
+                            ${item.qty} pcs x Rp ${unitPrice}
+                        </div>
                     `;
                     itemsContainer.appendChild(div);
                 });
