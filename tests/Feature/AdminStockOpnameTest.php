@@ -237,6 +237,74 @@ class AdminStockOpnameTest extends TestCase
             ->first();
 
         $this->assertEquals(88, $stockA->qty_on_hand);
+
+        // Verifikasi Jurnal Umum SAK Otomatis Penyesuaian Persediaan
+        $opname->load(['journalEntry.lines.chartOfAccount']);
+        $journal = $opname->journalEntry;
+        $this->assertNotNull($journal);
+        $this->assertEquals('posted', $journal->status);
+        $this->assertStringStartsWith('JRN-ADJ', $journal->entry_number);
+
+        // Nilai selisih: 88 - 100 = -12 unit * Rp 20.000 = Rp 240.000 (Defisit)
+        $this->assertEquals(240000.0, (float) $journal->total_debit);
+        $this->assertEquals(240000.0, (float) $journal->total_credit);
+
+        // Cek baris jurnal: Debit Beban Selisih (6-10006), Kredit Persediaan (1-13001)
+        $debitLine = $journal->lines->where('debit', '>', 0)->first();
+        $creditLine = $journal->lines->where('credit', '>', 0)->first();
+
+        $this->assertEquals('6-10006', $debitLine->chartOfAccount->account_code);
+        $this->assertEquals(240000.0, (float) $debitLine->debit);
+
+        $this->assertEquals('1-13001', $creditLine->chartOfAccount->account_code);
+        $this->assertEquals(240000.0, (float) $creditLine->credit);
+
+        // Verifikasi halaman lembar audit menampilkan informasi Jurnal Akuntansi SAK
+        $showResponse = $this->get(route('admin.cabang.opname.show', $opname->id));
+        $showResponse->assertOk();
+        $showResponse->assertSee('Jurnal Umum Penyesuaian Persediaan');
+        $showResponse->assertSee($journal->entry_number);
+    }
+
+    public function test_can_journal_surplus_physical_inventory(): void
+    {
+        // Inisiasi sesi & input hitung fisik surplus (+5 unit variantB @ Rp 50.000 = Rp 250.000)
+        $this->post(route('admin.cabang.opname.store'), [
+            'branch_id' => $this->branch->id,
+            'warehouse_id' => $this->warehouse->id,
+            'opname_date' => now()->toDateString(),
+        ]);
+
+        $opname = StockOpname::where('branch_id', $this->branch->id)->latest('id')->first();
+        $itemB = $opname->items()->where('product_variant_id', $this->variantB->id)->first();
+
+        $this->post(route('admin.cabang.opname.update-counts', $opname->id), [
+            'conducted_by' => $this->employee->id,
+            'items' => [
+                [
+                    'id' => $itemB->id,
+                    'qty_physical' => 55, // sistem 50 => surplus +5
+                ],
+            ],
+        ]);
+
+        $this->post(route('admin.cabang.opname.adjust', $opname->id), [
+            'approved_by' => $this->employee->id,
+        ]);
+
+        $opname->refresh();
+        $journal = $opname->journalEntry;
+
+        $this->assertNotNull($journal);
+        $this->assertEquals(250000.0, (float) $journal->total_debit);
+        $this->assertEquals(250000.0, (float) $journal->total_credit);
+
+        // Surplus: Debit Persediaan (1-13001), Kredit Pendapatan Selisih (4-20001)
+        $debitLine = $journal->lines->where('debit', '>', 0)->first();
+        $creditLine = $journal->lines->where('credit', '>', 0)->first();
+
+        $this->assertEquals('1-13001', $debitLine->chartOfAccount->account_code);
+        $this->assertEquals('4-20001', $creditLine->chartOfAccount->account_code);
     }
 
     public function test_can_export_stock_opname_to_csv(): void

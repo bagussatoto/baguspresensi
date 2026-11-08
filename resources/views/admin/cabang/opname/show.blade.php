@@ -88,6 +88,82 @@
     </div>
 </div>
 
+@if($stockOpname->journalEntry)
+<!-- CARD JURNAL AKUNTANSI PENYESUAIAN (SAK DOUBLE-ENTRY) -->
+<div class="data-table-container" style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 14px; overflow: hidden; margin-bottom: 24px;">
+    <div style="padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; background: rgba(56, 189, 248, 0.05);">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 18px;">📖</span>
+            <div>
+                <h3 style="font-size: 15px; font-weight: 700; color: #38bdf8; margin: 0;">
+                    Jurnal Umum Penyesuaian Persediaan (General Ledger SAK)
+                </h3>
+                <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">
+                    Nomor Entri: <strong style="font-family: monospace; color: #f8fafc;">{{ $stockOpname->journalEntry->entry_number }}</strong> &bull; 
+                    Tanggal: <strong>{{ $stockOpname->journalEntry->entry_date->format('d/m/Y') }}</strong> &bull; 
+                    Status: <span style="background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">POSTED</span>
+                </div>
+            </div>
+        </div>
+
+        <a href="{{ route('admin.akuntansi.jurnal') }}" class="btn-action-sm btn-action-primary" style="padding: 8px 16px; font-size: 12px; text-decoration: none;">
+            <span>🔍</span> Buka Buku Jurnal Umum
+        </a>
+    </div>
+
+    <div style="overflow-x: auto;">
+        <table class="inventory-table" style="width: 100%; border-collapse: collapse; font-size: 12.5px; text-align: left;">
+            <thead>
+                <tr style="background: rgba(15, 23, 42, 0.7); border-bottom: 1px solid rgba(255,255,255,0.08); color: #94a3b8; font-size: 11px; text-transform: uppercase;">
+                    <th style="padding: 10px 16px;">Kode Akun COA</th>
+                    <th style="padding: 10px 16px;">Nama Akun Buku Besar</th>
+                    <th style="padding: 10px 16px; text-align: right;">Debit (Rp)</th>
+                    <th style="padding: 10px 16px; text-align: right;">Kredit (Rp)</th>
+                    <th style="padding: 10px 16px;">Memo Transaksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($stockOpname->journalEntry->lines as $line)
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+                        <td style="padding: 10px 16px; font-family: monospace; font-weight: 700; color: #38bdf8;">
+                            {{ $line->chartOfAccount->account_code ?? '-' }}
+                        </td>
+                        <td style="padding: 10px 16px; color: #f8fafc;">
+                            {{ $line->chartOfAccount->account_name ?? '-' }}
+                        </td>
+                        <td style="padding: 10px 16px; text-align: right; font-family: monospace; font-weight: 700; color: {{ $line->debit > 0 ? '#f8fafc' : '#64748b' }};">
+                            {{ $line->debit > 0 ? 'Rp ' . number_format($line->debit, 0, ',', '.') : '-' }}
+                        </td>
+                        <td style="padding: 10px 16px; text-align: right; font-family: monospace; font-weight: 700; color: {{ $line->credit > 0 ? '#f8fafc' : '#64748b' }};">
+                            {{ $line->credit > 0 ? 'Rp ' . number_format($line->credit, 0, ',', '.') : '-' }}
+                        </td>
+                        <td style="padding: 10px 16px; color: #94a3b8; font-size: 12px;">
+                            {{ $line->memo ?: '-' }}
+                        </td>
+                    </tr>
+                @endforeach
+            </tbody>
+            <tfoot>
+                <tr style="background: rgba(15, 23, 42, 0.8); font-weight: 700; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <td colspan="2" style="padding: 10px 16px; text-align: right; color: #cbd5e1; text-transform: uppercase; font-size: 11px;">
+                        Total Keseimbangan (Balance):
+                    </td>
+                    <td style="padding: 10px 16px; text-align: right; font-family: monospace; color: #38bdf8;">
+                        Rp {{ number_format($stockOpname->journalEntry->total_debit, 0, ',', '.') }}
+                    </td>
+                    <td style="padding: 10px 16px; text-align: right; font-family: monospace; color: #38bdf8;">
+                        Rp {{ number_format($stockOpname->journalEntry->total_credit, 0, ',', '.') }}
+                    </td>
+                    <td style="padding: 10px 16px; font-size: 11px; color: #34d399;">
+                        ✓ Seimbang (Balanced)
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+@endif
+
 <!-- FORM AUDIT FISIK PER RAK -->
 <form action="{{ route('admin.cabang.opname.update-counts', $stockOpname->id) }}" method="POST">
     @csrf
@@ -242,3 +318,4 @@
     }
 </script>
 @endsection
+

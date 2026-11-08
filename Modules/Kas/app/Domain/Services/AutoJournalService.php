@@ -11,6 +11,7 @@ use Modules\Kas\Domain\Models\ChartOfAccount;
 use Modules\Kas\Domain\Models\JournalEntry;
 use Modules\Kas\Domain\Models\JournalEntryLine;
 use Modules\MasterData\Domain\Models\CafeSale;
+use Modules\MasterData\Domain\Models\StockOpname;
 
 /**
  * Service Penjurnalan Otomatis & Pembukuan Berpasangan (Double-Entry General Ledger).
@@ -270,25 +271,97 @@ class AutoJournalService
     }
 
     /**
-     * Dapatkan akun COA berdasarkan kode akun unik.
+     * Dapatkan akun COA berdasarkan kode akun unik, dengan fallback pembuatan akun terstandarisasi.
      */
-    private function getAccountByCode(string $code): ChartOfAccount
+    private function getAccountByCode(string $code, string $defaultName = '', string $category = 'asset', string $normal = 'debit'): ChartOfAccount
     {
         $account = ChartOfAccount::where('account_code', $code)->first();
         if ($account) {
             return $account;
         }
 
-        // Fallback jika belum ada
+        // Fallback jika belum ada di database
         return ChartOfAccount::create([
             'account_code' => $code,
-            'account_name' => "Akun {$code}",
-            'account_category' => 'asset',
-            'normal_balance' => 'debit',
+            'account_name' => $defaultName ?: "Akun {$code}",
+            'account_category' => $category,
+            'normal_balance' => $normal,
             'level' => 3,
             'is_header' => false,
             'is_active' => true,
         ]);
+    }
+
+    /**
+     * Jurnal otomatis penyesuaian nilai persediaan dari hasil audit fisik Stock Opname.
+     */
+    public function journalStockOpnameAdjustment(StockOpname $stockOpname): ?JournalEntry
+    {
+        // Hindari duplikasi jurnal untuk sesi opname yang sama
+        $existing = JournalEntry::where('reference_type', StockOpname::class)
+            ->where('reference_id', $stockOpname->id)
+            ->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        $varianceCost = (float) $stockOpname->total_variance_cost;
+        if (abs($varianceCost) < 0.01) {
+            // Jika tidak ada varian selisih biaya (nihil / 0), tidak ada penyesuaian finansial yang dibukukan
+            return null;
+        }
+
+        return DB::transaction(function () use ($stockOpname, $varianceCost): JournalEntry {
+            $entryDate = $stockOpname->opname_date ? Carbon::parse($stockOpname->opname_date)->toDateString() : Carbon::today()->toDateString();
+            $entryNumber = $this->generateEntryNumber('JRN-ADJ', Carbon::parse($entryDate));
+
+            $branchName = $stockOpname->branch->name ?? 'Cabang';
+            $entry = JournalEntry::create([
+                'entry_number' => $entryNumber,
+                'entry_date' => $entryDate,
+                'reference_type' => StockOpname::class,
+                'reference_id' => $stockOpname->id,
+                'branch_id' => $stockOpname->branch_id,
+                'creator_employee_id' => $stockOpname->approved_by,
+                'description' => "Penyesuaian Persediaan Stock Opname #{$stockOpname->opname_number} ({$branchName})",
+                'status' => 'posted',
+                'total_debit' => 0,
+                'total_credit' => 0,
+            ]);
+
+            $inventoryAccount = $this->getAccountByCode('1-13001', 'Persediaan Barang Dagang FnB & Ritel', 'asset', 'debit');
+
+            if ($varianceCost < 0) {
+                // KASUS 1: SELISIH KURANG (DEFISIT / KERUGIAN PERSEDIAAN / SHRINKAGE / RUSAK)
+                // Debit: Beban Kerugian Selisih Stok Opname (6-10006)
+                // Kredit: Persediaan Barang Dagang (1-13001) - saldo buku berkurang
+                $amount = abs($varianceCost);
+                $shrinkageAccount = $this->getAccountByCode('6-10006', 'Beban Kerugian Selisih Stok Opname', 'expense', 'debit');
+
+                $this->createLine($entry, $shrinkageAccount, $amount, 0, "Beban Selisih Kurang Stok Opname #{$stockOpname->opname_number}");
+                $this->createLine($entry, $inventoryAccount, 0, $amount, "Penurunan Nilai Persediaan Stok Opname #{$stockOpname->opname_number}");
+            } else {
+                // KASUS 2: SELISIH LEBIH (SURPLUS FISIK / TEMUAN INVENTARIS)
+                // Debit: Persediaan Barang Dagang (1-13001) - saldo buku bertambah
+                // Kredit: Pendapatan Selisih Lebih Stok Opname (4-20001)
+                $amount = $varianceCost;
+                $surplusAccount = $this->getAccountByCode('4-20001', 'Pendapatan Selisih Lebih Stok Opname', 'revenue', 'credit');
+
+                $this->createLine($entry, $inventoryAccount, $amount, 0, "Peningkatan Nilai Persediaan Stok Opname #{$stockOpname->opname_number}");
+                $this->createLine($entry, $surplusAccount, 0, $amount, "Pendapatan Selisih Lebih Stok Opname #{$stockOpname->opname_number}");
+            }
+
+            $totalDebit = (float) $entry->lines()->sum('debit');
+            $totalCredit = (float) $entry->lines()->sum('credit');
+
+            $entry->update([
+                'total_debit' => $totalDebit,
+                'total_credit' => $totalCredit,
+            ]);
+
+            return $entry;
+        });
     }
 
     /**

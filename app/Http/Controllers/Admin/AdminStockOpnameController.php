@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use Modules\Kas\Domain\Services\AutoJournalService;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\BranchProduct;
 use Modules\MasterData\Domain\Models\Employee;
@@ -26,6 +27,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class AdminStockOpnameController extends Controller
 {
+    public function __construct(
+        protected AutoJournalService $autoJournalService
+    ) {}
+
     /**
      * 1. Daftar Riwayat Sesi Stock Opname Seluruh Jaringan Cabang.
      */
@@ -173,7 +178,7 @@ class AdminStockOpnameController extends Controller
      */
     public function show(Request $request, StockOpname $stockOpname): View|JsonResponse
     {
-        $stockOpname->load(['branch', 'warehouse', 'conductor', 'approver', 'items.variant.product']);
+        $stockOpname->load(['branch', 'warehouse', 'conductor', 'approver', 'items.variant.product', 'journalEntry.lines.chartOfAccount']);
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -320,15 +325,22 @@ class AdminStockOpnameController extends Controller
                 'approved_at' => Carbon::now(),
             ]);
 
+            // Bukukan Jurnal Umum SAK Penyesuaian Nilai Persediaan Otomatis (Double-Entry GL)
+            $journal = $this->autoJournalService->journalStockOpnameAdjustment($stockOpname);
+
             DB::commit();
 
             $msg = "Penyesuaian stok opname {$stockOpname->opname_number} berhasil disetujui! Stok fisik inventaris gudang cabang telah diperbarui.";
+            if ($journal) {
+                $msg .= " Jurnal penyesuaian otomatis {$journal->entry_number} telah dibukukan ke Buku Besar.";
+            }
 
             if ($request->wantsJson()) {
                 return response()->json([
                     'success' => true,
                     'message' => $msg,
-                    'opname' => $stockOpname->fresh(['items']),
+                    'opname' => $stockOpname->fresh(['items', 'journalEntry.lines.chartOfAccount']),
+                    'journal' => $journal,
                 ]);
             }
 

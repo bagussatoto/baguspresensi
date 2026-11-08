@@ -7,6 +7,8 @@ namespace Modules\MasterData\Domain\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Modules\Kas\Domain\Models\JournalEntry;
 
 /**
  * Model StockOpname: Sesi Audit & Hitung Fisik Persediaan Berkala Cabang.
@@ -63,6 +65,12 @@ class StockOpname extends Model
     public function items(): HasMany
     {
         return $this->hasMany(StockOpnameItem::class, 'stock_opname_id');
+    }
+
+    public function journalEntry(): HasOne
+    {
+        return $this->hasOne(JournalEntry::class, 'reference_id')
+            ->where('reference_type', self::class);
     }
 
     public function isDraft(): bool
