@@ -241,6 +241,79 @@ class AdminAgingReceivableAndConsignmentTest extends TestCase
         $item->refresh();
         $this->assertEquals(40, $item->qty_sold);
         $this->assertEquals(60, $item->qty_remaining); // 100 - 40 = 60 sisa fisik
+
+        // 3. Verifikasi Jurnal Umum SAK Konsinyasi Keluar (Outward)
+        $consignment->load(['journalEntries.lines.chartOfAccount']);
+        $this->assertCount(1, $consignment->journalEntries);
+
+        $journal = $consignment->journalEntries->first();
+        $this->assertEquals('posted', $journal->status);
+        $this->assertStringStartsWith('JRN-CSG', $journal->entry_number);
+        $this->assertEquals(720000.0, (float) $journal->total_debit);
+        $this->assertEquals(720000.0, (float) $journal->total_credit);
+
+        // Outward: Debit Kas Laci (1-10001), Kredit Pendapatan Konsinyasi (4-10001)
+        $debitLine = $journal->lines->where('debit', '>', 0)->first();
+        $creditLine = $journal->lines->where('credit', '>', 0)->first();
+        $this->assertEquals('1-10001', $debitLine->chartOfAccount->account_code);
+        $this->assertEquals('4-10001', $creditLine->chartOfAccount->account_code);
+    }
+
+    public function test_can_journal_inward_vendor_consignment_settlement(): void
+    {
+        // 1. Buat kontrak konsinyasi masuk (inward dari vendor)
+        $consignment = Consignment::create([
+            'consignment_number' => 'CSG-IN-TEST-002',
+            'branch_id' => $this->branch->id,
+            'type' => 'inward',
+            'partner_name' => 'CV Camilan Nusantara',
+            'supplier_id' => $this->supplier->id,
+            'start_date' => now()->toDateString(),
+            'status' => 'active',
+            'total_items_count' => 1,
+            'total_consigned_value' => 600000,
+            'total_sold_value' => 0,
+            'total_settled_amount' => 0,
+            'remaining_settlement_due' => 0,
+        ]);
+
+        $item = ConsignmentItem::create([
+            'consignment_id' => $consignment->id,
+            'product_variant_id' => $this->variant->id,
+            'unit_price' => 12000,
+            'qty_consigned' => 50,
+            'qty_sold' => 0,
+            'qty_returned' => 0,
+            'qty_remaining' => 50,
+            'subtotal_consigned' => 600000,
+            'subtotal_sold' => 0,
+        ]);
+
+        // 2. Setor pembayaran ke vendor atas 25 pcs laku = Rp 300.000
+        $response = $this->post(route('admin.cabang.consignments.settle', $consignment->id), [
+            'settled_amount' => 300000,
+            'notes' => 'Pembayaran hak vendor 25 pcs.',
+            'items' => [
+                [
+                    'id' => $item->id,
+                    'qty_sold_now' => 25,
+                ],
+            ],
+        ]);
+
+        $response->assertRedirect();
+        $consignment->refresh();
+
+        $journal = $consignment->journalEntries->first();
+        $this->assertNotNull($journal);
+        $this->assertEquals(300000.0, (float) $journal->total_debit);
+        $this->assertEquals(300000.0, (float) $journal->total_credit);
+
+        // Inward: Debit Hutang Konsinyasi Supplier (2-10003), Kredit Kas (1-10001)
+        $debitLine = $journal->lines->where('debit', '>', 0)->first();
+        $creditLine = $journal->lines->where('credit', '>', 0)->first();
+        $this->assertEquals('2-10003', $debitLine->chartOfAccount->account_code);
+        $this->assertEquals('1-10001', $creditLine->chartOfAccount->account_code);
     }
 
     public function test_can_export_aging_and_consignment_csv(): void

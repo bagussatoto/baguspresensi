@@ -11,6 +11,7 @@ use Modules\Kas\Domain\Models\ChartOfAccount;
 use Modules\Kas\Domain\Models\JournalEntry;
 use Modules\Kas\Domain\Models\JournalEntryLine;
 use Modules\MasterData\Domain\Models\CafeSale;
+use Modules\MasterData\Domain\Models\Consignment;
 use Modules\MasterData\Domain\Models\StockOpname;
 
 /**
@@ -350,6 +351,73 @@ class AutoJournalService
 
                 $this->createLine($entry, $inventoryAccount, $amount, 0, "Peningkatan Nilai Persediaan Stok Opname #{$stockOpname->opname_number}");
                 $this->createLine($entry, $surplusAccount, 0, $amount, "Pendapatan Selisih Lebih Stok Opname #{$stockOpname->opname_number}");
+            }
+
+            $totalDebit = (float) $entry->lines()->sum('debit');
+            $totalCredit = (float) $entry->lines()->sum('credit');
+
+            $entry->update([
+                'total_debit' => $totalDebit,
+                'total_credit' => $totalCredit,
+            ]);
+
+            return $entry;
+        });
+    }
+
+    /**
+     * Jurnal otomatis rekonsiliasi dan setoran pelunasan konsinyasi cabang (Inward / Outward).
+     */
+    public function journalConsignmentSettlement(Consignment $consignment, float $settledAmount, ?string $memo = null): ?JournalEntry
+    {
+        if ($settledAmount <= 0.0) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($consignment, $settledAmount, $memo): JournalEntry {
+            $entryDate = Carbon::today()->toDateString();
+            $entryNumber = $this->generateEntryNumber('JRN-CSG', Carbon::parse($entryDate));
+
+            $branchName = $consignment->branch->name ?? 'Cabang';
+            $partnerName = $consignment->partner_name;
+            $typeLabel = $consignment->isInward() ? 'Titipan Vendor' : 'Titipan Reseller';
+
+            $desc = "Setoran Konsinyasi {$typeLabel} #{$consignment->consignment_number} ({$partnerName}) - {$branchName}";
+            if ($memo) {
+                $desc .= ": {$memo}";
+            }
+
+            $entry = JournalEntry::create([
+                'entry_number' => $entryNumber,
+                'entry_date' => $entryDate,
+                'reference_type' => Consignment::class,
+                'reference_id' => $consignment->id,
+                'branch_id' => $consignment->branch_id,
+                'creator_employee_id' => null,
+                'description' => substr($desc, 0, 255),
+                'status' => 'posted',
+                'total_debit' => 0,
+                'total_credit' => 0,
+            ]);
+
+            $cashAccount = $this->getAccountByCode('1-10001', 'Kas Laci Kasir (Outlet)', 'asset', 'debit');
+
+            if ($consignment->isInward()) {
+                // KONSINYASI MASUK (INWARD): Toko membayarkan setoran hak supplier/vendor
+                // Debit: Hutang Titipan Konsinyasi Supplier (2-10003) - Hutang berkurang
+                // Kredit: Kas Laci Kasir / Bank (1-10001) - Kas toko keluar
+                $payableAccount = $this->getAccountByCode('2-10003', 'Hutang Konsinyasi Supplier', 'liability', 'credit');
+
+                $this->createLine($entry, $payableAccount, $settledAmount, 0, "Pelunasan Hutang Konsinyasi {$partnerName}");
+                $this->createLine($entry, $cashAccount, 0, $settledAmount, "Pengeluaran Kas Setoran Konsinyasi {$partnerName}");
+            } else {
+                // KONSINYASI KELUAR (OUTWARD): Toko menerima uang setoran hasil penjualan dari Mitra/Reseller
+                // Debit: Kas Laci Kasir / Bank (1-10001) - Kas bertambah
+                // Kredit: Pendapatan Penjualan Konsinyasi (4-10001) - Pendapatan diakui
+                $revenueAccount = $this->getAccountByCode('4-10001', 'Pendapatan Penjualan Konsinyasi', 'revenue', 'credit');
+
+                $this->createLine($entry, $cashAccount, $settledAmount, 0, "Penerimaan Kas Setoran Reseller {$partnerName}");
+                $this->createLine($entry, $revenueAccount, 0, $settledAmount, "Pendapatan Konsinyasi Reseller {$partnerName}");
             }
 
             $totalDebit = (float) $entry->lines()->sum('debit');

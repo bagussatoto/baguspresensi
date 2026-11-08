@@ -7,6 +7,7 @@ namespace Modules\MasterData\Domain\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Modules\Kas\Domain\Models\JournalEntry;
 
 /**
  * Model Kontrak & Transaksi Konsinyasi Barang Multi-Cabang.
@@ -62,6 +63,12 @@ class Consignment extends Model
     public function items(): HasMany
     {
         return $this->hasMany(ConsignmentItem::class, 'consignment_id');
+    }
+
+    public function journalEntries(): HasMany
+    {
+        return $this->hasMany(JournalEntry::class, 'reference_id')
+            ->where('reference_type', self::class);
     }
 
     public function isInward(): bool

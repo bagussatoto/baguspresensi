@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use Modules\Kas\Domain\Services\AutoJournalService;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\CafeSale;
 use Modules\MasterData\Domain\Models\Consignment;
@@ -27,6 +28,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class AdminAgingReceivableController extends Controller
 {
+    public function __construct(
+        protected AutoJournalService $autoJournalService
+    ) {}
+
     /**
      * Tampilkan Halaman Utama Laporan Aging Piutang & Saldo Konsinyasi.
      */
@@ -51,7 +56,7 @@ class AdminAgingReceivableController extends Controller
         ];
 
         // 2. Ambil data Saldo Konsinyasi Multi-Cabang
-        $consignmentQuery = Consignment::with(['branch', 'supplier', 'customer', 'items.variant'])
+        $consignmentQuery = Consignment::with(['branch', 'supplier', 'customer', 'items.variant', 'journalEntries.lines.chartOfAccount'])
             ->latest('id');
 
         if ($selectedBranchId !== 'all') {
@@ -249,15 +254,22 @@ class AdminAgingReceivableController extends Controller
                 'notes' => $validated['notes'] ?? $consignment->notes,
             ]);
 
+            // Bukukan Jurnal Umum SAK Konsinyasi Otomatis (General Ledger Double-Entry)
+            $journal = $this->autoJournalService->journalConsignmentSettlement($consignment, $settledAmount, $validated['notes'] ?? null);
+
             DB::commit();
 
             $msg = "Rekonsiliasi konsinyasi {$consignment->consignment_number} berhasil disimpan. Setoran: Rp ".number_format($settledAmount, 0, ',', '.').', Sisa Hak Setor: Rp '.number_format($remainingDue, 0, ',', '.').'.';
+            if ($journal) {
+                $msg .= " Jurnal penyesuaian otomatis {$journal->entry_number} telah dibukukan ke General Ledger.";
+            }
 
             if ($request->wantsJson()) {
                 return response()->json([
                     'success' => true,
                     'message' => $msg,
-                    'consignment' => $consignment->fresh('items.variant'),
+                    'consignment' => $consignment->fresh(['items.variant', 'journalEntries.lines.chartOfAccount']),
+                    'journal' => $journal,
                 ]);
             }
 

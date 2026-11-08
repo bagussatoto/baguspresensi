@@ -269,6 +269,13 @@
                             <td style="padding: 11px 14px; font-family: monospace; font-weight: 700; color: #38bdf8;">
                                 {{ $c->consignment_number }}
                                 <div style="font-size: 10.5px; color: #64748b; font-weight: normal;">{{ $c->start_date ? $c->start_date->format('d/m/Y') : '-' }}</div>
+                                @if($c->journalEntries && $c->journalEntries->count() > 0)
+                                    <div style="margin-top: 4px;">
+                                        <a href="{{ route('admin.akuntansi.jurnal') }}" style="font-size: 10px; color: #38bdf8; text-decoration: none; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.3); padding: 2px 6px; border-radius: 4px; display: inline-block;">
+                                            📖 Jurnal: {{ $c->journalEntries->last()->entry_number }}
+                                        </a>
+                                    </div>
+                                @endif
                             </td>
                             <td style="padding: 11px 14px; color: #f8fafc;">
                                 {{ $c->branch->name ?? '-' }}
@@ -508,3 +515,4 @@
     }
 </script>
 @endsection
+
