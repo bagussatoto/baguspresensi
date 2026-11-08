@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminAccountingController;
+use App\Http\Controllers\Admin\AdminAgingReceivableController;
 use App\Http\Controllers\Admin\AdminAttendanceController;
 use App\Http\Controllers\Admin\AdminAttendanceSettingController;
 use App\Http\Controllers\Admin\AdminBranchMdmController;
@@ -252,6 +253,11 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::post('/distribusi/{id}/terima', [AdminDashboardController::class, 'receiveTransfer'])->name('admin.distribusi.terima');
     Route::post('/distribusi/permintaan/{id}/penuhi', [AdminDashboardController::class, 'fulfillStockRequest'])->name('admin.distribusi.penuhi');
     // Master Cabang & Jaringan Distribusi (MDM Multi-Cabang Hub-and-Spoke)
+    Route::get('/cabang/aging', [AdminAgingReceivableController::class, 'index'])->name('admin.cabang.aging');
+    Route::get('/cabang/aging/export-ar', [AdminAgingReceivableController::class, 'exportAgingCsv'])->name('admin.cabang.aging.export-ar');
+    Route::post('/cabang/consignments', [AdminAgingReceivableController::class, 'storeConsignment'])->name('admin.cabang.consignments.store');
+    Route::post('/cabang/consignments/{consignment}/settle', [AdminAgingReceivableController::class, 'settleConsignment'])->name('admin.cabang.consignments.settle');
+    Route::get('/cabang/consignments/export', [AdminAgingReceivableController::class, 'exportConsignmentCsv'])->name('admin.cabang.consignments.export');
     Route::get('/cabang/opname', [AdminStockOpnameController::class, 'index'])->name('admin.cabang.opname');
     Route::post('/cabang/opname', [AdminStockOpnameController::class, 'store'])->name('admin.cabang.opname.store');
     Route::get('/cabang/opname/{stockOpname}', [AdminStockOpnameController::class, 'show'])->name('admin.cabang.opname.show');
