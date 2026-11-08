@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domains\Attendance\Models;
 
 use App\Domains\Attendance\Services\AttendanceSettingService;
+use App\Domains\Attendance\Services\AuditTrailFormatter;
 use App\Models\User;
 use BadMethodCallException;
 use Illuminate\Database\Eloquent\Model;
@@ -69,5 +70,25 @@ class AuditLog extends Model
     public function auditable(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    /**
+     * Konversi data old_values ke format entri bahasa baku human-readable.
+     *
+     * @return array<int, array{key: string, label: string, value: string, is_empty: bool}>
+     */
+    public function formattedOldValues(string $lang = 'id'): array
+    {
+        return AuditTrailFormatter::formatEntries($this->old_values, $lang);
+    }
+
+    /**
+     * Konversi data new_values ke format entri bahasa baku human-readable.
+     *
+     * @return array<int, array{key: string, label: string, value: string, is_empty: bool}>
+     */
+    public function formattedNewValues(string $lang = 'id'): array
+    {
+        return AuditTrailFormatter::formatEntries($this->new_values, $lang);
     }
 }
