@@ -15,13 +15,24 @@ class StockInventory extends Model
         'warehouse_id',
         'product_variant_id',
         'qty_on_hand',
+        'qty_reserved',
         'safety_stock',
     ];
 
     protected $casts = [
         'qty_on_hand' => 'integer',
+        'qty_reserved' => 'integer',
         'safety_stock' => 'integer',
     ];
+
+    protected $appends = [
+        'qty_available',
+    ];
+
+    public function getQtyAvailableAttribute(): int
+    {
+        return max(0, (int) $this->qty_on_hand - (int) $this->qty_reserved);
+    }
 
     public function warehouse(): BelongsTo
     {

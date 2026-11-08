@@ -50,4 +50,14 @@ class ProductVariant extends Model
     {
         return $this->hasMany(PricelistItem::class, 'product_variant_id');
     }
+
+    public function branchProducts(): HasMany
+    {
+        return $this->hasMany(BranchProduct::class, 'product_variant_id');
+    }
+
+    public function pricings(): HasMany
+    {
+        return $this->hasMany(ProductPricing::class, 'product_variant_id');
+    }
 }

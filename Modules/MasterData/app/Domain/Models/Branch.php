@@ -8,6 +8,7 @@ use App\Domains\Attendance\Models\AttendanceRecord;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Kas\Domain\Models\KasAccount;
+use Modules\MasterData\Domain\Enums\BranchType;
 
 class Branch extends Model
 {
@@ -16,6 +17,7 @@ class Branch extends Model
     protected $fillable = [
         'code',
         'name',
+        'type',
         'is_headquarters',
         'address',
         'latitude',
@@ -29,6 +31,7 @@ class Branch extends Model
     ];
 
     protected $casts = [
+        'type' => BranchType::class,
         'is_headquarters' => 'boolean',
         'is_active' => 'boolean',
         'latitude' => 'float',
@@ -86,5 +89,30 @@ class Branch extends Model
     public function kasAccounts(): HasMany
     {
         return $this->hasMany(KasAccount::class, 'branch_id');
+    }
+
+    public function branchProducts(): HasMany
+    {
+        return $this->hasMany(BranchProduct::class, 'branch_id');
+    }
+
+    public function pricings(): HasMany
+    {
+        return $this->hasMany(ProductPricing::class, 'branch_id');
+    }
+
+    public function isHq(): bool
+    {
+        return $this->type === BranchType::Hq || $this->is_headquarters;
+    }
+
+    public function isDc(): bool
+    {
+        return $this->type === BranchType::Dc;
+    }
+
+    public function isStore(): bool
+    {
+        return $this->type === BranchType::Store;
     }
 }
