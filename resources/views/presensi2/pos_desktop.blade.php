@@ -701,8 +701,10 @@
                     @forelse($fnbProducts as $fp)
                         @php
                             $catCode = strtolower($fp->product?->category?->code ?? 'snack');
-                            $stockQty = (int) ($fp->stock_qty ?? 20);
-                            $priceFmt = number_format($fp->base_price, 0, ',', '.');
+                            $stockQty = (int) ($fp->stock_qty ?? $fp->qty_available ?? 20);
+                            $effPrice = (float) ($fp->effective_price ?? $fp->base_price);
+                            $priceFmt = number_format($effPrice, 0, ',', '.');
+                            $binLoc = $fp->bin_location ?: null;
                         @endphp
                         <div class="terlaris-item" 
                              id="terlaris-row-{{ $fp->id }}"
@@ -710,11 +712,16 @@
                              data-name="{{ strtoupper($fp->name) }}"
                              data-cat="{{ $catCode }}"
                              onclick="addToCart({{ $fp->id }})"
-                             title="Klik untuk masukkan ke Keranjang Belanja">
-                            <span class="terlaris-name">{{ strtoupper($fp->name) }}</span>
+                             title="Klik untuk masukkan ke Keranjang Belanja. {{ $binLoc ? "Lokasi: {$binLoc}" : '' }}">
+                            <div style="display: flex; flex-direction: column; min-width: 0;">
+                                <span class="terlaris-name">{{ strtoupper($fp->name) }}</span>
+                                @if($binLoc)
+                                    <span style="font-size: 9px; color: #38bdf8; font-family: monospace;">📍 {{ $binLoc }}</span>
+                                @endif
+                            </div>
                             <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
                                 <span class="badge-cyan-stock" title="Stok Tersedia">{{ $stockQty }}</span>
-                                <span class="badge-red-price" title="Harga">{{ $priceFmt }}</span>
+                                <span class="badge-red-price" style="{{ !empty($fp->is_zone_priced) ? 'background: #0284c7; color: #fff;' : '' }}" title="{{ !empty($fp->is_zone_priced) ? 'Harga Khusus Cabang/Zona' : 'Harga Standar' }}">{{ $priceFmt }}</span>
                             </div>
                         </div>
                     @empty
@@ -1309,8 +1316,9 @@
             return [
                 'id' => $p->id,
                 'name' => strtoupper($p->name),
-                'price' => (float) $p->base_price,
-                'stock' => (int) ($p->stock_qty ?? 20),
+                'price' => (float) ($p->effective_price ?? $p->base_price),
+                'stock' => (int) ($p->stock_qty ?? $p->qty_available ?? 20),
+                'bin' => (string) ($p->bin_location ?? ''),
                 'category' => strtolower($p->product?->category?->code ?? 'snack'),
             ];
         })->values());

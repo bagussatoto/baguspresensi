@@ -258,6 +258,17 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::get('/cabang/zonasi-harga', [AdminBranchMdmController::class, 'pricingsIndex'])->name('admin.cabang.zonasi-harga');
     Route::post('/cabang/zonasi-harga', [AdminBranchMdmController::class, 'pricingStore'])->name('admin.cabang.zonasi-harga.store');
 
+    // Master Cabang & Jaringan Distribusi (MDM Multi-Cabang Hub-and-Spoke)
+    Route::get('/cabang', [AdminBranchMdmController::class, 'index'])->name('admin.cabang');
+    Route::post('/cabang', [AdminBranchMdmController::class, 'store'])->name('admin.cabang.store');
+    Route::put('/cabang/{branch}', [AdminBranchMdmController::class, 'update'])->name('admin.cabang.update');
+    Route::delete('/cabang/{branch}', [AdminBranchMdmController::class, 'destroy'])->name('admin.cabang.destroy');
+    Route::get('/cabang/produk', [AdminBranchMdmController::class, 'productsIndex'])->name('admin.cabang.produk');
+    Route::put('/cabang/produk/{branchProduct}', [AdminBranchMdmController::class, 'productUpdate'])->name('admin.cabang.produk.update');
+    Route::post('/cabang/{branch}/sync-produk', [AdminBranchMdmController::class, 'syncNationalProducts'])->name('admin.cabang.sync-produk');
+    Route::get('/cabang/zonasi-harga', [AdminBranchMdmController::class, 'pricingsIndex'])->name('admin.cabang.zonasi-harga');
+    Route::post('/cabang/zonasi-harga', [AdminBranchMdmController::class, 'pricingStore'])->name('admin.cabang.zonasi-harga.store');
+
     Route::get('/merk', [AdminBrandController::class, 'index'])->name('admin.merk');
     Route::post('/merk', [AdminBrandController::class, 'store'])->name('admin.merk.store');
     Route::put('/merk/{brand}', [AdminBrandController::class, 'update'])->name('admin.merk.update');

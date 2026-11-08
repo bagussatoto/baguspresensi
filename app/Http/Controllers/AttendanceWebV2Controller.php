@@ -41,12 +41,14 @@ use Illuminate\View\View;
 use Modules\Kas\Domain\Services\AutoJournalService;
 use Modules\MasterData\Domain\Enums\EmployeeRole;
 use Modules\MasterData\Domain\Models\Branch;
+use Modules\MasterData\Domain\Models\BranchProduct;
 use Modules\MasterData\Domain\Models\CafePayment;
 use Modules\MasterData\Domain\Models\CafeSale;
 use Modules\MasterData\Domain\Models\CafeSaleItem;
 use Modules\MasterData\Domain\Models\Customer;
 use Modules\MasterData\Domain\Models\Employee;
 use Modules\MasterData\Domain\Models\PcStation;
+use Modules\MasterData\Domain\Models\ProductPricing;
 use Modules\MasterData\Domain\Models\ProductVariant;
 use Modules\MasterData\Domain\Models\StockInventory;
 use Modules\MasterData\Domain\Models\Warehouse;
@@ -2958,12 +2960,58 @@ class AttendanceWebV2Controller extends Controller
             ?? Warehouse::where('id', 5)->value('id')
             ?? Warehouse::first()?->id;
 
-        $stocks = StockInventory::whereIn('product_variant_id', $fnbProducts->pluck('id'))
-            ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
-            ->pluck('qty_on_hand', 'product_variant_id');
+        // MDM Multi-Cabang: Mapping Lokalisasi Rak & ROP (The Spoke)
+        $branchProductsMap = $branchId
+            ? BranchProduct::where('branch_id', $branchId)->get()->keyBy('product_variant_id')
+            : collect();
 
-        $fnbProducts->each(function ($p) use ($stocks) {
-            $p->stock_qty = (int) ($stocks[$p->id] ?? 20);
+        // MDM Multi-Cabang: Mapping Kebijakan Zonasi Harga Cabang
+        $branchObj = $branchId ? Branch::find($branchId) : null;
+        $zoneCode = $branchObj?->code ? 'ZONE-'.$branchObj->code : 'DEFAULT';
+        $todayStr = $workDate->toDateString();
+
+        $pricingPolicies = ProductPricing::where(function ($q) use ($branchId, $zoneCode): void {
+            if ($branchId) {
+                $q->where('branch_id', $branchId)->orWhere('zone_code', $zoneCode);
+            } else {
+                $q->where('zone_code', 'DEFAULT');
+            }
+        })
+            ->where('start_date', '<=', $todayStr)
+            ->where(fn ($q) => $q->whereNull('end_date')->orWhere('end_date', '>=', $todayStr))
+            ->orderBy('branch_id', 'desc')
+            ->get()
+            ->keyBy('product_variant_id');
+
+        // MDM Multi-Cabang: Mapping Ketersediaan Stok Riil (On-Hand vs Reserved vs Available)
+        $stockInventories = StockInventory::whereIn('product_variant_id', $fnbProducts->pluck('id'))
+            ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
+            ->get()
+            ->keyBy('product_variant_id');
+
+        $fnbProducts->each(function ($p) use ($stockInventories, $branchProductsMap, $pricingPolicies): void {
+            $inv = $stockInventories->get($p->id);
+            $p->qty_on_hand = (int) ($inv?->qty_on_hand ?? 20);
+            $p->qty_reserved = (int) ($inv?->qty_reserved ?? 0);
+            $p->qty_available = max(0, $p->qty_on_hand - $p->qty_reserved);
+            $p->stock_qty = $p->qty_available; // Kompatibilitas frontend POS
+
+            $bp = $branchProductsMap->get($p->id);
+            $p->bin_location = $bp?->bin_location ?: 'Rak-Utama';
+            $p->min_stock = (float) ($bp?->min_stock ?? 0);
+            $p->max_stock = (float) ($bp?->max_stock ?? 0);
+            $p->reorder_point = (float) ($bp?->reorder_point ?? 0);
+            $p->is_rop_alert = ($p->qty_available <= $p->reorder_point && $p->reorder_point > 0);
+
+            // Kebijakan Zonasi Harga Cabang
+            $policy = $pricingPolicies->get($p->id);
+            if ($policy && (float) $policy->sale_price > 0) {
+                $p->effective_price = (float) $policy->sale_price;
+                $p->is_zone_priced = true;
+            } else {
+                $p->effective_price = (float) $p->base_price;
+                $p->is_zone_priced = false;
+            }
         });
 
         // 2. Pendapatan Internet (Otomatis Penuh dari Server Billing & PC Station Cabang)
@@ -3636,7 +3684,7 @@ class AttendanceWebV2Controller extends Controller
                     $qty = max(1, (int) ($itemData['qty'] ?? 1));
                     $variant = ProductVariant::find($vId);
                     if ($variant) {
-                        $price = (float) $variant->base_price;
+                        $price = $this->resolveVariantEffectivePrice($variant, $branchId);
                         $subtotal = $price * $qty;
                         $totalGross += $subtotal;
                         $orderItems[] = [
@@ -3652,7 +3700,7 @@ class AttendanceWebV2Controller extends Controller
                 $qty = max(1, (int) $request->input('qty', 1));
                 $variant = ProductVariant::find($variantId);
                 if ($variant) {
-                    $price = (float) $variant->base_price;
+                    $price = $this->resolveVariantEffectivePrice($variant, $branchId);
                     $subtotal = $price * $qty;
                     $totalGross = $subtotal;
                     $orderItems[] = [
@@ -3820,6 +3868,19 @@ class AttendanceWebV2Controller extends Controller
                         StockInventory::where('product_variant_id', $oi['variant']->id)
                             ->where('warehouse_id', $warehouseId)
                             ->decrement('qty_on_hand', $oi['qty']);
+
+                        // MDM Multi-Cabang: Evaluasi ambang batas Reorder Point (ROP Alert)
+                        $updatedInv = StockInventory::where('product_variant_id', $oi['variant']->id)
+                            ->where('warehouse_id', $warehouseId)
+                            ->first();
+
+                        $bp = BranchProduct::where('branch_id', $branchId)
+                            ->where('product_variant_id', $oi['variant']->id)
+                            ->first();
+
+                        if ($bp && $updatedInv && $bp->needsReorder((float) $updatedInv->qty_available)) {
+                            Log::info("MDM Alert ROP: Produk {$oi['variant']->name} di cabang ID {$branchId} mencapai ROP ({$bp->reorder_point} unit). Sisa stok: {$updatedInv->qty_available} unit.");
+                        }
                     }
                 }
 
@@ -7201,5 +7262,32 @@ BAT;
         $result = $action->execute($payload, $userId);
 
         return response()->json($result, $result['success'] ? 200 : 422);
+    }
+
+    /**
+     * Resolusi Harga Efektif Varian Produk: Utamakan Zonasi Harga Cabang MDM, Fallback ke Harga Master Nasional.
+     */
+    protected function resolveVariantEffectivePrice(ProductVariant $variant, ?int $branchId): float
+    {
+        if (! $branchId) {
+            return (float) $variant->base_price;
+        }
+
+        $branch = Branch::find($branchId);
+        $zoneCode = $branch?->code ? 'ZONE-'.$branch->code : 'DEFAULT';
+        $today = Carbon::today()->toDateString();
+
+        $pricing = ProductPricing::where(function ($q) use ($branchId, $zoneCode): void {
+            $q->where('branch_id', $branchId)->orWhere('zone_code', $zoneCode);
+        })
+            ->where('product_variant_id', $variant->id)
+            ->where('start_date', '<=', $today)
+            ->where(fn ($q) => $q->whereNull('end_date')->orWhere('end_date', '>=', $today))
+            ->orderByDesc('branch_id')
+            ->first();
+
+        return ($pricing && (float) $pricing->sale_price > 0)
+            ? (float) $pricing->sale_price
+            : (float) $variant->base_price;
     }
 }
