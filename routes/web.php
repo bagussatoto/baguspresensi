@@ -16,6 +16,7 @@ use App\Http\Controllers\Admin\AdminProductController;
 use App\Http\Controllers\Admin\AdminSaleController;
 use App\Http\Controllers\Admin\AdminScheduleController;
 use App\Http\Controllers\Admin\AdminStockController;
+use App\Http\Controllers\Admin\AdminStockOpnameController;
 use App\Http\Controllers\Admin\AdminSupplierController;
 use App\Http\Controllers\Admin\AuditLogAdminController;
 use App\Http\Controllers\AttendanceWebController;
@@ -251,6 +252,13 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::post('/distribusi/{id}/terima', [AdminDashboardController::class, 'receiveTransfer'])->name('admin.distribusi.terima');
     Route::post('/distribusi/permintaan/{id}/penuhi', [AdminDashboardController::class, 'fulfillStockRequest'])->name('admin.distribusi.penuhi');
     // Master Cabang & Jaringan Distribusi (MDM Multi-Cabang Hub-and-Spoke)
+    Route::get('/cabang/opname', [AdminStockOpnameController::class, 'index'])->name('admin.cabang.opname');
+    Route::post('/cabang/opname', [AdminStockOpnameController::class, 'store'])->name('admin.cabang.opname.store');
+    Route::get('/cabang/opname/{stockOpname}', [AdminStockOpnameController::class, 'show'])->name('admin.cabang.opname.show');
+    Route::match(['post', 'put'], '/cabang/opname/{stockOpname}/counts', [AdminStockOpnameController::class, 'updateCounts'])->name('admin.cabang.opname.update-counts');
+    Route::post('/cabang/opname/{stockOpname}/adjust', [AdminStockOpnameController::class, 'adjust'])->name('admin.cabang.opname.adjust');
+    Route::get('/cabang/opname/{stockOpname}/export', [AdminStockOpnameController::class, 'exportCsv'])->name('admin.cabang.opname.export-csv');
+    Route::get('/cabang/opname/{stockOpname}/export-alias', [AdminStockOpnameController::class, 'exportCsv'])->name('admin.cabang.opname.export');
     Route::get('/cabang/konsolidasi', [AdminBranchMdmController::class, 'konsolidasi'])->name('admin.cabang.konsolidasi');
     Route::get('/cabang', [AdminBranchMdmController::class, 'index'])->name('admin.cabang');
     Route::post('/cabang', [AdminBranchMdmController::class, 'store'])->name('admin.cabang.store');

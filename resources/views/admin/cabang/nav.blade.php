@@ -14,6 +14,9 @@
     <a href="{{ route('admin.produk') }}" class="tab-pill-btn {{ request()->routeIs('admin.produk*') ? 'active' : '' }}">
         <span>🏷️</span> Master Produk (The Hub)
     </a>
+    <a href="{{ route('admin.cabang.opname') }}" class="tab-pill-btn {{ request()->routeIs('admin.cabang.opname*') ? 'active' : '' }}" style="background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4);">
+        <span>📋</span> Stock Opname Fisik
+    </a>
     <a href="{{ route('admin.harga') }}" class="tab-pill-btn {{ request()->routeIs('admin.harga*') ? 'active' : '' }}" style="margin-left: auto;">
         <span>🏷️</span> Pricelist Tiering
     </a>
