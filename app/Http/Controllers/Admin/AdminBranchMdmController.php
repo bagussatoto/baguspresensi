@@ -19,6 +19,7 @@ use Modules\MasterData\Domain\Models\CafeSale;
 use Modules\MasterData\Domain\Models\ProductPricing;
 use Modules\MasterData\Domain\Models\ProductVariant;
 use Modules\MasterData\Domain\Models\StockInventory;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Controller Pengelolaan Master Data Management (MDM) ERP Multi-Cabang Hub-and-Spoke.
@@ -342,7 +343,7 @@ class AdminBranchMdmController extends Controller
     /**
      * 4. Dashboard Konsolidasi & Monitoring Multi-Cabang (Hub-and-Spoke Overview).
      */
-    public function konsolidasi(Request $request): View|JsonResponse
+    public function konsolidasi(Request $request): View|JsonResponse|StreamedResponse
     {
         $dateParam = $request->input('date');
         $filterDate = $dateParam ? Carbon::parse($dateParam) : Carbon::today();
@@ -491,6 +492,131 @@ class AdminBranchMdmController extends Controller
             'filter_date' => $filterDate->toDateString(),
             'network_cashier_count' => $networkCashierCount,
         ];
+
+        // Ekspor ke format CSV Excel jika parameter export=csv
+        if ($request->input('export') === 'csv') {
+            $fileName = 'laporan_konsolidasi_cabang_'.$filterDate->format('Ymd').'.csv';
+            $headers = [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
+            ];
+
+            $callback = function () use ($summary, $branchMatrix, $criticalRopItems, $stockTransferOrders): void {
+                $handle = fopen('php://output', 'w');
+                // UTF-8 BOM untuk kompatibilitas Microsoft Excel
+                fwrite($handle, "\xEF\xBB\xBF");
+
+                // SEKSI 1: RINGKASAN EKSEKUTIF KONSOLIDASI
+                fputcsv($handle, ['=== LAPORAN KONSOLIDASI & MONITORING MULTI-CABANG PT MAYA GRAHA KENCANA ===']);
+                fputcsv($handle, ['Tanggal Rekap:', $summary['filter_date']]);
+                fputcsv($handle, ['Total Titik Jaringan:', $summary['total_branches'].' Cabang']);
+                fputcsv($handle, ['Total Valuasi Persediaan Jaringan:', 'Rp '.number_format($summary['total_valuation'], 2, ',', '.')]);
+                fputcsv($handle, ['Valuasi Persediaan DC (Logistik):', 'Rp '.number_format($summary['dc_valuation'], 2, ',', '.')." ({$summary['dc_valuation_pct']}%)"]);
+                fputcsv($handle, ['Valuasi Persediaan Toko (Store):', 'Rp '.number_format($summary['store_valuation'], 2, ',', '.')." ({$summary['store_valuation_pct']}%)"]);
+                fputcsv($handle, ['Total Omset Kasir Hari Ini:', 'Rp '.number_format($summary['today_sales'], 2, ',', '.')]);
+                fputcsv($handle, ['Total Omset Kasir Bulan Ini (MTD):', 'Rp '.number_format($summary['month_sales'], 2, ',', '.')]);
+                fputcsv($handle, ['Jumlah SKU Kritis ROP:', $summary['critical_rop_count'].' Item']);
+                fputcsv($handle, ['Antrean Transfer STO DC:', $summary['pending_sto_count'].' Antrean']);
+                fputcsv($handle, []);
+
+                // SEKSI 2: MATRIKS KINERJA MULTI-CABANG
+                fputcsv($handle, ['--- MATRIKS KOMPARASI KINERJA PENJUALAN & PERSEDIAAN CABANG ---']);
+                fputcsv($handle, [
+                    'Kode Cabang',
+                    'Nama Entitas Cabang',
+                    'Tipe Jaringan',
+                    'Jumlah Kasir',
+                    'Fisik Stok (Pcs)',
+                    'Valuasi Stok (Rp)',
+                    'Transaksi Hari Ini (Nota)',
+                    'Omset Tunai Hari Ini (Rp)',
+                    'Omset Non-Tunai / QRIS (Rp)',
+                    'Total Omset Hari Ini (Rp)',
+                    'Rata-rata Keranjang Belanja (Rp)',
+                    'Omset Bulan Ini MTD (Rp)',
+                ]);
+
+                foreach ($branchMatrix as $row) {
+                    $b = $row['branch'];
+                    fputcsv($handle, [
+                        $b->code,
+                        $b->name,
+                        $b->type->label() ?? $b->type->value,
+                        $b->employees_count,
+                        $row['stock_qty'],
+                        number_format($row['valuation'], 2, ',', '.'),
+                        $row['today_trx_count'],
+                        number_format($row['today_cash'], 2, ',', '.'),
+                        number_format($row['today_qris'], 2, ',', '.'),
+                        number_format($row['today_sales'], 2, ',', '.'),
+                        number_format($row['avg_basket'], 2, ',', '.'),
+                        number_format($row['month_sales'], 2, ',', '.'),
+                    ]);
+                }
+                fputcsv($handle, []);
+
+                // SEKSI 3: RADAR PERINGATAN KRITIS ROP
+                fputcsv($handle, ['--- RADAR PERINGATAN KRITIS REORDER POINT (ROP) & KEBUTUHAN PASOK DARI DC ---']);
+                fputcsv($handle, [
+                    'Kode Cabang',
+                    'Nama Cabang Toko',
+                    'SKU Produk',
+                    'Nama Varian Produk',
+                    'Lokasi Rak (Bin)',
+                    'Sisa Stok Fisik',
+                    'Ambang ROP',
+                    'Stok Maksimum',
+                    'Rekomendasi Transfer dari DC',
+                ]);
+
+                foreach ($criticalRopItems as $crit) {
+                    fputcsv($handle, [
+                        $crit['branch']->code ?? '-',
+                        $crit['branch']->name ?? '-',
+                        $crit['variant']->sku ?? '-',
+                        $crit['variant']->name ?? '-',
+                        $crit['bin_location'] ?? '-',
+                        $crit['current_stock'],
+                        $crit['reorder_point'],
+                        $crit['max_stock'],
+                        '+'.$crit['recommended_transfer'],
+                    ]);
+                }
+                fputcsv($handle, []);
+
+                // SEKSI 4: LIVE TRACKING STO
+                fputcsv($handle, ['--- STATUS SURAT TRANSFER STOK (STO) TERAKHIR ---']);
+                fputcsv($handle, [
+                    'No. Dokumen STO',
+                    'Cabang Pemohon',
+                    'Operator Kasir',
+                    'Nama Item',
+                    'Kategori',
+                    'Kuantitas Diminta',
+                    'Urgensi',
+                    'Status Distribusi',
+                    'Waktu Diajukan',
+                ]);
+
+                foreach ($stockTransferOrders as $sto) {
+                    fputcsv($handle, [
+                        $sto->request_number,
+                        $sto->branch->name ?? '-',
+                        $sto->employee->name ?? '-',
+                        $sto->item_name,
+                        $sto->item_category,
+                        $sto->qty_requested.' '.($sto->unit ?? 'Pcs'),
+                        $sto->urgency,
+                        $sto->status,
+                        $sto->created_at ? $sto->created_at->format('d/m/Y H:i') : '-',
+                    ]);
+                }
+
+                fclose($handle);
+            };
+
+            return response()->stream($callback, 200, $headers);
+        }
 
         if ($request->wantsJson()) {
             return response()->json([

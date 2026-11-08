@@ -56,6 +56,21 @@
     }
     .progress-bar-dc { background: #38bdf8; height: 100%; transition: width 0.3s ease; }
     .progress-bar-store { background: #10b981; height: 100%; transition: width 0.3s ease; }
+
+    @media print {
+        .tab-nav-pills, .hero-banner-card form, .btn-action-sm, .admin-sidebar, header { display: none !important; }
+        body { background: #ffffff !important; color: #000000 !important; font-size: 11px !important; }
+        .hero-banner-card { border: none !important; padding: 0 !important; margin-bottom: 12px !important; }
+        .hero-title-text { color: #000000 !important; font-size: 18px !important; }
+        .hero-desc-text { color: #555555 !important; font-size: 10px !important; }
+        .kpi-card { background: #f8fafc !important; border: 1px solid #cbd5e1 !important; padding: 10px !important; }
+        .kpi-title { color: #475569 !important; }
+        .kpi-value { color: #0f172a !important; font-size: 16px !important; }
+        .kpi-sub { color: #64748b !important; }
+        .matrix-table th { background: #e2e8f0 !important; color: #0f172a !important; padding: 6px 8px !important; }
+        .matrix-table td { color: #0f172a !important; padding: 6px 8px !important; border-bottom: 1px solid #cbd5e1 !important; }
+        @page { size: landscape; margin: 10mm; }
+    }
 </style>
 
 <!-- HERO HEADER -->
@@ -71,9 +86,15 @@
             <span style="font-size: 12px; color: #94a3b8;">📅 Tanggal:</span>
             <input type="date" name="date" value="{{ $summary['filter_date'] }}" onchange="this.form.submit()" style="background: transparent; border: none; color: #fff; font-size: 12.5px; font-family: monospace; outline: none; cursor: pointer;">
         </div>
-        <a href="{{ route('admin.cabang.konsolidasi') }}" class="btn-action-sm btn-action-secondary" style="padding: 7px 12px;">
+        <a href="{{ route('admin.cabang.konsolidasi') }}" class="btn-action-sm btn-action-secondary" style="padding: 7px 12px;" title="Reset filter ke hari ini">
             <span>🔄</span> Hari Ini
         </a>
+        <a href="{{ route('admin.cabang.konsolidasi', ['date' => $summary['filter_date'], 'export' => 'csv']) }}" class="btn-action-sm btn-action-emerald" style="padding: 7px 14px; text-decoration: none; font-weight: 700;" title="Unduh data konsolidasi ke file CSV (kompatibel Excel)">
+            <span>📥</span> Unduh CSV (Excel)
+        </a>
+        <button type="button" onclick="window.print()" class="btn-action-sm btn-action-primary" style="padding: 7px 14px; cursor: pointer;" title="Cetak laporan konsolidasi">
+            <span>🖨️</span> Cetak Laporan
+        </button>
     </form>
 </div>
 
