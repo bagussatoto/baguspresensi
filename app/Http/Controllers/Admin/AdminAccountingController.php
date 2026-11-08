@@ -560,7 +560,8 @@ class AdminAccountingController extends Controller
             ->with(['journalEntry.branch', 'chartOfAccount'])
             ->whereHas('journalEntry', function ($q) use ($startDate, $endDate, $selectedBranchId): void {
                 $q->where('status', 'posted')
-                    ->whereBetween('entry_date', [$startDate, $endDate]);
+                    ->whereDate('entry_date', '>=', $startDate)
+                    ->whereDate('entry_date', '<=', $endDate);
 
                 if ($selectedBranchId !== 'all' && is_numeric($selectedBranchId)) {
                     $q->where('branch_id', (int) $selectedBranchId);
