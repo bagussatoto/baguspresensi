@@ -1049,4 +1049,70 @@ class AttendanceWebV2PortalTest extends TestCase
             ]);
         $resUnlockPrint->assertStatus(403);
     }
+
+    public function test_clock_out_blocks_before_minimum_duration_and_without_handover(): void
+    {
+        Carbon::setTestNow('2026-10-13 07:00:00');
+
+        AttendanceRecord::create([
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift->id,
+            'work_date' => '2026-10-13',
+            'clock_in_at' => Carbon::now(),
+            'clock_in_lat' => -6.200000,
+            'clock_in_lng' => 106.816666,
+            'status' => AttendanceStatus::Present,
+            'verification_method' => VerificationMethod::AdminManual,
+        ]);
+
+        // 1. Baru 5 menit setelah check-in -> wajib ditolak
+        Carbon::setTestNow('2026-10-13 07:05:00');
+
+        $tooEarlyResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.clock-out'), [
+                'shift_id' => $this->shift->id,
+                'enforce_handover' => true,
+            ]);
+
+        $tooEarlyResponse->assertStatus(422);
+        $tooEarlyResponse->assertJson(['success' => false]);
+
+        // 2. Sudah > 30 menit, tetapi belum serah terima -> wajib ditolak
+        Carbon::setTestNow('2026-10-13 08:00:00');
+
+        $noHandoverResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.clock-out'), [
+                'shift_id' => $this->shift->id,
+                'enforce_handover' => true,
+            ]);
+
+        $noHandoverResponse->assertStatus(422);
+        $noHandoverResponse->assertJson(['success' => false]);
+
+        // 3. Sudah serah terima -> check-out diizinkan
+        ShiftSalesSummary::create([
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift->id,
+            'work_date' => '2026-10-13',
+            'total_revenue' => 0,
+            'cash_in_drawer' => 100000,
+            'system_expected_cash' => 100000,
+            'blind_cash_count' => 100000,
+            'status' => 'closed',
+            'handover_status' => 'completed',
+        ]);
+
+        $validResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.clock-out'), [
+                'shift_id' => $this->shift->id,
+                'enforce_handover' => true,
+            ]);
+
+        $validResponse->assertOk();
+        $validResponse->assertJson(['success' => true]);
+
+        Carbon::setTestNow();
+    }
 }

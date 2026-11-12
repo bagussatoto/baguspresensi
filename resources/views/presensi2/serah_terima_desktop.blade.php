@@ -672,8 +672,8 @@
                     <div style="font-size: 12px; color: #3b82f6; margin-top: 2px;">Serah terima di PC Kasir telah tersimpan. Untuk validasi foto selfie & radius GPS lokasi presensi yang sah, silakan buka aplikasi di HP Anda untuk melakukan Clock-Out.</div>
                 </div>
             </div>
-            <a href="{{ route('pos.login') }}" class="btn-primary" style="background: #2563eb; color: #fff; text-decoration: none; padding: 8px 16px; font-weight: 700; border-radius: 4px; font-size: 12px;">
-                <span>🔒</span> Kunci & Keluar PC Kasir
+            <a href="{{ route('presensi2.logout', ['mode' => 'pos']) }}" class="btn-primary" style="background: #2563eb; color: #fff; text-decoration: none; padding: 8px 16px; font-weight: 700; border-radius: 4px; font-size: 12px;">
+                <span>🔒</span> Logout & Kunci PC Kasir
             </a>
         </div>
     @endif
@@ -964,28 +964,13 @@
                         {{-- HIDDEN INPUT SOURCE DESKTOP --}}
                         <input type="hidden" name="source" value="desktop">
 
-                        {{-- AUTO CLOCK OUT CHECKBOX --}}
-                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 10px; margin-bottom: 14px;">
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 0; font-size: 12px; color: #1e293b;">
-                                <input type="checkbox" name="auto_clock_out" value="1" checked style="width: 17px; height: 17px; accent-color: #00a65a; cursor: pointer;">
-                                <span><strong>Selesai Serah Terima</strong>: Otomatis lakukan <strong>Presensi Pulang (Clock Out)</strong> &amp; tetap di halaman ini untuk cek rekap</span>
-                            </label>
-                        </div>
+
 
                         {{-- TOMBOL SUBMIT --}}
                         <div style="display: flex; flex-direction: column; gap: 8px;">
                             <button type="submit" class="btn-action-primary">
                                 <span>🤝</span> Simpan Serah Terima Shift
                             </button>
-
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
-                                <button type="button" onclick="previewThermalReceipt()" class="btn-action-secondary" style="justify-content: center;">
-                                    <span>🖨️</span> Cetak Slip (58/80mm)
-                                </button>
-                                <button type="button" onclick="openModalSetorKas({{ $salesSummary?->id ?? 'null' }}, {{ (int) $handoverAmountVal }})" class="btn-action-secondary" style="justify-content: center; background: #fffbeb; color: #b45309; border-color: #fde68a;">
-                                    <span>🏦</span> Setor ke Bank
-                                </button>
-                            </div>
                         </div>
                     </form>
                 </div>
@@ -1725,8 +1710,57 @@
         // Initial calc on page load
         document.addEventListener('DOMContentLoaded', function() {
             calcDenominations();
+            @if(session('success'))
+                var savedModal = document.getElementById('modal-handover-saved');
+                if (savedModal) savedModal.style.display = 'flex';
+            @endif
         });
+
+        function closeHandoverSavedModal() {
+            var savedModal = document.getElementById('modal-handover-saved');
+            if (savedModal) savedModal.style.display = 'none';
+        }
     </script>
+
+    @if(session('success'))
+        {{-- MODAL KONFIRMASI SETELAH SIMPAN SERAH TERIMA --}}
+        <div id="modal-handover-saved" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); z-index: 9999; align-items: center; justify-content: center; padding: 16px;">
+            <div style="background: #ffffff; border-radius: 8px; max-width: 460px; width: 100%; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25); overflow: hidden; border: 1px solid #cbd5e1;">
+                <div style="background: #059669; color: #ffffff; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px;">
+                        <span>✅</span> Serah Terima Shift Tersimpan
+                    </div>
+                    <button type="button" onclick="closeHandoverSavedModal()" style="background: transparent; border: none; color: #ffffff; font-size: 18px; cursor: pointer; line-height: 1;">&times;</button>
+                </div>
+                <div style="padding: 18px;">
+                    <div style="background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 10px 12px; border-radius: 6px; font-size: 12.5px; font-weight: 600; margin-bottom: 14px;">
+                        {{ session('success') }}
+                    </div>
+                    <div style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; padding: 12px; border-radius: 6px; font-size: 12.5px; line-height: 1.5; margin-bottom: 16px;">
+                        <strong>Langkah Selanjutnya Sebelum Meninggalkan Kasir:</strong>
+                        <ul style="margin: 6px 0 0 18px; padding: 0;">
+                            <li>Cetak slip bukti serah terima bila diperlukan.</li>
+                            <li><strong>Logout dari PC Kasir</strong> agar sesi Anda aman &amp; kasir berikutnya bisa login.</li>
+                            <li>Lakukan <strong>Presensi Pulang (Check-Out)</strong> di HP / menu Presensi Karyawan untuk validasi selfie &amp; GPS.</li>
+                        </ul>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <a href="{{ route('presensi2.logout', ['mode' => 'pos']) }}" class="btn-action-primary" style="text-decoration: none; justify-content: center; background: #dc2626; border-color: #b91c1c;">
+                            <span>🚪</span> Ya, Logout &amp; Kunci PC Kasir
+                        </a>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <button type="button" onclick="closeHandoverSavedModal(); previewThermalReceipt();" class="btn-action-secondary" style="justify-content: center;">
+                                <span>🖨️</span> Cetak Slip
+                            </button>
+                            <button type="button" onclick="closeHandoverSavedModal()" class="btn-action-secondary" style="justify-content: center;">
+                                Tetap di Halaman Ini
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
     @include('presensi2.partials.modal_shift_history_and_settlement')
 </body>
 </html>

@@ -2641,7 +2641,7 @@
             <!-- 4. Settlement Setoran Harian (0/4) -->
             <button type="button" onclick="closePosShiftDrawer(); openDailySettlementModal();" class="drawer-action-btn" style="color: #0f766e; border-left: 4px solid #0f766e;">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="font-size: 18px;">📊</span>
+                 <span style="font-size: 18px;">📊</span>
                     <div>
                         <div>Settlement Setoran Harian</div>
                         <div style="font-size: 11px; font-weight: normal; color: #64748b;">Closing statement shift 1 s/d 4</div>
@@ -2652,13 +2652,13 @@
                 </span>
             </button>
 
-            <!-- 5. Tutup Shift & Serah Terima Kas -->
-            <a href="{{ route('presensi2.serah-terima') }}" class="drawer-action-btn" style="color: #b45309; border-left: 4px solid #f59e0b; background: #fffbeb;">
+            <!-- 5. Rekap Akhir Shift (Sebelum Serah Terima) -->
+            <a href="{{ route('presensi2.rekap.desktop') }}" class="drawer-action-btn" style="color: #b45309; border-left: 4px solid #f59e0b; background: #fffbeb;">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="font-size: 18px;">🏁</span>
+                    <span style="font-size: 18px;">📊</span>
                     <div>
-                        <div>Tutup Shift & Serah Terima Kas</div>
-                        <div style="font-size: 11px; font-weight: normal; color: #92400e;">Hitung kas laci & handover kasir</div>
+                        <div>Rekap Akhir Shift & Tutup Sesi</div>
+                        <div style="font-size: 11px; font-weight: normal; color: #92400e;">Cek omset & audit stok sebelum serah terima</div>
                     </div>
                 </div>
                 <span style="color: #b45309; font-size: 14px;">➔</span>

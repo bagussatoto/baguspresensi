@@ -392,10 +392,28 @@
                     </div>
                 </div>
 
-                <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px; text-align: center;">
-                    Pastikan durasi jam kerja di atas sudah sesuai sebelum konfirmasi pulang / serah terima:
-                </div>
-                <button type="button" id="btn-clock-out" onclick="submitAttendance('out')" class="btn btn-rose" style="padding: 14px; font-size: 14.5px; width: 100%; font-weight: 700; box-shadow: 0 4px 14px rgba(244, 63, 94, 0.35);">
+                @php
+                    $canCheckOutByTime = ($minutesWorked ?? 0) >= ($minCheckoutMinutes ?? 30);
+                    $canCheckOut = $canCheckOutByTime && ($hasCompletedHandover ?? false);
+                @endphp
+
+                @if(!$canCheckOutByTime)
+                    <div style="background: rgba(245, 158, 11, 0.14); border: 1px solid rgba(245, 158, 11, 0.45); border-radius: 10px; padding: 11px 13px; margin-bottom: 12px; font-size: 12px; color: #fde68a; line-height: 1.5;">
+                        <strong>⏳ Belum Bisa Check-Out (Baru {{ $minutesWorked ?? 0 }} menit bekerja)</strong><br>
+                        Minimal durasi kerja adalah <strong>{{ $minCheckoutMinutes ?? 30 }} menit</strong> setelah Check-In agar tidak terjadi salah klik atau absen formalitas.
+                    </div>
+                @elseif(!($hasCompletedHandover ?? false))
+                    <div style="background: rgba(244, 63, 94, 0.14); border: 1px solid rgba(244, 63, 94, 0.45); border-radius: 10px; padding: 11px 13px; margin-bottom: 12px; font-size: 12px; color: #fecdd3; line-height: 1.5;">
+                        <strong>🔒 Wajib Rekap &amp; Serah Terima Shift Terlebih Dahulu</strong><br>
+                        Sebelum Check-Out, Anda wajib menyelesaikan <a href="{{ route('presensi2.rekap') }}" style="color: #93c5fd; font-weight: 700; text-decoration: underline;">Rekap</a> dan <a href="{{ route('presensi2.serah-terima') }}" style="color: #93c5fd; font-weight: 700; text-decoration: underline;">Serah Terima Shift</a> terlebih dahulu (meski penjualan Rp 0).
+                    </div>
+                @else
+                    <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px; text-align: center;">
+                        Pastikan durasi jam kerja di atas sudah sesuai sebelum konfirmasi pulang / serah terima:
+                    </div>
+                @endif
+
+                <button type="button" id="btn-clock-out" onclick="submitAttendance('out')" class="btn btn-rose" {{ $canCheckOut ? '' : 'disabled' }} style="padding: 14px; font-size: 14.5px; width: 100%; font-weight: 700; box-shadow: 0 4px 14px rgba(244, 63, 94, 0.35); {{ $canCheckOut ? '' : 'opacity: 0.45; cursor: not-allowed;' }}">
                     <span>🏁</span> Konfirmasi Check-Out (Selesai Dinas)
                 </button>
             </div>
@@ -642,6 +660,7 @@
                 payload.shift_id = parseInt(shiftSelect.value, 10);
             }
         } else if (mode === 'out') {
+            payload.enforce_handover = true;
             const durInput = document.getElementById('duration_hours_input');
             if (durInput && durInput.value) {
                 payload.duration_hours = parseInt(durInput.value, 10);

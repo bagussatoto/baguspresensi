@@ -964,18 +964,48 @@
                     </a>
                 </li>
 
-                {{-- 1. DATA (DENGAN 6 SUB-ITEM) --}}
+                {{-- 1. DATA (DENGAN SUB-ITEM & BADGE ANTREAN) --}}
+                @php
+                    $sidebarPendingRegistrations = \Illuminate\Support\Facades\Schema::hasTable('employee_registrations')
+                        ? \App\Models\EmployeeRegistration::where('status', 'pending')->count()
+                        : 0;
+                    $sidebarPendingResets = \Illuminate\Support\Facades\Schema::hasTable('password_reset_requests')
+                        ? \App\Models\PasswordResetRequest::where('status', 'pending')->count()
+                        : 0;
+                    $sidebarSdmPendingCount = $sidebarPendingRegistrations + $sidebarPendingResets;
+                @endphp
                 <li>
                     <a href="{{ route('admin.data') }}" class="nav-link-item {{ request()->routeIs('admin.data') ? 'active' : '' }}" onclick="toggleSubMenu('data-submenu', event)">
                         <span class="nav-item-left">
                             <span>🗄️</span> <span>1. Data Terpadu</span>
                         </span>
-                        <span style="font-size: 11px;">▾</span>
+                        <span style="display: inline-flex; align-items: center; gap: 6px;">
+                            @if($sidebarSdmPendingCount > 0)
+                            <span class="badge-status badge-rose" style="font-size: 10px; padding: 2px 7px;">
+                                {{ $sidebarSdmPendingCount }} Baru
+                            </span>
+                            @endif
+                            <span style="font-size: 11px;">▾</span>
+                        </span>
                     </a>
                     <ul class="nav-sub-list" id="data-submenu" style="{{ request()->routeIs('admin.data') || request()->routeIs('admin.karyawan.verifikasi') || request()->routeIs('admin.karyawan.reset-password') ? 'display: flex;' : 'display: none;' }}">
                         <li><a href="{{ route('admin.data', ['tab' => 'tab-profil']) }}" class="nav-sub-link {{ request('tab') == 'tab-profil' || (!request('tab') && request()->routeIs('admin.data')) ? 'active' : '' }}"><span>👤</span> Profil & Karyawan</a></li>
-                        <li><a href="{{ route('admin.karyawan.verifikasi') }}" class="nav-sub-link {{ request()->routeIs('admin.karyawan.verifikasi') ? 'active' : '' }}"><span>🛡️</span> Verifikasi Pendaftaran Karyawan</a></li>
-                        <li><a href="{{ route('admin.karyawan.reset-password') }}" class="nav-sub-link {{ request()->routeIs('admin.karyawan.reset-password') ? 'active' : '' }}"><span>🔑</span> Otorisasi Reset Password/PIN</a></li>
+                        <li>
+                            <a href="{{ route('admin.karyawan.verifikasi') }}" class="nav-sub-link {{ request()->routeIs('admin.karyawan.verifikasi') ? 'active' : '' }}" style="display: flex; justify-content: space-between; align-items: center;">
+                                <span><span>🛡️</span> Verifikasi Pendaftaran Karyawan</span>
+                                @if($sidebarPendingRegistrations > 0)
+                                <span class="badge-status badge-rose" style="font-size: 9px; padding: 1px 6px;">{{ $sidebarPendingRegistrations }} Baru</span>
+                                @endif
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ route('admin.karyawan.reset-password') }}" class="nav-sub-link {{ request()->routeIs('admin.karyawan.reset-password') ? 'active' : '' }}" style="display: flex; justify-content: space-between; align-items: center;">
+                                <span><span>🔑</span> Otorisasi Reset Password/PIN</span>
+                                @if($sidebarPendingResets > 0)
+                                <span class="badge-status badge-rose" style="font-size: 9px; padding: 1px 6px;">{{ $sidebarPendingResets }} Baru</span>
+                                @endif
+                            </a>
+                        </li>
                         <li><a href="{{ route('admin.data', ['tab' => 'tab-jadwal']) }}" class="nav-sub-link {{ request('tab') == 'tab-jadwal' ? 'active' : '' }}"><span>📅</span> Jadwal Shift Karyawan</a></li>
                         <li><a href="{{ route('admin.data', ['tab' => 'tab-billing']) }}" class="nav-sub-link {{ request('tab') == 'tab-billing' ? 'active' : '' }}"><span>💰</span> Data Billing Setiap Shift</a></li>
                         <li><a href="{{ route('admin.penjualan.penyesuaian-billing') }}" class="nav-sub-link {{ request()->routeIs('admin.penjualan.penyesuaian-billing*') ? 'active' : '' }}"><span>⚡</span> Persetujuan Penyesuaian Billing</a></li>
@@ -986,14 +1016,21 @@
                 </li>
 
                 {{-- 2. PENERIMAAN STOK DISTRIBUSI --}}
+                @php
+                    $sidebarStockTransfersCount = $stockTransfersCount ?? (
+                        \Illuminate\Support\Facades\Schema::hasTable('stock_transfer_dispatches')
+                            ? \Illuminate\Support\Facades\DB::table('stock_transfer_dispatches')->where('status', '!=', 'received')->count()
+                            : 0
+                    );
+                @endphp
                 <li>
                     <a href="{{ route('admin.distribusi') }}" class="nav-link-item {{ request()->routeIs('admin.distribusi') ? 'active' : '' }}">
                         <span class="nav-item-left">
                             <span>🚚</span> <span>2. Penerimaan Distribusi</span>
                         </span>
-                        @if(isset($stockTransfersCount) && $stockTransfersCount > 0)
+                        @if($sidebarStockTransfersCount > 0)
                         <span class="badge-status badge-amber" style="font-size: 10px; padding: 2px 7px;">
-                            {{ $stockTransfersCount }} Baru
+                            {{ $sidebarStockTransfersCount }} Baru
                         </span>
                         @endif
                     </a>

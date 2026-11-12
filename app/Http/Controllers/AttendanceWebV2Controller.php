@@ -1798,6 +1798,31 @@ class AttendanceWebV2Controller extends Controller
 
         $allEmployees = Employee::where('is_active', true)->orderBy('name', 'asc')->get();
 
+        $minCheckoutMinutes = 30;
+        $minutesWorked = ($attendanceToday && $attendanceToday->clock_in_at && ! $attendanceToday->clock_out_at)
+            ? (int) $attendanceToday->clock_in_at->diffInMinutes($now)
+            : 0;
+
+        $hasCompletedHandover = false;
+        if ($attendanceToday && ! $attendanceToday->clock_out_at) {
+            $summaryDate = $attendanceToday->work_date ? $attendanceToday->work_date->toDateString() : $workDate->toDateString();
+            $hasCompletedHandover = ShiftSalesSummary::whereDate('work_date', $summaryDate)
+                ->where(function ($q) use ($employee, $branchId, $attendanceToday) {
+                    $q->where('employee_id', $employee->id);
+                    if ($branchId && $attendanceToday->shift_id) {
+                        $q->orWhere(function ($sq) use ($branchId, $attendanceToday) {
+                            $sq->where('branch_id', $branchId)
+                                ->where('shift_id', $attendanceToday->shift_id);
+                        });
+                    }
+                })
+                ->where(function ($q) {
+                    $q->where('handover_status', 'completed')
+                        ->orWhere('status', 'closed');
+                })
+                ->exists();
+        }
+
         return view('presensi2.scan', [
             'currentEmployee' => $employee,
             'branch' => $branch,
@@ -1810,6 +1835,9 @@ class AttendanceWebV2Controller extends Controller
             'allEmployees' => $allEmployees,
             'arrivalValidation' => $arrivalValidation,
             'shifts' => $shifts,
+            'minCheckoutMinutes' => $minCheckoutMinutes,
+            'minutesWorked' => $minutesWorked,
+            'hasCompletedHandover' => $hasCompletedHandover,
         ]);
     }
 
@@ -1922,6 +1950,53 @@ class AttendanceWebV2Controller extends Controller
         $branchId = (int) ($branch->id ?? 1);
         $lat = (float) ($branch->latitude ?? -6.1585);
         $lng = (float) ($branch->longitude ?? 106.9080);
+
+        $openAttendance = AttendanceRecord::where('employee_id', $employee->id)
+            ->whereNull('clock_out_at')
+            ->latest('id')
+            ->first();
+
+        if ($openAttendance && $openAttendance->clock_in_at) {
+            $minutesSinceClockIn = (int) $openAttendance->clock_in_at->diffInMinutes(Carbon::now());
+            if ($minutesSinceClockIn < 30) {
+                $remaining = 30 - $minutesSinceClockIn;
+
+                return response()->json([
+                    'success' => false,
+                    'message' => "Belum bisa Check-Out! Minimal durasi kerja adalah 30 menit setelah Check-In (sisa {$remaining} menit lagi).",
+                ], 422);
+            }
+
+            if ($request->boolean('enforce_handover')) {
+                $summaryDate = $openAttendance->work_date
+                    ? $openAttendance->work_date->toDateString()
+                    : Carbon::now()->toDateString();
+
+                $hasCompletedHandover = ShiftSalesSummary::whereDate('work_date', $summaryDate)
+                    ->where(function ($q) use ($employee, $branchId, $openAttendance) {
+                        $q->where('employee_id', $employee->id);
+                        if ($branchId && $openAttendance->shift_id) {
+                            $q->orWhere(function ($sq) use ($branchId, $openAttendance) {
+                                $sq->where('branch_id', $branchId)
+                                    ->where('shift_id', $openAttendance->shift_id);
+                            });
+                        }
+                    })
+                    ->where(function ($q) {
+                        $q->where('handover_status', 'completed')
+                            ->orWhere('status', 'closed');
+                    })
+                    ->exists();
+
+                if (! $hasCompletedHandover) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Belum bisa Check-Out! Anda wajib menyelesaikan Rekap & Serah Terima Shift terlebih dahulu.',
+                        'redirect_url' => route('presensi2.rekap'),
+                    ], 422);
+                }
+            }
+        }
 
         $manualDurationMinutes = $request->filled('duration_hours')
             ? (int) round(((float) $request->input('duration_hours')) * 60)

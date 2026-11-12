@@ -327,7 +327,6 @@
                     <div class="form-group">
                         <label class="form-label" for="employee_name">Nama Kasir Bertugas *</label>
                         <input type="text" name="employee_name" id="employee_name" class="form-input"
-                               list="cashier-datalist"
                                placeholder="Ketik nama lengkap atau NIK kasir..."
                                value="{{ old('employee_name') }}"
                                required autofocus autocomplete="username">

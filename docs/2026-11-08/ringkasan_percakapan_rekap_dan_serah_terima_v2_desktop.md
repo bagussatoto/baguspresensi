@@ -135,3 +135,4 @@ Pada sesi pengembangan ini, pengguna menyampaikan beberapa evaluasi dan kebutuha
 1. **Uji Coba Lapangan Kasir**: Kasir menguji pengisian serah terima shift menggunakan tampilan v2 pada saat pergantian shift sore dan malam.
 2. **Sinkronisasi Setoran Bank**: Memastikan alur klik tombol `Setor` pada tabel Siap Setor langsung memindahkan baris data ke tabel History Setor secara realtime.
 3. **Penyempurnaan Lanjutan**: Menyesuaikan kebutuhan tambahan dari supervisor/owner jika ada kolom ekstra yang diperlukan pada laporan cetak harian.
+

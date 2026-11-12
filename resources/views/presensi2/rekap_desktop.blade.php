@@ -867,20 +867,6 @@
                     <a href="{{ route('presensi2.serah-terima.desktop', array_filter(['date' => request('date'), 'shift' => request('shift'), 'summary_id' => $salesSummary?->id])) }}" class="btn-block-action blue">
                         <span>🤝</span> Lanjut ke Serah Terima Kas Shift ➔
                     </a>
-
-                    <button type="button" onclick="triggerPrintTable()" class="btn-block-action secondary">
-                        <span>🖨️</span> Cetak Struk Laporan Summary Kasir
-                    </button>
-
-                    <button type="button" onclick="triggerPrintHardware()" class="btn-block-action secondary">
-                        <span>🖨️</span> Cetak Struk Hardware Printer
-                    </button>
-
-                    @if($attendanceToday && !$attendanceToday->clock_out_at)
-                        <button type="button" onclick="submitRekapCheckOut()" id="btn-clock-out-rekap" class="btn-block-action red" style="margin-top: 10px;">
-                            <span>⏱️</span> Selesai Shift & Check-Out Pulang Presensi
-                        </button>
-                    @endif
                 </div>
             </div>
 
