@@ -60,8 +60,14 @@ Berikut adalah daftar pekerjaan prioritas yang dapat kita eksekusi hari ini:
   - Menyatukan folder dokumentasi November (`2026-11-03` s/d `2026-11-14`) ke dalam `docs/2026-11/` setelah izin kepemilikan folder (`chown`) diperbaiki.
 
 ### 🟢 Prioritas Pengujian (Quality Assurance)
-- [ ] **Tugas 6 — Automated Feature Test Siklus Estafet Multi-Shift**:
-  - Membuat pengujian otomatis PHPUnit untuk skenario: *Shift 1 Tutup & Serah Terima ➔ Shift 2 Masuk & Transaksi (Tidak Terkunci oleh Shift 1) ➔ Admin Approve Penyesuaian Billing Rp 0 ➔ Admin Buka Kunci Shift*.
+- [x] **Tugas 6 — Automated Feature Test Siklus Estafet Multi-Shift**:
+  - Pengujian otomatis PHPUnit menyeluruh (43 assertions green) di [ShiftEstafetMultiShiftLifecycleTest.php](file:///var/www/laravel_apps/bagus/tests/Feature/ShiftEstafetMultiShiftLifecycleTest.php) mencakup 6 langkah skenario end-to-end:
+    1. *Shift 1 Presensi & Transaksi Kas POS/FnB*.
+    2. *Shift 1 Closing, Blind Cash Count, dan Serah Terima*.
+    3. *Shift 2 Masuk & Transaksi Independen (terbukti TIDAK terkunci oleh closing Shift 1)*.
+    4. *Shift 2 Closing & Penggabungan Batch Setoran Bersama Shift 1 (`deposit_batch_id`)*.
+    5. *Admin Pusat Verifikasi Penerimaan Setoran Kas Cabang & Terbit Jurnal GL Otomatis*.
+    6. *Admin Otorisasi Penyesuaian Billing & Proteksi Buka Kunci Shift (24 Jam & Bank Deposit Guard)*.
 
 ---
 
