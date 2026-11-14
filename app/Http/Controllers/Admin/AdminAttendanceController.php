@@ -586,11 +586,15 @@ class AdminAttendanceController extends Controller
         $mandatoryNote = (bool) app(AttendanceSettingService::class)
             ->get('attendance.approval.rejection_note_mandatory', true);
 
-        if ($mandatoryNote && empty(trim((string) $request->input('rejection_note', '')))) {
-            return redirect()->back()->withErrors(['rejection_note' => 'Alasan / catatan penolakan wajib diisi.']);
+        if ($request->isMethod('post') && $mandatoryNote && empty(trim((string) $request->input('rejection_note', '')))) {
+            return redirect()->route('admin.presensi.approval')->withErrors(['rejection_note' => 'Alasan / catatan penolakan wajib diisi.']);
         }
 
         $note = $request->input('rejection_note', 'Tidak memenuhi kualifikasi atau kebutuhan operasional mendesak.');
+        if (empty(trim((string) $note))) {
+            $note = 'Tidak memenuhi kualifikasi atau kebutuhan operasional mendesak.';
+        }
+
         $approverId = $this->resolveApproverEmployeeId($request);
 
         $leave->update([
@@ -600,7 +604,7 @@ class AdminAttendanceController extends Controller
             'approved_by' => $approverId,
         ]);
 
-        return redirect()->route('admin.presensi.approval')->with('success', 'Permohonan cuti #'.$leave->id.' telah ditolak.');
+        return redirect()->route('admin.presensi.approval')->with('success', 'Permohonan cuti #'.$leave->id.' ('.($leave->employee->name ?? 'Karyawan').') telah ditolak.');
     }
 
     /**

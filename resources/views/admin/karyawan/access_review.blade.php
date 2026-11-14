@@ -351,7 +351,7 @@
 function openDeprovisionModal(id, name, code) {
     document.getElementById('deprovisionEmpName').innerText = name;
     document.getElementById('deprovisionEmpCode').innerText = code;
-    document.getElementById('deprovisionForm').action = "/admin/karyawan/" + id + "/toggle-status";
+    document.getElementById('deprovisionForm').action = "{{ url('admin/karyawan') }}/" + id + "/toggle-status";
     const modal = document.getElementById('deprovisionModal');
     modal.style.display = 'flex';
 }

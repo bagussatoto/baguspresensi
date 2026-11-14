@@ -1051,7 +1051,7 @@
 
         function openRejectSwapModal(swapId, empName) {
             document.getElementById('rejectSwapEmpName').textContent = empName;
-            document.getElementById('rejectSwapForm').action = '/admin/presensi/swap/' + swapId + '/reject';
+            document.getElementById('rejectSwapForm').action = "{{ url('admin/presensi/swap') }}/" + swapId + '/reject';
             document.getElementById('swapRejectionNote').value = '';
             document.getElementById('rejectSwapModal').classList.add('show');
         }
@@ -1063,7 +1063,7 @@
 
         function openRejectLeaveModal(leaveId, empName) {
             document.getElementById('rejectLeaveEmpName').textContent = empName;
-            document.getElementById('rejectLeaveForm').action = '/admin/presensi/leave/' + leaveId + '/reject';
+            document.getElementById('rejectLeaveForm').action = "{{ url('admin/presensi/leave') }}/" + leaveId + '/reject';
             document.getElementById('leaveRejectionNote').value = '';
             document.getElementById('rejectLeaveModal').classList.add('show');
         }
@@ -1071,20 +1071,20 @@
         function openApproveOvertimeModal(otId, empName, requestedMinutes) {
             document.getElementById('approveOvertimeEmpName').textContent = empName;
             document.getElementById('approvedMinutesInput').value = requestedMinutes;
-            document.getElementById('approveOvertimeForm').action = '/admin/presensi/overtime/' + otId + '/approve';
+            document.getElementById('approveOvertimeForm').action = "{{ url('admin/presensi/overtime') }}/" + otId + '/approve';
             document.getElementById('approveOvertimeModal').classList.add('show');
         }
 
         function openRejectOvertimeModal(otId, empName) {
             document.getElementById('rejectOvertimeEmpName').textContent = empName;
-            document.getElementById('rejectOvertimeForm').action = '/admin/presensi/overtime/' + otId + '/reject';
+            document.getElementById('rejectOvertimeForm').action = "{{ url('admin/presensi/overtime') }}/" + otId + '/reject';
             document.getElementById('overtimeRejectionNote').value = '';
             document.getElementById('rejectOvertimeModal').classList.add('show');
         }
 
         function openRejectCorrectionModal(corrId, empName) {
             document.getElementById('rejectCorrectionEmpName').textContent = empName;
-            document.getElementById('rejectCorrectionForm').action = '/admin/presensi/correction/' + corrId + '/reject';
+            document.getElementById('rejectCorrectionForm').action = "{{ url('admin/presensi/correction') }}/" + corrId + '/reject';
             document.getElementById('correctionRejectionNote').value = '';
             document.getElementById('rejectCorrectionModal').classList.add('show');
         }

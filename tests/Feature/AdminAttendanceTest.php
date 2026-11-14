@@ -170,9 +170,28 @@ class AdminAttendanceTest extends TestCase
             'rejection_note' => 'Jadwal shift sedang padat, silakan reschedule.',
         ]);
 
-        $response->assertRedirect();
+        $response->assertRedirect(route('admin.presensi.approval'));
         $this->assertEquals(ApprovalStatus::Rejected, $leave->fresh()->status);
         $this->assertEquals('Jadwal shift sedang padat, silakan reschedule.', $leave->fresh()->rejection_note);
+    }
+
+    public function test_admin_can_reject_leave_request_via_get(): void
+    {
+        $leave = LeaveRequest::create([
+            'employee_id' => $this->employee->id,
+            'leave_type' => LeaveType::Annual,
+            'start_date' => Carbon::today()->addDays(1),
+            'end_date' => Carbon::today()->addDays(2),
+            'total_days' => 2,
+            'reason' => 'Liburan',
+            'status' => ApprovalStatus::Pending,
+        ]);
+
+        $response = $this->get(route('admin.presensi.leave.reject', $leave->id));
+
+        $response->assertRedirect(route('admin.presensi.approval'));
+        $this->assertEquals(ApprovalStatus::Rejected, $leave->fresh()->status);
+        $this->assertNotNull($leave->fresh()->rejection_note);
     }
 
     public function test_admin_can_approve_overtime_claim(): void

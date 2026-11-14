@@ -639,7 +639,7 @@
     function openSettleModal(consignment) {
         document.getElementById('settleNumber').innerText = consignment.consignment_number;
         document.getElementById('settlePartner').innerText = consignment.partner_name + ' (' + (consignment.type === 'inward' ? 'Titipan Supplier' : 'Titip ke Mitra') + ')';
-        document.getElementById('settleForm').action = '/admin/cabang/consignments/' + consignment.id + '/settle';
+        document.getElementById('settleForm').action = "{{ url('admin/cabang/consignments') }}/" + consignment.id + '/settle';
 
         const container = document.getElementById('settleItemsContainer');
         container.innerHTML = '';
