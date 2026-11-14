@@ -610,7 +610,10 @@
             <table class="v2-table">
                 <thead>
                     <tr>
-                        <th style="width: 45px; text-align: center;">No</th>
+                        <th style="width: 40px; text-align: center;">
+                            <input type="checkbox" id="check-all-siap-setor" onchange="toggleSelectAllSiapSetor(this)" title="Pilih Semua Shift Siap Setor">
+                        </th>
+                        <th style="width: 40px; text-align: center;">No</th>
                         <th>Tanggal</th>
                         <th style="text-align: center;">shif</th>
                         <th>Invoice</th>
@@ -627,6 +630,9 @@
                             $rtdNilai = (float) $rtd->handoverAmount();
                         @endphp
                         <tr>
+                            <td style="text-align: center;">
+                                <input type="checkbox" class="cb-shift-setor" value="{{ $rtd->id }}" data-amount="{{ $rtdNilai }}" onchange="recalculateSelectedDeposit()" checked>
+                            </td>
                             <td style="text-align: center; color: #64748b; font-weight: 700;">{{ $idx + 1 }}</td>
                             <td style="font-family: 'JetBrains Mono', monospace;">
                                 {{ $rtd->handover_at ? $rtd->handover_at->format('Y-m-d H:i:s') : ($rtd->work_date?->format('Y-m-d H:i:s') ?? date('Y-m-d H:i:s')) }}
@@ -655,7 +661,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="9" class="v2-table-empty">
+                            <td colspan="10" class="v2-table-empty">
                                 Tidak ada antrean dana siap setor saat ini.
                             </td>
                         </tr>
@@ -664,15 +670,17 @@
                     {{-- TOTAL ROW EXACTLY AS IN REFERENCE --}}
                     @if($readyToDepositSummaries->isNotEmpty())
                         <tr class="v2-table-summary-row">
-                            <td colspan="7" style="text-align: center; font-size: 13px; font-weight: 800; padding: 12px 14px;">
-                                Total Nilai Rekap
+                            <td colspan="8" style="text-align: center; font-size: 13px; font-weight: 800; padding: 12px 14px;">
+                                Total Nilai Rekap (<span id="selected-shift-count">{{ $readyToDepositSummaries->count() }}</span> Shift Terpilih)
                             </td>
                             <td style="text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 800; color: #1e293b;">
-                                {{ number_format($totalSiapSetor, 0, ',', '.') }}
+                                <span id="display-total-siap-setor">{{ number_format($totalSiapSetor, 0, ',', '.') }}</span>
                             </td>
                             <td></td>
                         </tr>
                     @endif
+                </tbody>
+            </table>
                 </tbody>
             </table>
 
@@ -731,10 +739,13 @@
                                 {{ strtoupper($hs->branch->name ?? 'MAYA 1') }}
                             </td>
                             {{-- SHIFT BADGES EXACTLY AS IN THE REFERENCE IMAGE --}}
+                            @php
+                                $coveredShifts = $hs->depositShiftsCovered();
+                            @endphp
                             <td style="text-align: center;">
                                 <div class="shift-badges-group">
                                     @for($s = 1; $s <= 4; $s++)
-                                        <span class="badge-shift-sq {{ $hsShiftNum === $s ? 'active' : '' }}">
+                                        <span class="badge-shift-sq {{ in_array($s, $coveredShifts, true) ? 'active' : '' }}">
                                             {{ $s }}
                                         </span>
                                     @endfor
@@ -829,10 +840,21 @@
                 <span>🏦 Form Setoran Kas ke Bank / Kolektor</span>
                 <button type="button" onclick="closeModalSetorKas()" style="background: transparent; border: none; color: #fff; font-size: 18px; cursor: pointer;">✕</button>
             </div>
-            <form action="{{ route('presensi2.serah-terima.store') }}" method="POST" style="padding: 16px 20px;">
+            <form action="{{ route('presensi2.serah-terima.store') }}" method="POST" enctype="multipart/form-data" style="padding: 16px 20px;" id="form-setor-kas">
                 @csrf
                 <input type="hidden" name="action_type" value="setor">
+                <input type="hidden" name="source" value="v2">
                 <input type="hidden" name="summary_id" id="modal-setor-summary-id" value="{{ $readyToDepositSummaries->first()?->id }}">
+                <div id="modal-setor-batch-ids-container"></div>
+
+                <div class="form-group" style="background: #fef3c7; border: 1px solid #fde68a; border-radius: 6px; padding: 10px 14px; margin-bottom: 14px;">
+                    <div style="font-size: 11.5px; font-weight: 700; color: #92400e;">
+                        📦 Shift Terpilih Siap Setor: <span id="modal-setor-shift-badge-text">{{ $readyToDepositSummaries->count() }} Shift</span>
+                    </div>
+                    <div style="font-size: 11px; color: #b45309; margin-top: 2px;">
+                        Seluruh shift yang dicentang akan otomatis digabung ke dalam 1 nomor bukti setoran dan dipindahkan ke tabel History Setor.
+                    </div>
+                </div>
 
                 <div class="form-group">
                     <label class="form-label">Metode Setoran Kas *</label>
@@ -856,6 +878,11 @@
                 <div class="form-group">
                     <label class="form-label">Catatan / Bukti Referensi</label>
                     <input type="text" name="deposit_notes" class="form-control" placeholder="No referensi transfer atau catatan...">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Foto Bukti Transfer / Kwitansi Setor (Opsional)</label>
+                    <input type="file" name="deposit_proof" accept="image/*" class="form-control">
                 </div>
 
                 <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px;">
@@ -888,8 +915,62 @@
             document.getElementById('modal-handover-baru').classList.remove('active');
         }
 
+        // SELEKSI SHIFT SIAP SETOR & REKALKULASI NOMINAL
+        function toggleSelectAllSiapSetor(master) {
+            const checkboxes = document.querySelectorAll('.cb-shift-setor');
+            checkboxes.forEach(cb => cb.checked = master.checked);
+            recalculateSelectedDeposit();
+        }
+
+        function recalculateSelectedDeposit() {
+            const checkboxes = document.querySelectorAll('.cb-shift-setor:checked');
+            let total = 0;
+            const selectedIds = [];
+            checkboxes.forEach(cb => {
+                total += parseFloat(cb.getAttribute('data-amount') || 0);
+                selectedIds.push(cb.value);
+            });
+
+            const countEl = document.getElementById('selected-shift-count');
+            if (countEl) countEl.innerText = checkboxes.length;
+
+            const displayTotal = document.getElementById('display-total-siap-setor');
+            if (displayTotal) {
+                displayTotal.innerText = new Intl.NumberFormat('id-ID').format(total);
+            }
+
+            const inputAmount = document.getElementById('modal-setor-amount');
+            if (inputAmount) inputAmount.value = Math.round(total);
+
+            const badgeText = document.getElementById('modal-setor-shift-badge-text');
+            if (badgeText) badgeText.innerText = `${checkboxes.length} Shift Terpilih`;
+
+            const batchContainer = document.getElementById('modal-setor-batch-ids-container');
+            if (batchContainer) {
+                batchContainer.innerHTML = '';
+                selectedIds.forEach(id => {
+                    const hidden = document.createElement('input');
+                    hidden.type = 'hidden';
+                    hidden.name = 'summary_ids[]';
+                    hidden.value = id;
+                    batchContainer.appendChild(hidden);
+                });
+            }
+
+            if (selectedIds.length > 0) {
+                const mainSummaryInput = document.getElementById('modal-setor-summary-id');
+                if (mainSummaryInput) mainSummaryInput.value = selectedIds[0];
+            }
+        }
+
         // MODAL SETOR
         function openModalSetorSemua() {
+            recalculateSelectedDeposit();
+            const checkboxes = document.querySelectorAll('.cb-shift-setor:checked');
+            if (checkboxes.length === 0) {
+                alert('Pilih minimal 1 shift pada tabel Siap Setor yang ingin disetorkan!');
+                return;
+            }
             document.getElementById('modal-setor-kas').classList.add('active');
         }
         function closeModalSetorKas() {

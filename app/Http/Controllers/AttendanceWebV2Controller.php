@@ -6629,7 +6629,11 @@ BAT;
         // 3. Riwayat / Histori Setoran yang SUDAH DISETOR ke Bank / Kolektor (Section 3: History Setor)
         $historyDepositSummaries = ShiftSalesSummary::with(['employee', 'shift', 'branch'])
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-            ->where('deposit_status', 'verified')
+            ->where(function ($q) {
+                $q->where('deposit_status', 'verified')
+                    ->orWhere('deposit_status', 'submitted');
+            })
+            ->where('deposit_method', '!=', 'next_shift_handover')
             ->orderByDesc('deposited_at')
             ->orderByDesc('id')
             ->take(15)
@@ -6638,6 +6642,7 @@ BAT;
         if ($historyDepositSummaries->isEmpty()) {
             $historyDepositSummaries = ShiftSalesSummary::with(['employee', 'shift', 'branch'])
                 ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+                ->where('deposit_status', 'verified')
                 ->orderByDesc('work_date')
                 ->orderByDesc('id')
                 ->take(10)
@@ -6865,6 +6870,8 @@ BAT;
 
         $validated = $request->validate([
             'summary_id' => 'nullable|integer',
+            'summary_ids' => 'nullable|array',
+            'summary_ids.*' => 'integer',
             'deposited_amount' => 'nullable|numeric|min:0',
             'handover_amount' => 'nullable|numeric|min:0',
             'retained_drawer_cash' => 'nullable|numeric|min:0',
@@ -7002,8 +7009,44 @@ BAT;
 
         if ($isSetorAction) {
             // Setor Kas ke Bank, Kolektor, atau Brankas
+            // Jika ada beberapa shift yang disetor bersamaan dalam 1 batch
+            $batchId = 'DEP-'.date('YmdHis').'-'.($branchId ?: 1);
+            $receiptNo = sprintf('%03d-%02d-%04d', (($branchId ?: 1) * 220) + 8, (int) date('d'), 2900 + (int) $summary->id);
+
+            $summaryIdsToDeposit = [];
+            if (! empty($validated['summary_ids']) && is_array($validated['summary_ids'])) {
+                $summaryIdsToDeposit = array_filter(array_map('intval', $validated['summary_ids']));
+            }
+            if (! in_array($summary->id, $summaryIdsToDeposit, true)) {
+                $summaryIdsToDeposit[] = $summary->id;
+            }
+
+            // Periksa apakah jumlah total disetor dialokasikan atau disimpan ke summary utama
+            $otherSummaries = ShiftSalesSummary::whereIn('id', $summaryIdsToDeposit)
+                ->where('id', '!=', $summary->id)
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+                ->get();
+
+            foreach ($otherSummaries as $otherSum) {
+                $otherSumAmount = (float) $otherSum->handoverAmount();
+                $otherSum->update([
+                    'deposit_status' => 'verified',
+                    'deposit_receipt_no' => $receiptNo,
+                    'deposit_batch_id' => $batchId,
+                    'deposited_amount' => $otherSumAmount,
+                    'deposit_method' => $method ?: 'bank_transfer',
+                    'deposit_recipient' => $recipient,
+                    'deposit_notes' => $depositNotes." (Batch Setor: {$receiptNo})",
+                    'deposited_at' => $now,
+                    'deposit_verified_at' => $now,
+                    'deposit_verified_by' => $recipient,
+                ]);
+            }
+
             $summary->update([
                 'deposit_status' => 'verified',
+                'deposit_receipt_no' => $receiptNo,
+                'deposit_batch_id' => $batchId,
                 'deposited_amount' => $depositedAmount,
                 'deposit_method' => $method ?: 'bank_transfer',
                 'deposit_recipient' => $recipient,
@@ -7025,8 +7068,11 @@ BAT;
                     'retained_drawer_cash' => $retainedCash,
                     'deposit_method' => $method,
                     'deposit_recipient' => $recipient,
+                    'deposit_receipt_no' => $receiptNo,
+                    'deposit_batch_id' => $batchId,
                     'deposit_status' => 'verified',
                     'deposit_proof' => $proofPath,
+                    'summary_ids_included' => $summaryIdsToDeposit,
                 ],
                 'ip_address' => $request->ip() ?? '127.0.0.1',
                 'user_agent' => $request->userAgent() ?? 'Portal Presensi v2',
@@ -7035,7 +7081,9 @@ BAT;
 
             rescue(fn () => app(EarlyWarningNotificationService::class)->sendShiftDepositAlert($summary));
 
-            $message = 'Setoran kas shift sebesar Rp '.number_format($depositedAmount, 0, ',', '.')." berhasil disimpan ke {$recipient}!";
+            $countShifts = count($summaryIdsToDeposit);
+            $shiftSuffix = $countShifts > 1 ? " ({$countShifts} Shift Digabung)" : '';
+            $message = 'Setoran kas shift sebesar Rp '.number_format($depositedAmount, 0, ',', '.')."{$shiftSuffix} berhasil disimpan ke {$recipient}! No Bukti: {$receiptNo}";
         } else {
             // Serah terima ke shift selanjutnya (langsung ke serah terima, jangan langsung ke setor)
             rescue(fn () => AuditLog::create([
@@ -7077,8 +7125,16 @@ BAT;
             }
         }
 
+        $isV2 = $request->input('source') === 'v2' || $request->input('view') === 'v2' || $request->is('*v2*');
         $isDesktop = $request->input('source') === 'desktop' || $request->input('view') === 'desktop' || $request->is('*desktop*');
-        $redirectRoute = $isDesktop ? 'presensi2.serah-terima.desktop' : 'presensi2.serah-terima';
+
+        if ($isV2) {
+            $redirectRoute = 'presensi2.serah-terima.v2.desktop';
+        } elseif ($isDesktop) {
+            $redirectRoute = 'presensi2.serah-terima.desktop';
+        } else {
+            $redirectRoute = 'presensi2.serah-terima';
+        }
 
         if ($request->wantsJson()) {
             return response()->json([

@@ -78,6 +78,8 @@ class ShiftSalesSummary extends Model
         'print_adjustment_rejection_reason',
         'status',
         'deposit_status',
+        'deposit_receipt_no',
+        'deposit_batch_id',
         'deposited_amount',
         'retained_drawer_cash',
         'deposit_method',
@@ -352,10 +354,42 @@ class ShiftSalesSummary extends Model
 
     public function depositReceiptNumber(): string
     {
+        if (! empty($this->deposit_receipt_no)) {
+            return $this->deposit_receipt_no;
+        }
+
         $idPart = (int) ($this->id ?? 1);
         $branchPart = (int) ($this->branch_id ?? 1);
 
         return sprintf('%03d-%02d-%04d', ($branchPart * 220) + 8, 49, 2900 + $idPart);
+    }
+
+    /**
+     * Mengembalikan daftar nomor shift (1..4) yang tercakup dalam setoran ini.
+     *
+     * @return array<int>
+     */
+    public function depositShiftsCovered(): array
+    {
+        $shifts = [(int) $this->shiftNumber()];
+
+        if (! empty($this->deposit_batch_id)) {
+            $batchShifts = static::where('deposit_batch_id', $this->deposit_batch_id)
+                ->pluck('shift_id')
+                ->filter()
+                ->map(fn ($s) => max(1, min(4, (int) $s)))
+                ->unique()
+                ->values()
+                ->all();
+
+            if (! empty($batchShifts)) {
+                $shifts = $batchShifts;
+            }
+        }
+
+        sort($shifts);
+
+        return $shifts;
     }
 
     public function rekapNumber(): string

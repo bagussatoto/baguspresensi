@@ -1603,7 +1603,7 @@ class ShiftStockAndSalesFlowTest extends TestCase
         $this->clockInStaff();
 
         $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
-            ->get(route('presensi2.serah-terima.desktop'));
+            ->get(route('presensi2.serah-terima.desktop', ['demo' => 1]));
 
         $response->assertStatus(200);
         $response->assertSee('MODE SIMULASI POS');
@@ -1677,5 +1677,91 @@ class ShiftStockAndSalesFlowTest extends TestCase
             'qty' => 1,
             'unit_price' => 12000,
         ]);
+    }
+
+    public function test_serah_terima_v2_desktop_deposit_action_moves_shifts_to_history_with_batch_and_receipt(): void
+    {
+        $this->clockInStaff();
+
+        $shift1 = Shift::firstOrCreate(
+            ['code' => 'SHIFT-1'],
+            ['name' => 'Shift 1 Pagi', 'start_time' => '07:00', 'end_time' => '15:00', 'is_active' => true]
+        );
+        $shift2 = Shift::firstOrCreate(
+            ['code' => 'SHIFT-2'],
+            ['name' => 'Shift 2 Sore', 'start_time' => '15:00', 'end_time' => '22:00', 'is_active' => true]
+        );
+
+        $summary1 = ShiftSalesSummary::create([
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $shift1->id,
+            'work_date' => now()->toDateString(),
+            'total_revenue' => 150000,
+            'cash_in_drawer' => 150000,
+            'handover_amount' => 150000,
+            'handover_status' => 'completed',
+            'deposit_status' => 'unsubmitted',
+            'status' => 'closed',
+        ]);
+
+        $summary2 = ShiftSalesSummary::create([
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $shift2->id,
+            'work_date' => now()->toDateString(),
+            'total_revenue' => 200000,
+            'cash_in_drawer' => 200000,
+            'handover_amount' => 200000,
+            'handover_status' => 'completed',
+            'deposit_status' => 'unsubmitted',
+            'status' => 'closed',
+        ]);
+
+        // 1. Kunjungi halaman Serah Terima v2 Desktop
+        $pageResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.serah-terima.v2.desktop'));
+
+        $pageResponse->assertStatus(200);
+        $pageResponse->assertSee('Siap setor');
+        $pageResponse->assertSee('History setor');
+        $pageResponse->assertSee('check-all-siap-setor');
+
+        // 2. Eksekusi Setor kas untuk 2 shift sekaligus (Batch Setor)
+        $postResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->post(route('presensi2.serah-terima.store'), [
+                'action_type' => 'setor',
+                'source' => 'v2',
+                'summary_id' => $summary1->id,
+                'summary_ids' => [$summary1->id, $summary2->id],
+                'deposit_method' => 'bank_transfer',
+                'deposited_amount' => 350000,
+                'deposit_recipient' => 'BCA MayaNet Pusat',
+                'deposit_notes' => 'Setoran Shift 1 & Shift 2 ke Rekening BCA Pusat',
+            ]);
+
+        $postResponse->assertRedirect(route('presensi2.serah-terima.v2.desktop', ['summary_id' => $summary1->id]));
+
+        $summary1->refresh();
+        $summary2->refresh();
+
+        $this->assertEquals('verified', $summary1->deposit_status);
+        $this->assertEquals('verified', $summary2->deposit_status);
+        $this->assertNotEmpty($summary1->deposit_receipt_no);
+        $this->assertEquals($summary1->deposit_receipt_no, $summary2->deposit_receipt_no);
+        $this->assertNotEmpty($summary1->deposit_batch_id);
+        $this->assertEquals($summary1->deposit_batch_id, $summary2->deposit_batch_id);
+
+        // Periksa daftar shift yang tercakup (Shift 1 dan Shift 2)
+        $covered = $summary1->depositShiftsCovered();
+        $this->assertContains(1, $covered);
+        $this->assertContains(2, $covered);
+
+        // 3. Muat ulang halaman Serah Terima v2, pastikan sudah muncul di History Setor
+        $afterResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.serah-terima.v2.desktop'));
+
+        $afterResponse->assertStatus(200);
+        $afterResponse->assertSee($summary1->deposit_receipt_no);
     }
 }
