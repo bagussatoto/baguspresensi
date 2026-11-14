@@ -106,6 +106,17 @@ class AdminApprovalAndAliasesTest extends TestCase
             '/bagus/admin/karyawan/reset-password',
             '/admin/karyawan/verifikasi',
             '/admin/karyawan/reset-password',
+            '/bagus/admin/stok-limit',
+            '/bagus/admin/cabang/opname',
+            '/bagus/admin/cabang',
+            '/bagus/admin/cabang/produk',
+            '/bagus/admin/cabang/zonasi-harga',
+            '/bagus/admin/cabang/konsolidasi',
+            '/bagus/admin/cabang/aging',
+            '/bagus/admin/merk',
+            '/bagus/admin/konsumen',
+            '/bagus/admin/jadwal',
+            '/bagus/admin/presensi/audit-logs',
         ];
 
         foreach ($subroutes as $url) {

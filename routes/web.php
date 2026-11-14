@@ -265,10 +265,80 @@ Route::middleware(['web', 'auditor.readonly'])->group(function () {
     Route::get('/bagus/admin/akuntansi/neraca', [AdminAccountingController::class, 'neracaIndex']);
     Route::get('/bagus/admin/akuntansi/pivot', [AdminAccountingController::class, 'pivotIndex']);
     Route::get('/bagus/admin/coa', [AdminChartOfAccountController::class, 'index']);
+
+    // Alias URL Stok & Stok Opname
+    Route::get('/bagus/admin/stok-limit', [AdminStockController::class, 'index']);
+    Route::put('/bagus/admin/stok-limit/{stock}', [AdminStockController::class, 'update']);
+    Route::get('/bagus/admin/cabang/opname', [AdminStockOpnameController::class, 'index']);
+    Route::post('/bagus/admin/cabang/opname', [AdminStockOpnameController::class, 'store']);
+    Route::get('/bagus/admin/cabang/opname/{stockOpname}', [AdminStockOpnameController::class, 'show']);
+    Route::match(['post', 'put'], '/bagus/admin/cabang/opname/{stockOpname}/counts', [AdminStockOpnameController::class, 'updateCounts']);
+    Route::post('/bagus/admin/cabang/opname/{stockOpname}/adjust', [AdminStockOpnameController::class, 'adjust']);
+    Route::get('/bagus/admin/cabang/opname/{stockOpname}/export', [AdminStockOpnameController::class, 'exportCsv']);
+
+    // Alias URL Master Data & Jaringan Distribusi
+    Route::get('/bagus/admin/cabang', [AdminBranchMdmController::class, 'index']);
+    Route::post('/bagus/admin/cabang', [AdminBranchMdmController::class, 'store']);
+    Route::put('/bagus/admin/cabang/{branch}', [AdminBranchMdmController::class, 'update']);
+    Route::delete('/bagus/admin/cabang/{branch}', [AdminBranchMdmController::class, 'destroy']);
+    Route::get('/bagus/admin/cabang/produk', [AdminBranchMdmController::class, 'productsIndex']);
+    Route::put('/bagus/admin/cabang/produk/{branchProduct}', [AdminBranchMdmController::class, 'productUpdate']);
+    Route::post('/bagus/admin/cabang/{branch}/sync-produk', [AdminBranchMdmController::class, 'syncNationalProducts']);
+    Route::get('/bagus/admin/cabang/zonasi-harga', [AdminBranchMdmController::class, 'pricingsIndex']);
+    Route::post('/bagus/admin/cabang/zonasi-harga', [AdminBranchMdmController::class, 'pricingStore']);
+    Route::get('/bagus/admin/cabang/konsolidasi', [AdminBranchMdmController::class, 'konsolidasi']);
+    Route::get('/bagus/admin/cabang/aging', [AdminAgingReceivableController::class, 'index']);
+    Route::get('/bagus/admin/cabang/aging/export-ar', [AdminAgingReceivableController::class, 'exportAgingCsv']);
+    Route::post('/bagus/admin/cabang/aging/whatsapp-reminder', [AdminAgingReceivableController::class, 'sendWhatsAppReminder']);
+    Route::post('/bagus/admin/cabang/consignments', [AdminAgingReceivableController::class, 'storeConsignment']);
+    Route::post('/bagus/admin/cabang/consignments/{consignment}/settle', [AdminAgingReceivableController::class, 'settleConsignment']);
+    Route::get('/bagus/admin/cabang/consignments/export', [AdminAgingReceivableController::class, 'exportConsignmentCsv']);
+
     Route::get('/bagus/admin/produk', [AdminProductController::class, 'index']);
+    Route::post('/bagus/admin/produk', [AdminProductController::class, 'store']);
+    Route::put('/bagus/admin/produk/{product}', [AdminProductController::class, 'update']);
+    Route::post('/bagus/admin/produk/{product}/toggle-status', [AdminProductController::class, 'toggleStatus']);
+    Route::delete('/bagus/admin/produk/{product}', [AdminProductController::class, 'destroy']);
+
     Route::get('/bagus/admin/supplier', [AdminSupplierController::class, 'index']);
+    Route::post('/bagus/admin/supplier', [AdminSupplierController::class, 'store']);
+    Route::put('/bagus/admin/supplier/{supplier}', [AdminSupplierController::class, 'update']);
+    Route::post('/bagus/admin/supplier/{supplier}/toggle-status', [AdminSupplierController::class, 'toggleStatus']);
+    Route::delete('/bagus/admin/supplier/{supplier}', [AdminSupplierController::class, 'destroy']);
+
     Route::get('/bagus/admin/kategori', [AdminCategoryController::class, 'index']);
+    Route::post('/bagus/admin/kategori', [AdminCategoryController::class, 'store']);
+    Route::put('/bagus/admin/kategori/{category}', [AdminCategoryController::class, 'update']);
+    Route::post('/bagus/admin/kategori/{category}/toggle-status', [AdminCategoryController::class, 'toggleStatus']);
+    Route::delete('/bagus/admin/kategori/{category}', [AdminCategoryController::class, 'destroy']);
+
+    Route::get('/bagus/admin/merk', [AdminBrandController::class, 'index']);
+    Route::post('/bagus/admin/merk', [AdminBrandController::class, 'store']);
+    Route::put('/bagus/admin/merk/{brand}', [AdminBrandController::class, 'update']);
+    Route::post('/bagus/admin/merk/{brand}/toggle-status', [AdminBrandController::class, 'toggleStatus']);
+    Route::delete('/bagus/admin/merk/{brand}', [AdminBrandController::class, 'destroy']);
+
+    Route::get('/bagus/admin/konsumen', [AdminCustomerController::class, 'index']);
+    Route::post('/bagus/admin/konsumen', [AdminCustomerController::class, 'store']);
+    Route::put('/bagus/admin/konsumen/{customer}', [AdminCustomerController::class, 'update']);
+    Route::post('/bagus/admin/konsumen/{customer}/toggle-status', [AdminCustomerController::class, 'toggleStatus']);
+    Route::delete('/bagus/admin/konsumen/{customer}', [AdminCustomerController::class, 'destroy']);
+
     Route::get('/bagus/admin/harga', [AdminPricelistController::class, 'index']);
+    Route::post('/bagus/admin/harga', [AdminPricelistController::class, 'store']);
+    Route::put('/bagus/admin/harga/{pricelist}', [AdminPricelistController::class, 'update']);
+    Route::post('/bagus/admin/harga/{pricelist}/item', [AdminPricelistController::class, 'storeItem']);
+    Route::delete('/bagus/admin/harga/{pricelist}', [AdminPricelistController::class, 'destroy']);
+
+    Route::get('/bagus/admin/jadwal', [AdminScheduleController::class, 'index']);
+    Route::post('/bagus/admin/jadwal', [AdminScheduleController::class, 'store']);
+    Route::post('/bagus/admin/jadwal/upload-static', [AdminScheduleController::class, 'uploadStatic']);
+    Route::post('/bagus/admin/jadwal/{schedule}/set-active', [AdminScheduleController::class, 'setActive']);
+    Route::delete('/bagus/admin/jadwal/{schedule}', [AdminScheduleController::class, 'destroy']);
+
+    Route::get('/bagus/admin/presensi/audit-logs', [AuditLogAdminController::class, 'index']);
+    Route::get('/bagus/admin/karyawan-unlock', [AdminEmployeeController::class, 'unlockIndex']);
+    Route::get('/bagus/admin/karyawan-access-review', [AdminEmployeeController::class, 'accessReviewIndex']);
 });
 
 // Alias URL portal layanan mandiri & permohonan karyawan dengan prefix /bagus/presensi/...
