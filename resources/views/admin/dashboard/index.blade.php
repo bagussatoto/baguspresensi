@@ -21,6 +21,78 @@
     </div>
 </div>
 
+<!-- PUSAT ANTREAN OTORISASI & TINDAKAN CEPAT (JIKA ADA ANTREAN) -->
+@php
+    $totalPendingActions = ($employeeApprovalsTotal ?? 0) + ($pendingShiftDepositsCount ?? 0) + ($billingPendingCount ?? 0);
+@endphp
+@if($totalPendingActions > 0)
+<div style="background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95)); border: 1px solid rgba(244, 63, 94, 0.4); border-radius: 14px; padding: 18px 22px; margin-bottom: 24px; box-shadow: 0 10px 25px rgba(244, 63, 94, 0.12);">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 36px; height: 36px; border-radius: 10px; background: rgba(244, 63, 94, 0.2); color: #fb7185; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                🔔
+            </div>
+            <div>
+                <h3 style="font-size: 15px; font-weight: 700; color: #fff; margin: 0;">Pusat Antrean Otorisasi & Verifikasi Admin</h3>
+                <span style="font-size: 12px; color: var(--text-muted);">Terdapat <strong>{{ $totalPendingActions }} tugas penting</strong> yang memerlukan tindakan dan persetujuan Anda segera:</span>
+            </div>
+        </div>
+        <span class="badge-status badge-rose" style="font-size: 11px; padding: 4px 10px;">
+            ⚠️ {{ $totalPendingActions }} Menunggu Tindakan
+        </span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">
+        @if(($employeeApprovalsTotal ?? 0) > 0)
+        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;">
+            <div>
+                <div style="font-weight: 700; color: #38bdf8; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                    <span>📝</span> Permohonan Karyawan ({{ $employeeApprovalsTotal }})
+                </div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;">
+                    {{ $pendingLeavesCount ?? 0 }} Cuti/Sakit &bull; {{ $pendingShiftSwapsCount ?? 0 }} Tukar Shift &bull; {{ $pendingCorrectionsCount ?? 0 }} Koreksi
+                </div>
+            </div>
+            <a href="{{ route('admin.presensi.approval') }}" class="btn-action-sm btn-action-primary" style="padding: 6px 12px; font-size: 11.5px; white-space: nowrap;">
+                Tinjau →
+            </a>
+        </div>
+        @endif
+
+        @if(($pendingShiftDepositsCount ?? 0) > 0)
+        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;">
+            <div>
+                <div style="font-weight: 700; color: #34d399; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                    <span>📥</span> Setoran Kas Kasir ({{ $pendingShiftDepositsCount }})
+                </div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;">
+                    Uang fisik kas laci shift menunggu verifikasi masuk bank
+                </div>
+            </div>
+            <a href="{{ route('admin.penjualan.serah-terima') }}" class="btn-action-sm btn-action-emerald" style="padding: 6px 12px; font-size: 11.5px; white-space: nowrap;">
+                Verifikasi Kas →
+            </a>
+        </div>
+        @endif
+
+        @if(($billingPendingCount ?? 0) > 0)
+        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;">
+            <div>
+                <div style="font-weight: 700; color: #fb7185; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                    <span>⚡</span> Penyesuaian Billing & Print ({{ $billingPendingCount }})
+                </div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;">
+                    Klaim mati listrik / kertas print rusak kasir
+                </div>
+            </div>
+            <a href="{{ route('admin.penjualan.penyesuaian-billing') }}" class="btn-action-sm btn-action-primary" style="padding: 6px 12px; font-size: 11.5px; white-space: nowrap; background: #e11d48; border-color: #f43f5e;">
+                Otorisasi →
+            </a>
+        </div>
+        @endif
+    </div>
+</div>
+@endif
+
 <!-- TOP 4 KPI METRICS -->
 <div class="stats-grid-row">
     <a href="{{ route('admin.data', ['tab' => 'tab-presensi']) }}" class="metric-stat-card">
@@ -228,9 +300,45 @@
                     <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; color: #cbd5e1;">📝 Audit Trail</span>
                 </div>
             </div>
+            <div style="padding: 14px 22px; background: rgba(15, 23, 42, 0.4); border-top: 1px solid var(--border-glass); display: flex; gap: 8px;">
+                <a href="{{ route('admin.penjualan.penyesuaian-billing') }}" class="btn-action-sm btn-action-primary" style="flex: 1; justify-content: center; padding: 10px; font-size: 12px; background: linear-gradient(135deg, #e11d48, #be123c); border-color: #f43f5e;">
+                    Penyesuaian Billing →
+                </a>
+                <a href="{{ route('admin.penjualan.serah-terima') }}" class="btn-action-sm btn-action-emerald" style="justify-content: center; padding: 10px 14px; font-size: 12px;" title="Verifikasi Penerimaan Setoran Kas Toko / Bank">
+                    <span>📥</span> Kas: {{ $pendingShiftDepositsCount ?? 0 }}
+                </a>
+            </div>
+        </div>
+
+        <!-- KARTU MODUL 6: PERSETUJUAN PERMOHONAN KARYAWAN & TUKAR SHIFT -->
+        <div class="dashboard-section-card" style="margin-bottom: 0; display: flex; flex-direction: column; justify-content: space-between;">
+            <div style="padding: 22px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(14, 165, 233, 0.15); color: #38bdf8; display: flex; align-items: center; justify-content: center; font-size: 22px;">
+                        📝
+                    </div>
+                    @php
+                        $pendingApprCount = $employeeApprovalsTotal ?? 0;
+                    @endphp
+                    <span class="badge-status {{ $pendingApprCount > 0 ? 'badge-rose' : 'badge-emerald' }}">
+                        {{ $pendingApprCount > 0 ? $pendingApprCount . ' Menunggu Persetujuan' : 'Semua Disetujui' }}
+                    </span>
+                </div>
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 6px;">
+                    6. Persetujuan Permohonan & Tukar Shift
+                </h3>
+                <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 16px;">
+                    Otorisasi permohonan mandiri staf kasir: izin, sakit, cuti, tukar jadwal shift antar-karyawan, serta permohonan koreksi jam absensi.
+                </p>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px;">
+                    <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; color: #cbd5e1;">🏖️ Izin/Cuti: {{ $pendingLeavesCount ?? 0 }}</span>
+                    <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; color: #cbd5e1;">🔄 Tukar Shift: {{ $pendingShiftSwapsCount ?? 0 }}</span>
+                    <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; color: #cbd5e1;">⏱️ Koreksi: {{ $pendingCorrectionsCount ?? 0 }}</span>
+                </div>
+            </div>
             <div style="padding: 14px 22px; background: rgba(15, 23, 42, 0.4); border-top: 1px solid var(--border-glass);">
-                <a href="{{ route('admin.penjualan.penyesuaian-billing') }}" class="btn-action-sm btn-action-primary" style="width: 100%; justify-content: center; padding: 10px; font-size: 13px; background: linear-gradient(135deg, #e11d48, #be123c); border-color: #f43f5e;">
-                    Buka Otorisasi Penyesuaian →
+                <a href="{{ route('admin.presensi.approval') }}" class="btn-action-sm btn-action-primary" style="width: 100%; justify-content: center; padding: 10px; font-size: 13px; background: linear-gradient(135deg, #0284c7, #0ea5e9); border-color: #38bdf8;">
+                    Buka Approval Permohonan Karyawan →
                 </a>
             </div>
         </div>
@@ -264,6 +372,9 @@
             </div>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button type="button" id="btnFilterDiscrepancy" onclick="toggleDiscrepancyFilter()" class="btn-action-sm" style="padding: 8px 14px; font-size: 12px; background: rgba(244, 63, 94, 0.2); border: 1px solid #f43f5e; color: #fca5a5; cursor: pointer; border-radius: 6px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+                <span>⚠️</span> <span id="btnFilterDiscrepancyText">Filter: Hanya Selisih</span>
+            </button>
             <button type="button" onclick="openDailyZReportModal()" class="btn-action-sm" style="padding: 8px 14px; font-size: 12px; background: #059669; border: 1px solid #10b981; color: #ffffff; cursor: pointer; border-radius: 6px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
                 <span>🖨️</span> Cetak Z-Report Harian (24 Jam)
             </button>
@@ -294,7 +405,7 @@
                     $discCount = (int) $audit['discrepancy_count'];
                     $hwSt = $audit['hardware_status'] ?? 'normal';
                 @endphp
-                <tr style="{{ $hasDisc ? 'background: rgba(239, 68, 68, 0.04);' : '' }}">
+                <tr data-has-discrepancy="{{ ($hasDisc || ($audit['cash_diff'] ?? 0) != 0) ? '1' : '0' }}" style="{{ $hasDisc ? 'background: rgba(239, 68, 68, 0.04);' : '' }}">
                     <td>
                         <div style="font-weight: 700; color: #fff; font-size: 12.5px;">
                             {{ $audit['completed_at_formatted'] }} WIB
@@ -778,6 +889,32 @@ function openAuditModal(data) {
 function closeAuditModal() {
     const modal = document.getElementById('modal-audit-detail');
     if (modal) modal.style.display = 'none';
+}
+
+function toggleDiscrepancyFilter() {
+    const rows = document.querySelectorAll('tr[data-has-discrepancy]');
+    const btn = document.getElementById('btnFilterDiscrepancy');
+    const btnText = document.getElementById('btnFilterDiscrepancyText');
+    if (!btn) return;
+    const isFiltered = btn.getAttribute('data-active') === 'true';
+
+    if (!isFiltered) {
+        rows.forEach(r => {
+            if (r.getAttribute('data-has-discrepancy') === '0') {
+                r.style.display = 'none';
+            }
+        });
+        btn.setAttribute('data-active', 'true');
+        btn.style.background = '#e11d48';
+        btn.style.color = '#ffffff';
+        if (btnText) btnText.textContent = 'Tampilkan Semua Shift';
+    } else {
+        rows.forEach(r => r.style.display = '');
+        btn.setAttribute('data-active', 'false');
+        btn.style.background = 'rgba(244, 63, 94, 0.2)';
+        btn.style.color = '#fca5a5';
+        if (btnText) btnText.textContent = 'Filter: Hanya Selisih';
+    }
 }
 </script>
 

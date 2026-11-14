@@ -81,12 +81,12 @@ class AdminDashboardRevampTest extends TestCase
 
         $response->assertStatus(200);
 
-        // 1. Overview contains links / cards to all 5 sections
+        // 1. Overview contains links / cards to all sections
         $response->assertSee('1. Data Terpadu');
         $response->assertSee('2. Penerimaan Stok Distribusi');
         $response->assertSee('3. Stok (Ketersediaan Produk)');
         $response->assertSee('4. Laporan');
-        $response->assertSee('5. Keluar');
+        $response->assertSee('Keluar');
 
         // 2. Dedicated Data page contains all sub-modules
         $dataResponse = $this->actingAs($this->adminUser)
@@ -192,10 +192,13 @@ class AdminDashboardRevampTest extends TestCase
         ]);
     }
 
-    public function test_bagus_admin_url_redirects_to_admin_index(): void
+    public function test_bagus_admin_url_serves_admin_dashboard(): void
     {
-        $response = $this->get('/bagus/admin');
-        $response->assertRedirect(route('admin.index'));
+        $response = $this->actingAs($this->adminUser)
+            ->withSession(['admin_role' => 'Manager', 'admin_logged_in' => true])
+            ->get('/bagus/admin');
+        $response->assertStatus(200);
+        $response->assertSee('Dashboard Operasional');
     }
 
     public function test_admin_can_confirm_stock_transfer_dispatch(): void

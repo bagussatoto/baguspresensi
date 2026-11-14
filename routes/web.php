@@ -36,27 +36,13 @@ Route::get('/', function () {
 Route::get('/bagus', function () {
     return redirect()->route('presensi2.index');
 });
-Route::get('/bagus/admin', function () {
-    return redirect()->route('admin.index');
-});
-Route::get('/bagus/admin/ERP', function () {
-    return redirect()->route('admin.erp');
-});
-Route::get('/bagus/admin/erp', function () {
-    return redirect()->route('admin.erp');
-});
-Route::get('/bagus/admin/data', function () {
-    return redirect()->route('admin.data');
-});
-Route::get('/bagus/admin/distribusi', function () {
-    return redirect()->route('admin.distribusi');
-});
-Route::get('/bagus/admin/stok', function () {
-    return redirect()->route('admin.stok');
-});
-Route::get('/bagus/admin/laporan', function () {
-    return redirect()->route('admin.laporan');
-});
+Route::get('/bagus/admin', [AdminDashboardController::class, 'index']);
+Route::get('/bagus/admin/ERP', [AdminErpHubController::class, 'index']);
+Route::get('/bagus/admin/erp', [AdminErpHubController::class, 'index']);
+Route::get('/bagus/admin/data', [AdminDashboardController::class, 'dataIndex']);
+Route::get('/bagus/admin/distribusi', [AdminDashboardController::class, 'distribusiIndex']);
+Route::get('/bagus/admin/stok', [AdminDashboardController::class, 'stokIndex']);
+Route::get('/bagus/admin/laporan', [AdminDashboardController::class, 'laporanIndex']);
 Route::get('/warnet', [InternetCafeController::class, 'index'])->name('warnet.index');
 Route::get('/bagus/warnet', [InternetCafeController::class, 'index'])->name('bagus.warnet');
 Route::get('/master-data', [MasterDataWebController::class, 'index'])->name('master-data.index');
@@ -248,6 +234,35 @@ Route::middleware(['web', 'auditor.readonly'])->group(function () {
         return redirect()->route('admin.distribusi')
             ->with('info', 'Permintaan stok #'.$id.' dapat dipenuhi dengan menekan tombol "Penuhi Stok" di tabel permintaan.');
     });
+
+    // Alias URL admin presensi, persetujuan permohonan, & karyawan dengan prefix /bagus/admin/...
+    Route::get('/bagus/admin/presensi', [AdminAttendanceController::class, 'index']);
+    Route::get('/bagus/admin/presensi/approval', [AdminAttendanceController::class, 'approval']);
+    Route::post('/bagus/admin/presensi/leave/{leave}/approve', [AdminAttendanceController::class, 'approveLeave']);
+    Route::post('/bagus/admin/presensi/leave/{leave}/reject', [AdminAttendanceController::class, 'rejectLeave']);
+    Route::post('/bagus/admin/presensi/swap/{swap}/approve', [AdminAttendanceController::class, 'approveShiftSwap']);
+    Route::post('/bagus/admin/presensi/swap/{swap}/reject', [AdminAttendanceController::class, 'rejectShiftSwap']);
+    Route::post('/bagus/admin/presensi/correction/{correction}/approve', [AdminAttendanceController::class, 'approveCorrection']);
+    Route::post('/bagus/admin/presensi/correction/{correction}/reject', [AdminAttendanceController::class, 'rejectCorrection']);
+    Route::post('/bagus/admin/presensi/overtime/{overtime}/approve', [AdminAttendanceController::class, 'approveOvertime']);
+    Route::post('/bagus/admin/presensi/overtime/{overtime}/reject', [AdminAttendanceController::class, 'rejectOvertime']);
+    Route::get('/bagus/admin/presensi/rekap', [AdminAttendanceController::class, 'rekap']);
+    Route::get('/bagus/admin/presensi/pengaturan', [AdminAttendanceSettingController::class, 'index']);
+
+    Route::get('/bagus/admin/karyawan', [AdminEmployeeController::class, 'index']);
+    Route::get('/bagus/admin/karyawan-verifikasi', [AdminEmployeeController::class, 'verifikasiIndex']);
+    Route::get('/bagus/admin/karyawan/verifikasi', [AdminEmployeeController::class, 'verifikasiIndex']);
+    Route::get('/admin/karyawan/verifikasi', [AdminEmployeeController::class, 'verifikasiIndex']);
+    Route::get('/bagus/admin/karyawan-reset-password', [AdminEmployeeController::class, 'resetPasswordIndex']);
+    Route::get('/bagus/admin/karyawan/reset-password', [AdminEmployeeController::class, 'resetPasswordIndex']);
+    Route::get('/admin/karyawan/reset-password', [AdminEmployeeController::class, 'resetPasswordIndex']);
+
+    Route::get('/bagus/admin/akuntansi/jurnal', [AdminAccountingController::class, 'jurnalIndex']);
+    Route::get('/bagus/admin/coa', [AdminChartOfAccountController::class, 'index']);
+    Route::get('/bagus/admin/produk', [AdminProductController::class, 'index']);
+    Route::get('/bagus/admin/supplier', [AdminSupplierController::class, 'index']);
+    Route::get('/bagus/admin/kategori', [AdminCategoryController::class, 'index']);
+    Route::get('/bagus/admin/harga', [AdminPricelistController::class, 'index']);
 });
 
 // Alias URL portal layanan mandiri & permohonan karyawan dengan prefix /bagus/presensi/...

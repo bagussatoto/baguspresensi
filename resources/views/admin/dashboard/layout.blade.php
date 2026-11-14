@@ -1010,6 +1010,7 @@
                         <li><a href="{{ route('admin.data', ['tab' => 'tab-billing']) }}" class="nav-sub-link {{ request('tab') == 'tab-billing' ? 'active' : '' }}"><span>💰</span> Data Billing Setiap Shift</a></li>
                         <li><a href="{{ route('admin.penjualan.penyesuaian-billing') }}" class="nav-sub-link {{ request()->routeIs('admin.penjualan.penyesuaian-billing*') ? 'active' : '' }}"><span>⚡</span> Persetujuan Penyesuaian Billing</a></li>
                         <li><a href="{{ route('admin.data', ['tab' => 'tab-presensi']) }}" class="nav-sub-link {{ request('tab') == 'tab-presensi' ? 'active' : '' }}"><span>👥</span> Presensi Karyawan</a></li>
+                        <li><a href="{{ route('admin.presensi.approval') }}" class="nav-sub-link {{ request()->routeIs('admin.presensi.approval*') ? 'active' : '' }}"><span>📝</span> Approval Cuti & Tukar Shift</a></li>
                         <li><a href="{{ route('admin.data', ['tab' => 'tab-jamkerja']) }}" class="nav-sub-link {{ request('tab') == 'tab-jamkerja' ? 'active' : '' }}"><span>⏱️</span> Jam Kerja Karyawan</a></li>
                         <li><a href="{{ route('admin.data', ['tab' => 'tab-sop']) }}" class="nav-sub-link {{ request('tab') == 'tab-sop' ? 'active' : '' }}"><span>📜</span> SOP Operasional</a></li>
                     </ul>
@@ -1069,31 +1070,62 @@
                     </a>
                 </li>
 
-                {{-- 6. PENYESUAIAN BILLING & PRINT --}}
+                {{-- 6. PENYESUAIAN BILLING & VERIFIKASI KAS --}}
                 @php
                     $sidebarBillingPendingCount = \App\Models\ShiftSalesSummary::where(function($q) {
                         $q->where('billing_adjustment_status', 'pending_approval')
                           ->orWhere('print_adjustment_status', 'pending_approval');
                     })->count();
+                    $sidebarPendingDepositsCount = \App\Models\ShiftSalesSummary::where('deposit_status', 'pending_verification')->count();
+                    $sidebarTotalSalesAlerts = $sidebarBillingPendingCount + $sidebarPendingDepositsCount;
                 @endphp
                 <li>
-                    <a href="{{ route('admin.penjualan.penyesuaian-billing') }}" class="nav-link-item {{ request()->routeIs('admin.penjualan.penyesuaian-billing*') ? 'active' : '' }}">
+                    <a href="{{ route('admin.penjualan.penyesuaian-billing') }}" class="nav-link-item {{ request()->routeIs('admin.penjualan.penyesuaian-billing*') || request()->routeIs('admin.penjualan.serah-terima*') ? 'active' : '' }}">
                         <span class="nav-item-left">
-                            <span>⚡</span> <span>5. Penyesuaian Billing & Print</span>
+                            <span>⚡</span> <span>6. Penyesuaian Billing & Kas</span>
                         </span>
-                        @if($sidebarBillingPendingCount > 0)
+                        @if($sidebarTotalSalesAlerts > 0)
                         <span class="badge-status badge-rose" style="font-size: 10px; padding: 2px 7px;">
-                            {{ $sidebarBillingPendingCount }} Baru
+                            {{ $sidebarTotalSalesAlerts }} Baru
                         </span>
                         @endif
                     </a>
                 </li>
 
-                {{-- 7. KELUAR --}}
+                {{-- 7. APPROVAL PERMOHONAN & TUKAR SHIFT KARYAWAN --}}
+                @php
+                    $sidebarLeavesCount = \Illuminate\Support\Facades\Schema::hasTable('leave_requests')
+                        ? \App\Domains\Leave\Models\LeaveRequest::where('status', 'pending')->count()
+                        : 0;
+                    $sidebarSwapsCount = \Illuminate\Support\Facades\Schema::hasTable('shift_swap_requests')
+                        ? \App\Domains\Attendance\Models\ShiftSwapRequest::where('status', 'pending_supervisor')->count()
+                        : 0;
+                    $sidebarCorrectionsCount = \Illuminate\Support\Facades\Schema::hasTable('attendance_corrections')
+                        ? \App\Domains\Attendance\Models\AttendanceCorrection::where('status', 'pending')->count()
+                        : 0;
+                    $sidebarOvertimesCount = \Illuminate\Support\Facades\Schema::hasTable('overtime_claims')
+                        ? \App\Domains\Attendance\Models\OvertimeClaim::where('status', 'pending')->count()
+                        : 0;
+                    $sidebarTotalApprovals = $sidebarLeavesCount + $sidebarSwapsCount + $sidebarCorrectionsCount + $sidebarOvertimesCount;
+                @endphp
+                <li>
+                    <a href="{{ route('admin.presensi.approval') }}" class="nav-link-item {{ request()->routeIs('admin.presensi.approval*') ? 'active' : '' }}">
+                        <span class="nav-item-left">
+                            <span>📝</span> <span>7. Approval Permohonan & Shift</span>
+                        </span>
+                        @if($sidebarTotalApprovals > 0)
+                        <span class="badge-status badge-rose" style="font-size: 10px; padding: 2px 7px;">
+                            {{ $sidebarTotalApprovals }} Menunggu
+                        </span>
+                        @endif
+                    </a>
+                </li>
+
+                {{-- 8. KELUAR --}}
                 <li>
                     <a href="javascript:void(0)" onclick="openLogoutModal()" class="nav-link-item" style="color: #fb7185;">
                         <span class="nav-item-left">
-                            <span>🚪</span> <span>7. Keluar</span>
+                            <span>🚪</span> <span>8. Keluar</span>
                         </span>
                     </a>
                 </li>

@@ -6,7 +6,10 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domains\Attendance\Enums\AttendanceStatus;
 use App\Domains\Attendance\Models\ActivityAttendance;
+use App\Domains\Attendance\Models\AttendanceCorrection;
 use App\Domains\Attendance\Models\AttendanceRecord;
+use App\Domains\Attendance\Models\OvertimeClaim;
+use App\Domains\Attendance\Models\ShiftSwapRequest;
 use App\Domains\Employee\Models\Shift;
 use App\Domains\Leave\Models\LeaveRequest;
 use App\Http\Controllers\Controller;
@@ -20,6 +23,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Modules\MasterData\Domain\Enums\BranchType;
 use Modules\MasterData\Domain\Models\Branch;
@@ -79,6 +83,26 @@ class AdminDashboardController extends Controller
                 ->orWhere('print_adjustment_status', 'pending_approval');
         })->count();
 
+        $pendingShiftDepositsCount = ShiftSalesSummary::where('deposit_status', 'pending_verification')->count();
+
+        $pendingLeavesCount = Schema::hasTable('leave_requests')
+            ? LeaveRequest::where('status', 'pending')->count()
+            : 0;
+
+        $pendingShiftSwapsCount = Schema::hasTable('shift_swap_requests')
+            ? ShiftSwapRequest::where('status', 'pending_supervisor')->count()
+            : 0;
+
+        $pendingCorrectionsCount = Schema::hasTable('attendance_corrections')
+            ? AttendanceCorrection::where('status', 'pending')->count()
+            : 0;
+
+        $pendingOvertimesCount = Schema::hasTable('overtime_claims')
+            ? OvertimeClaim::where('status', 'pending')->count()
+            : 0;
+
+        $employeeApprovalsTotal = $pendingLeavesCount + $pendingShiftSwapsCount + $pendingCorrectionsCount + $pendingOvertimesCount;
+
         $stockAuditSummary = $this->getStockAuditReportsData();
         $zReportData = $this->getDailyZReportData($today);
 
@@ -95,6 +119,12 @@ class AdminDashboardController extends Controller
             'profitAnalytics',
             'recentPosSales',
             'billingPendingCount',
+            'pendingShiftDepositsCount',
+            'pendingLeavesCount',
+            'pendingShiftSwapsCount',
+            'pendingCorrectionsCount',
+            'pendingOvertimesCount',
+            'employeeApprovalsTotal',
             'stockAuditSummary',
             'zReportData'
         ));

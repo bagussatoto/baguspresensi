@@ -168,6 +168,25 @@
     📅 presensi
 </a>
 
+{{-- 13b. APPROVAL PERMOHONAN & TUKAR SHIFT --}}
+@php
+    $subnavPendingApprovalsCount = (
+        (\Illuminate\Support\Facades\Schema::hasTable('leave_requests') ? \App\Domains\Leave\Models\LeaveRequest::where('status', 'pending')->count() : 0) +
+        (\Illuminate\Support\Facades\Schema::hasTable('shift_swap_requests') ? \App\Domains\Attendance\Models\ShiftSwapRequest::where('status', 'pending_supervisor')->count() : 0) +
+        (\Illuminate\Support\Facades\Schema::hasTable('attendance_corrections') ? \App\Domains\Attendance\Models\AttendanceCorrection::where('status', 'pending')->count() : 0)
+    );
+@endphp
+<a href="{{ route('admin.presensi.approval') }}" 
+   class="subnav-item {{ request()->routeIs('admin.presensi.approval*') ? 'active' : '' }}" 
+   title="Persetujuan Izin, Cuti, Sakit, & Tukar Shift Karyawan">
+    📝 approval cuti & shift
+    @if($subnavPendingApprovalsCount > 0)
+        <span style="background: #ef4444; color: #fff; font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 999px; margin-left: 3px;">
+            {{ $subnavPendingApprovalsCount }}
+        </span>
+    @endif
+</a>
+
 {{-- 14. REKAP LIST KLAIM JAM KERJA --}}
 <a href="{{ route('admin.data', ['tab' => 'tab-jamkerja']) }}" 
    class="subnav-item {{ (request()->routeIs('admin.data') && request('tab') == 'tab-jamkerja') || request()->routeIs('admin.presensi.approval*') || request()->is('*jam-kerja*') ? 'active' : '' }}" 
