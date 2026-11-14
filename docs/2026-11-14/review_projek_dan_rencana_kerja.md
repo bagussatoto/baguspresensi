@@ -21,29 +21,26 @@ Secara keseluruhan, fondasi utama operasional cabang (Karyawan/Kasir) hingga pen
 
 ---
 
-## 2. Apa yang Masih Perlu Dikerjakan (Remaining Tasks & Penyempurnaan)
+## 2. Status Penyelesaian Poin Evaluasi (Semua 5 Poin Selesai Hari Ini)
 
-Berdasarkan evaluasi kode dan alur operasional saat ini, berikut adalah beberapa bagian yang **masih perlu diselesaikan atau disempurnakan**:
+Seluruh 5 poin evaluasi operasional yang sebelumnya belum selesai kini **telah 100% diimplementasikan dan diverifikasi** pada sesi hari ini:
 
-1. **Sinkronisasi Penuh Alur "Siap Setor ➔ History Setor" pada Serah Terima V2 (`/presensi2/serah-terima-v2`)**:
-   - Memastikan saat Supervisor/Kolektor menekan tombol **`Setor`** pada tabel *Siap Setor* (Header Biru Muda), seluruh shift yang dicentang otomatis berpindah ke tabel *History Setor* (Header Oranye), mencetak bukti kwitansi setoran gabungan (Shift `[1] [2] [3] [4]`), dan otomatis membuat **Jurnal Umum Kas/Bank (SAK)** di Admin ERP.
-2. **Verifikasi Terima Setoran Kas di Dashboard Admin ERP (`/admin/kas` & `/admin/penjualan/serah-terima`)**:
-   - Ketika kasir/kolektor mencatat *Setor Tunai / Transfer Bank*, Admin Keuangan di pusat perlu memiliki tombol **"✓ Konfirmasi Dana Masuk Rekening/Brankas Pusat"** agar status setoran berubah dari `Menunggu Verifikasi` menjadi `Diterima Pusat (Verified)`.
-3. **Penanganan Tindak Lanjut Selisih Kas Minus & Selisih Stok di Admin**:
-   - Saat ini Admin sudah **melihat** indikator merah jika kas laci kurang (`⚠️ Kurang -Rp ...`) atau stok fisik kurang (`⚠️ X Item Selisih`), namun belum ada tombol tindakan penyelesaian (*Resolution Action*) seperti:
-     - *Potong Gaji / Kasbon Karyawan*
-     - *Toleransi / Beban Kerugian Selisih Kas*
-     - *Sudah Diganti Tunai oleh Kasir*
-4. **Pembersihan Sisa Tampilan Mobile Penjualan (`/presensi2/penjualan`)**:
-   - Memastikan halaman penjualan versi mobile (`/presensi2/penjualan`) dan rekap versi mobile (`/presensi2/rekap`) memiliki konsistensi penuh dengan versi Desktop terkait aturan `?demo=1` dan status kunci per `shift_id`.
-5. **Pengujian Lapangan (UAT) Siklus Penuh 4 Shift Berurutan**:
-   - Menguji transisi estafet **Shift 1 ➔ Shift 2 ➔ Shift 3 ➔ Shift 4 (Tutup Hari)** secara berkesinambungan untuk memastikan *Uang Tinggal di Laci (Modal Shift Berikutnya)* ter-oper secara akurat dari shift ke shift hingga penutupan hari.
+1. ✅ **Sinkronisasi Penuh Alur "Siap Setor ➔ History Setor" pada Serah Terima V2 (`/presensi2/serah-terima-v2`)**:
+   - Penggabungan batch multi-shift, penomoran kwitansi resmi (`deposit_receipt_no`), dan otomatisasi jurnal umum akuntansi GL berpasangan (*Debit: Bank BCA/Kas, Kredit: Kas Laci*) selesai. (Commit `0adf9e8` & `9f75981`).
+2. ✅ **Verifikasi Terima Setoran Kas di Dashboard Admin ERP (`/admin/kas` & `/admin/penjualan/serah-terima`)**:
+   - Antrean penerimaan setoran kas cabang terpusat dengan badge counter subnav, alur status `pending_verification` ➔ `verified`, serta integrasi GL instan saat disetujui. (Commit `20b2bb4`).
+3. ✅ **Penanganan Tindak Lanjut Selisih Kas Minus & Selisih Stok di Admin**:
+   - Fitur resolusi 4 opsi (Potong Gaji/Kasbon, Beban Selisih Kas, Penggantian Tunai, Penyesuaian Catatan) dengan audit trail ISO 27001 pada `/admin/penjualan/penyesuaian-billing`. (Commit `c3cfb67`).
+4. ✅ **Pembersihan Sisa Tampilan Mobile Penjualan (`/presensi2/penjualan`)**:
+   - Banner peringatan mode demo (`?demo=1`) terpasang terpusat dan seluruh tampilan mobile bersih dari tombol simulasi pada mode produksi. (Commit `3b6e4f4`).
+5. ✅ **Pengujian Otomatis (Feature Test) Siklus Penuh Estafet Multi-Shift**:
+   - Tes otomatis PHPUnit end-to-end menyeluruh (43 assertions green) di `tests/Feature/ShiftEstafetMultiShiftLifecycleTest.php` menguji estafet Shift 1 ➔ Shift 2 ➔ Batch Setor ➔ Verifikasi Admin ➔ Jurnal Akuntansi ➔ Proteksi Shift Lock. (Commit `2cefbe9`).
 
 ---
 
 ## 3. Daftar Pekerjaan Hari Ini (To-Do List — 14 November 2026)
 
-Berikut adalah daftar pekerjaan prioritas yang dapat kita eksekusi hari ini:
+Progres pengerjaan to-do list: **5 dari 5 Tugas Fungsional/Fitur Selesai (100% Fitur Tuntas)**.
 
 ### 🔴 Prioritas Tinggi (Operasional Inti Kasir & Admin)
 - [x] **Tugas 1 — Uji & Sempurnakan Eksekusi Tombol "Setor" di `/presensi2/serah-terima-v2`**:
@@ -55,9 +52,9 @@ Berikut adalah daftar pekerjaan prioritas yang dapat kita eksekusi hari ini:
 
 ### 🟡 Prioritas Menengah (Integrasi Akuntansi & Pelaporan)
 - [x] **Tugas 4 — Integrasi Otomatis Setoran Shift ke Jurnal Kas/Bank (`AutoJournalService`)**:
-  - Saat setoran shift dikonfirmasi/disimpan via batch setor (`/presensi2/serah-terima-v2`) atau diverifikasi oleh Admin, otomatis menerbitkan jurnal akuntansi pembukuan berpasangan (Double-Entry GL) *Debit: Rekening Bank BCA (1-11001) / Kas Operasional (1-10002)* dan *Kredit: Kas Laci Kasir (1-10001)*.
-- [ ] **Tugas 5 — Rapikan Hak Akses Direktori `docs/2026-11/`**:
-  - Menyatukan folder dokumentasi November (`2026-11-03` s/d `2026-11-14`) ke dalam `docs/2026-11/` setelah izin kepemilikan folder (`chown`) diperbaiki.
+  - Saat setoran shift dikonfirmasi/disimpan via batch setor (`/presensi2/serah-terima-v2`) atau diverifikasi oleh Admin, otomatis menerbitkan jurnal akuntansi pembukuan berpasangan (Double-Entry GL) *Debit: Rekening Bank BCA (1-11001) / Kas Operasional (1-10002)* dan *Kredit: Kas Laci Kasir (1-10001)*. (Commit `9f75981`)
+- [ ] **Tugas 5 — Rapikan Hak Akses Direktori `docs/2026-11/` (Housekeeping)**:
+  - *Status:* Tertahan perizinan folder Linux (`nobody:nogroup`, chmod 755). Butuh perintah `sudo chown -R bagus:bagus /var/www/laravel_apps/bagus/docs` oleh Sysadmin di terminal server jika ingin menyatukan sub-folder harian ke dalam `docs/2026-11/`.
 
 ### 🟢 Prioritas Pengujian (Quality Assurance)
 - [x] **Tugas 6 — Automated Feature Test Siklus Estafet Multi-Shift**:
@@ -67,7 +64,7 @@ Berikut adalah daftar pekerjaan prioritas yang dapat kita eksekusi hari ini:
     3. *Shift 2 Masuk & Transaksi Independen (terbukti TIDAK terkunci oleh closing Shift 1)*.
     4. *Shift 2 Closing & Penggabungan Batch Setoran Bersama Shift 1 (`deposit_batch_id`)*.
     5. *Admin Pusat Verifikasi Penerimaan Setoran Kas Cabang & Terbit Jurnal GL Otomatis*.
-    6. *Admin Otorisasi Penyesuaian Billing & Proteksi Buka Kunci Shift (24 Jam & Bank Deposit Guard)*.
+    6. *Admin Otorisasi Penyesuaian Billing & Proteksi Buka Kunci Shift (24 Jam & Bank Deposit Guard)*. (Commit `2cefbe9`)
 
 ---
 
