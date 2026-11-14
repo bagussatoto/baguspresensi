@@ -258,6 +258,12 @@ Route::middleware(['web', 'auditor.readonly'])->group(function () {
     Route::get('/admin/karyawan/reset-password', [AdminEmployeeController::class, 'resetPasswordIndex']);
 
     Route::get('/bagus/admin/akuntansi/jurnal', [AdminAccountingController::class, 'jurnalIndex']);
+    Route::post('/bagus/admin/akuntansi/jurnal/manual', [AdminAccountingController::class, 'storeManualJournal']);
+    Route::get('/bagus/admin/akuntansi/buku-besar', [AdminAccountingController::class, 'bukuBesarIndex']);
+    Route::get('/bagus/admin/akuntansi/neraca-saldo', [AdminAccountingController::class, 'neracaSaldoIndex']);
+    Route::get('/bagus/admin/akuntansi/laba-rugi', [AdminAccountingController::class, 'labaRugiIndex']);
+    Route::get('/bagus/admin/akuntansi/neraca', [AdminAccountingController::class, 'neracaIndex']);
+    Route::get('/bagus/admin/akuntansi/pivot', [AdminAccountingController::class, 'pivotIndex']);
     Route::get('/bagus/admin/coa', [AdminChartOfAccountController::class, 'index']);
     Route::get('/bagus/admin/produk', [AdminProductController::class, 'index']);
     Route::get('/bagus/admin/supplier', [AdminSupplierController::class, 'index']);
