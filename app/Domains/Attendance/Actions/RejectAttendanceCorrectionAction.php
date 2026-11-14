@@ -10,6 +10,7 @@ use App\Domains\Attendance\Services\AuditLogService;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -27,6 +28,10 @@ class RejectAttendanceCorrectionAction
         $employee = $correction->employee;
 
         // Proteksi Anti Self-Approval / Self-Action (Prinsip SoD Maker-Checker)
+        if ($approverId === (int) $correction->employee_id) {
+            throw new AuthorizationException('Pelanggaran SoD: Anda tidak diizinkan menolak permohonan koreksi presensi Anda sendiri.');
+        }
+
         $approverUser = User::find($approverId);
         if ($approverUser) {
             $isSelf = false;
@@ -42,11 +47,6 @@ class RejectAttendanceCorrectionAction
             if ($isSelf) {
                 throw new AuthorizationException('Pelanggaran SoD: Anda tidak diizinkan menolak permohonan koreksi presensi Anda sendiri.');
             }
-        } else {
-            // Approver adalah Employee langsung (Supervisor ID)
-            if ($approverId === (int) $correction->employee_id) {
-                throw new AuthorizationException('Pelanggaran SoD: Anda tidak diizinkan menolak permohonan koreksi presensi Anda sendiri.');
-            }
         }
 
         return DB::transaction(function () use ($correction, $approverId, $rejectionNote): AttendanceCorrection {
@@ -57,6 +57,10 @@ class RejectAttendanceCorrectionAction
                 'rejection_note' => $rejectionNote,
             ]);
 
+            $auditUserId = Auth::id()
+                ?? User::where('employee_id', $approverId)->value('id')
+                ?? (User::where('id', $approverId)->exists() ? $approverId : null);
+
             // Perekaman Jejak Forensik WORM ISO/IEC 27001:2022
             $this->auditLogService->log(
                 action: 'attendance_correction_rejected',
@@ -66,7 +70,7 @@ class RejectAttendanceCorrectionAction
                     'status' => ApprovalStatus::Rejected->value,
                     'rejection_note' => $rejectionNote,
                 ],
-                userId: $approverId,
+                userId: $auditUserId,
             );
 
             return $correction->fresh();

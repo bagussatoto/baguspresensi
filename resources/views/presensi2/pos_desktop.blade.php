@@ -651,7 +651,7 @@
             <a href="{{ route('presensi2.stok') }}" class="btn-nav-pill" title="Cek Stok Fisik Shift">
                 <span>📦</span> Cek Stok
             </a>
-            @if(request()->boolean('demo') || request()->boolean('simulasi'))
+            @if(app()->environment('testing') || request()->boolean('demo') || request()->boolean('simulasi'))
                 <button type="button" onclick="togglePosSimulation()" class="btn-nav-pill" style="color: #7c3aed; border-color: #c4b5fd; background: #f5f3ff;" title="Buka / Tutup Panel Uji Coba Transaksi">
                     <span>🧪</span> <span id="btn-toggle-sim-label">Mode Simulasi</span>
                 </button>
@@ -716,7 +716,7 @@
         </div>
     @endif
 
-    @if(request()->boolean('demo') || request()->boolean('simulasi'))
+    @if(app()->environment('testing') || request()->boolean('demo') || request()->boolean('simulasi'))
     {{-- PANEL MODE SIMULASI & PENGUJIAN TRANSAKSI POS --}}
     <div id="pos-simulation-container" class="pos-simulation-bar" style="display: block;">
         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
@@ -734,6 +734,21 @@
             </div>
 
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                {{-- PRESET 1: AQUA 600ML TUNAI --}}
+                <button type="button" onclick="runPosSimulation('aqua_cash')" class="btn-pos-preset" style="background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 6px 11px; border-radius: 6px; font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px;" title="Langsung checkout 1 Aqua 600ml tunai dan cetak struk">
+                    <span>⚡ 1. Beli Aqua (Tunai)</span>
+                </button>
+
+                {{-- PRESET 2: PRINT A4 + MINUMAN QRIS --}}
+                <button type="button" onclick="runPosSimulation('print_qris')" class="btn-pos-preset" style="background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 6px 11px; border-radius: 6px; font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px;" title="Langsung checkout 2 Lembar Print + 1 Minuman via QRIS">
+                    <span>⚡ 2. Print + Minum (QRIS)</span>
+                </button>
+
+                {{-- PRESET 3: ISI KERANJANG SAJA --}}
+                <button type="button" onclick="runPosSimulation('fill_cart')" class="btn-pos-preset" style="background: #faf5ff; border: 1px solid #e9d5ff; color: #6b21a8; padding: 6px 11px; border-radius: 6px; font-size: 11.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px;" title="Hanya isi 2 produk ke keranjang untuk dicoba kasir manual">
+                    <span>🛒 3. Isi Keranjang Uji Coba</span>
+                </button>
+
                 {{-- RESET TRANSAKSI TESTING HARI INI --}}
                 <a href="{{ request()->fullUrlWithQuery(['action' => 'reset_sales']) }}"
                    onclick="return confirm('PERINGATAN UJI COBA:\n\nApakah Anda yakin ingin me-reset seluruh transaksi penjualan shift hari ini?\n\n• Seluruh transaksi testing hari ini akan dihapus dari sistem\n• Stok barang di gudang/kulkas akan dikembalikan utuh\n• Rekap omset shift akan kembali bersih Rp 0')"

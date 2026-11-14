@@ -57,6 +57,17 @@ class AttendanceCorrectionTest extends TestCase
             'password' => bcrypt('password123'),
         ]);
 
+        $adminEmp = Employee::create([
+            'branch_id' => $this->branch->id,
+            'name' => 'Admin HRD Independen',
+            'code' => 'ADM-001',
+            'username' => 'hrd',
+            'email' => 'hrd@mgk.com',
+            'position' => 'Manager HRD',
+            'is_active' => true,
+        ]);
+        $this->adminUser->update(['employee_id' => $adminEmp->id]);
+
         $this->shift = Shift::create([
             'name' => 'Shift Pagi (Shift 2)',
             'code' => 'SHIFT-2',

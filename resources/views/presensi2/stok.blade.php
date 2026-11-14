@@ -432,7 +432,7 @@
                             @php 
                                 $isCrit = (bool) ($d['is_critical'] ?? ($d['sesudahnya'] <= 5)); 
                                 $dId = $d['variant_id'];
-                                $physVal = old('drink_physical.'.$dId, 0);
+                                $physVal = old('drink_physical.'.$dId, $d['physical_stock'] ?? 0);
                                 $diffVal = (int) $physVal - (int) $d['sesudahnya'];
                             @endphp
                             <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
@@ -529,7 +529,7 @@
                             @php 
                                 $isCrit = (bool) ($m['is_critical'] ?? ($m['sesudahnya'] <= 5)); 
                                 $mId = $m['variant_id'];
-                                $physVal = old('food_physical.'.$mId, 0);
+                                $physVal = old('food_physical.'.$mId, $m['physical_stock'] ?? 0);
                                 $diffVal = (int) $physVal - (int) $m['sesudahnya'];
                             @endphp
                             <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">

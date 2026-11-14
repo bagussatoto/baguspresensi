@@ -525,6 +525,21 @@ class AdminAttendanceController extends Controller
             if ($user && isset($user->employee_id) && $user->employee_id && Employee::where('id', $user->employee_id)->exists()) {
                 return (int) $user->employee_id;
             }
+            if ($user) {
+                $matchedEmployeeId = Employee::where('is_active', true)
+                    ->where(function ($q) use ($user) {
+                        if (! empty($user->email)) {
+                            $q->where('email', $user->email);
+                        }
+                        if (! empty($user->name)) {
+                            $q->orWhere('name', $user->name);
+                        }
+                    })
+                    ->value('id');
+                if ($matchedEmployeeId) {
+                    return (int) $matchedEmployeeId;
+                }
+            }
         }
 
         // Cari Manager atau Admin di tabel employees

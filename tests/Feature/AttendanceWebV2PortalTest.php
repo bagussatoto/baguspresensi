@@ -92,7 +92,7 @@ class AttendanceWebV2PortalTest extends TestCase
             'credential' => '654321',
         ]);
 
-        $response->assertRedirect(route('presensi2.index'));
+        $response->assertRedirect(route('presensi2.scan'));
         $this->assertEquals($this->employee->id, session('presensi2_employee_id'));
     }
 
@@ -103,7 +103,7 @@ class AttendanceWebV2PortalTest extends TestCase
             'credential' => 'secret123',
         ]);
 
-        $response->assertRedirect(route('presensi2.index'));
+        $response->assertRedirect(route('presensi2.scan'));
         $this->assertEquals($this->employee->id, session('presensi2_employee_id'));
     }
 
@@ -114,7 +114,7 @@ class AttendanceWebV2PortalTest extends TestCase
             'credential' => '654321',
         ]);
 
-        $response->assertRedirect(route('presensi2.index'));
+        $response->assertRedirect(route('presensi2.scan'));
         $this->assertEquals($this->employee->id, session('presensi2_employee_id'));
     }
 
@@ -183,7 +183,7 @@ class AttendanceWebV2PortalTest extends TestCase
             'employee_code' => 'EMP-001',
             'credential' => 'secret123',
         ]);
-        $resSuccess->assertRedirect(route('presensi2.index'));
+        $resSuccess->assertRedirect(route('presensi2.scan'));
         $this->assertEquals($this->employee->id, session('presensi2_employee_id'));
         $this->assertNull(cache()->get('presensi2_login_tier:emp_'.$this->employee->id.'|127.0.0.1'));
     }
@@ -231,7 +231,7 @@ class AttendanceWebV2PortalTest extends TestCase
             'credential' => '654321',
         ]);
 
-        $response->assertRedirect(route('presensi2.index'));
+        $response->assertRedirect(route('presensi2.scan'));
         $this->assertEquals($this->employee->id, session('presensi2_employee_id'));
     }
 
@@ -262,7 +262,7 @@ class AttendanceWebV2PortalTest extends TestCase
             'credential' => '998877',
         ]);
 
-        $response->assertRedirect(route('presensi2.index'));
+        $response->assertRedirect(route('presensi2.scan'));
         $this->assertEquals($this->employee->id, session('presensi2_employee_id'));
 
         // Pastikan sekarang ter-rehash dengan aman
@@ -581,7 +581,7 @@ class AttendanceWebV2PortalTest extends TestCase
             'employee_id' => $this->employee->id,
             'credential' => 'newpass654',
         ]);
-        $loginResponse->assertRedirect(route('presensi2.index'));
+        $loginResponse->assertRedirect(route('presensi2.scan'));
         $this->assertEquals($this->employee->id, session('presensi2_employee_id'));
     }
 

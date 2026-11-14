@@ -14,6 +14,7 @@ use App\Domains\Employee\Models\Shift;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\Employee;
@@ -37,6 +38,10 @@ class ApproveAttendanceCorrectionAction
         $branchId = $employee->branch_id ?? Branch::value('id');
 
         // Proteksi Anti Self-Approval (Prinsip SoD Maker-Checker)
+        if ($approverId === (int) $correction->employee_id) {
+            throw new AuthorizationException('Pelanggaran SoD: Anda tidak diizinkan menyetujui permohonan koreksi presensi Anda sendiri.');
+        }
+
         $approverUser = User::find($approverId);
         if ($approverUser) {
             $isSelf = false;
@@ -50,11 +55,6 @@ class ApproveAttendanceCorrectionAction
                 $isSelf = true;
             }
             if ($isSelf) {
-                throw new AuthorizationException('Pelanggaran SoD: Anda tidak diizinkan menyetujui permohonan koreksi presensi Anda sendiri.');
-            }
-        } else {
-            // Approver adalah Employee langsung (Supervisor ID)
-            if ($approverId === (int) $correction->employee_id) {
                 throw new AuthorizationException('Pelanggaran SoD: Anda tidak diizinkan menyetujui permohonan koreksi presensi Anda sendiri.');
             }
         }
@@ -129,9 +129,13 @@ class ApproveAttendanceCorrectionAction
             $record->verification_method = VerificationMethod::AdminManual;
             $record->notes = trim(($record->notes ?? '').' [Koreksi Disetujui ID #'.$correction->id.']');
 
+            $auditUserId = Auth::id()
+                ?? User::where('employee_id', $approverId)->value('id')
+                ?? (User::where('id', $approverId)->exists() ? $approverId : null);
+
             // Penanda struktural SoT penyesuaian koreksi
             $record->is_adjusted = true;
-            $record->adjusted_by = $approverId;
+            $record->adjusted_by = $auditUserId ?? $approverId;
             $record->adjusted_at = Carbon::now();
             $record->save();
 
@@ -157,7 +161,7 @@ class ApproveAttendanceCorrectionAction
                     'duration_minutes' => $record->duration_minutes,
                     'is_adjusted' => true,
                 ],
-                userId: $approverId,
+                userId: $auditUserId,
             );
 
             return $correction->fresh();

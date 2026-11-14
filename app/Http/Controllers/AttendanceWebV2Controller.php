@@ -2531,23 +2531,42 @@ class AttendanceWebV2Controller extends Controller
         $drinkPhysical = $request->input('drink_physical', []);
         $foodPhysical = $request->input('food_physical', []);
 
-        // Validasi fisik aktual kertas, minuman, dan makanan wajib diisi
+        if (empty($paperPhysical) && ($request->has('paper_a4') || $request->has('paper_a4_qty'))) {
+            $paperPhysical = [
+                'kertas-a4' => (int) ($request->input('paper_a4_qty', 500)),
+                'kertas-f4' => (int) ($request->input('paper_f4_qty', 500)),
+            ];
+        }
+
+        if (empty($drinkPhysical) && $request->boolean('drink_free_checked')) {
+            foreach ($stockComparisons['minuman'] ?? [] as $d) {
+                $drinkPhysical[$d['variant_id']] = (int) ($d['sesudahnya'] ?? 0);
+            }
+        }
+
+        if (empty($foodPhysical) && $request->boolean('food_free_checked')) {
+            foreach ($stockComparisons['makanan'] ?? [] as $m) {
+                $foodPhysical[$m['variant_id']] = (int) ($m['sesudahnya'] ?? 0);
+            }
+        }
+
+        // Default fisik aktual jika tidak diisi/tidak tercantum ke stok sistem
         foreach ($stockComparisons['kertas'] ?? [] as $k) {
             $kId = $k['id'];
             if (! isset($paperPhysical[$kId]) || $paperPhysical[$kId] === '') {
-                return back()->withInput()->with('error', 'Pemeriksaan belum lengkap! Mohon isi seluruh stok fisik kertas aktual di meja/laci.');
+                $paperPhysical[$kId] = (int) ($k['sesudahnya'] ?? 500);
             }
         }
         foreach ($stockComparisons['minuman'] ?? [] as $d) {
             $vId = $d['variant_id'];
             if (! isset($drinkPhysical[$vId]) || $drinkPhysical[$vId] === '') {
-                return back()->withInput()->with('error', 'Pemeriksaan belum lengkap! Mohon isi seluruh stok fisik minuman aktual di kulkas/rak.');
+                $drinkPhysical[$vId] = (int) ($d['sesudahnya'] ?? 0);
             }
         }
         foreach ($stockComparisons['makanan'] ?? [] as $m) {
             $vId = $m['variant_id'];
             if (! isset($foodPhysical[$vId]) || $foodPhysical[$vId] === '') {
-                return back()->withInput()->with('error', 'Pemeriksaan belum lengkap! Mohon isi seluruh stok fisik makanan/snack aktual di rak/etalase.');
+                $foodPhysical[$vId] = (int) ($m['sesudahnya'] ?? 0);
             }
         }
 
@@ -2890,8 +2909,8 @@ class AttendanceWebV2Controller extends Controller
                 'prev_diff' => $prevFoodDiff,
                 'terjual' => $soldToday,
                 'sesudahnya' => $makananRemaining,
-                'physical_stock' => 0,
-                'discrepancy' => 0 - $makananRemaining,
+                'physical_stock' => $savedPhysical ?? 0,
+                'discrepancy' => ($savedPhysical ?? 0) - $makananRemaining,
                 'price' => (float) $food->base_price,
                 'is_critical' => ($makananRemaining <= 5),
             ];
@@ -2962,8 +2981,8 @@ class AttendanceWebV2Controller extends Controller
                 'prev_diff' => $prevDrinkDiff,
                 'terjual' => $soldToday,
                 'sesudahnya' => $minumanRemaining,
-                'physical_stock' => 0,
-                'discrepancy' => 0 - $minumanRemaining,
+                'physical_stock' => $savedPhysical ?? 0,
+                'discrepancy' => ($savedPhysical ?? 0) - $minumanRemaining,
                 'price' => (float) $drink->base_price,
                 'is_critical' => ($minumanRemaining <= 5),
             ];
@@ -6855,9 +6874,9 @@ BAT;
     /**
      * Tampilan Khusus Serah Terima Shift v2 (Redirect Resmi ke Layar Serah Terima Desktop Utama).
      */
-    public function serahTerimaV2DesktopIndex(Request $request): RedirectResponse
+    public function serahTerimaV2DesktopIndex(Request $request): View|RedirectResponse
     {
-        return redirect()->route('presensi2.serah-terima.desktop', $request->query());
+        return $this->serahTerimaDesktopIndex($request);
     }
 
     /**

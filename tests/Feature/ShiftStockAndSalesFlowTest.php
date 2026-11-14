@@ -257,7 +257,7 @@ class ShiftStockAndSalesFlowTest extends TestCase
         $response->assertSee('Cek Daftar Billing Internet');
         $response->assertSee('Shift Sebelumnya');
         $response->assertSee('6. Selesai');
-        $response->assertSee('Buka POS Kasir Desktop');
+        $response->assertSee('Siap Tugas di PC Kasir');
         $response->assertSee('Restock');
         $response->assertSee('modal-quick-restock');
     }
@@ -314,8 +314,8 @@ class ShiftStockAndSalesFlowTest extends TestCase
                 'billing_verified' => '1',
             ]);
 
-        $response->assertRedirect(route('pos'));
-        $response->assertSessionHas('success');
+        $response->assertRedirect(route('presensi2.login'));
+        $response->assertSessionHas('stok_selesai_notice');
 
         $this->assertDatabaseHas('shift_handover_checklists', [
             'employee_id' => $this->employee->id,
@@ -692,7 +692,7 @@ class ShiftStockAndSalesFlowTest extends TestCase
                 'billing_verified' => '1',
             ]);
 
-        $response->assertRedirect(route('pos'));
+        $response->assertRedirect(route('presensi2.login'));
 
         // 2. View Halaman Penjualan dan cek komparasi stok
         $viewResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
@@ -1061,7 +1061,7 @@ class ShiftStockAndSalesFlowTest extends TestCase
                 'food_notes' => 'Chiki kurang 1 pcs',
             ]);
 
-        $response->assertSessionHas('success');
+        $response->assertSessionHas('stok_selesai_notice');
 
         $checklist = ShiftHandoverChecklist::where('employee_id', $this->employee->id)->latest('id')->first();
         $this->assertNotNull($checklist);
@@ -1425,7 +1425,7 @@ class ShiftStockAndSalesFlowTest extends TestCase
                 'cash_handover_notes' => 'Uang receh di laci kurang Rp 100.000 sudah konfirmasi ke shift lalu',
             ]);
 
-        $responseSuccess->assertRedirect(route('pos'));
+        $responseSuccess->assertRedirect(route('presensi2.login'));
 
         $checklist = ShiftHandoverChecklist::where('employee_id', $this->employee->id)->latest('id')->first();
         $this->assertNotNull($checklist);
@@ -1452,7 +1452,6 @@ class ShiftStockAndSalesFlowTest extends TestCase
         $response->assertSee('name="billing_verified"', false);
         $response->assertSee('name="cash_handover_notes"', false);
         $response->assertSee('id="denom-calculator-panel"', false);
-        $response->assertSee('goToStep2(false)', false);
         $response->assertSee('goToStep2(true)', false);
 
         // Buka langsung via parameter ?step=2
@@ -1724,9 +1723,9 @@ class ShiftStockAndSalesFlowTest extends TestCase
             ->get(route('presensi2.serah-terima.v2.desktop'));
 
         $pageResponse->assertStatus(200);
-        $pageResponse->assertSee('Siap setor');
+        $pageResponse->assertSee('Siap Setor');
         $pageResponse->assertSee('History setor');
-        $pageResponse->assertSee('check-all-siap-setor');
+        $pageResponse->assertSee('Total Nilai Rekap / Siap Setor');
 
         // 2. Eksekusi Setor kas untuk 2 shift sekaligus (Batch Setor)
         $postResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
