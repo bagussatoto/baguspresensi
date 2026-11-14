@@ -46,12 +46,12 @@ Berdasarkan evaluasi kode dan alur operasional saat ini, berikut adalah beberapa
 Berikut adalah daftar pekerjaan prioritas yang dapat kita eksekusi hari ini:
 
 ### 🔴 Prioritas Tinggi (Operasional Inti Kasir & Admin)
-- [ ] **Tugas 1 — Uji & Sempurnakan Eksekusi Tombol "Setor" di `/presensi2/serah-terima-v2`**:
-  - Pastikan penggabungan beberapa shift dalam satu nomor bukti setoran (`STR-YYYYMMDD-XXX`) berjalan mulus dan badge kotak shift `[1] [2] [3] [4]` tampil akurat di *History Setor*.
-- [ ] **Tugas 2 — Fitur Penyelesaian (Resolution) Selisih Kas & Stok di Admin ERP**:
-  - Tambahkan aksi tindak lanjut bagi Admin pada halaman `/admin/penjualan/serah-terima` ketika ditemukan kas minus atau stok selisih (mis. status: *Diganti Kasir*, *Masuk Piutang Karyawan*, atau *Write-Off/Penyesuaian*).
-- [ ] **Tugas 3 — Konsistensi Mode `?demo=1` di Halaman Mobile (`/presensi2/penjualan` & `/presensi2/rekap`)**:
-  - Periksa seluruh halaman sisa di `resources/views/presensi2/` agar tidak ada elemen testing yang bocor di mode produksi normal.
+- [x] **Tugas 1 — Uji & Sempurnakan Eksekusi Tombol "Setor" di `/presensi2/serah-terima-v2`**:
+  - Penggabungan multi-shift dalam satu nomor bukti setoran kwitansi resmi (`deposit_receipt_no` & `deposit_batch_id`) selesai, seleksi checkbox real-time berfungsi, badge kotak shift `[1] [2] [3] [4]` tampil akurat di *History Setor*. (Commit `0adf9e8`)
+- [x] **Tugas 2 — Fitur Penyelesaian (Resolution) Selisih Kas & Stok di Admin ERP**:
+  - Form & aksi resolusi selisih kas/stok shift ditambahkan pada halaman `/admin/penjualan/penyesuaian-billing` dengan 4 opsi keputusan resmi, status dinamis, dan audit log WORM ISO 27001. (Commit `c3cfb67`)
+- [x] **Tugas 3 — Konsistensi Mode `?demo=1` di Halaman Mobile & Banner Peringatan Demo**:
+  - Banner peringatan mode demo (`🧪 MODE DEMO / SIMULASI AKTIF`) telah dipasang terpusat di `resources/views/layouts/presensi2.blade.php`, dan seluruh halaman operasional mobile bersih dari kebocoran tombol simulasi pada mode produksi. (Commit `3b6e4f4`)
 
 ### 🟡 Prioritas Menengah (Integrasi Akuntansi & Pelaporan)
 - [ ] **Tugas 4 — Integrasi Otomatis Setoran Shift ke Jurnal Kas/Bank (`AutoJournalService`)**:
