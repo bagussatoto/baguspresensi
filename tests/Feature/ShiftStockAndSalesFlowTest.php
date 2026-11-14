@@ -1763,5 +1763,12 @@ class ShiftStockAndSalesFlowTest extends TestCase
 
         $afterResponse->assertStatus(200);
         $afterResponse->assertSee($summary1->deposit_receipt_no);
+
+        // 4. Pastikan Jurnal Umum Akuntansi SAK (Double-Entry GL) otomatis terbit dan berimbang
+        $this->assertDatabaseHas('journal_entries', [
+            'reference_type' => ShiftSalesSummary::class,
+            'reference_id' => $summary1->id,
+            'status' => 'posted',
+        ]);
     }
 }

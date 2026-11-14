@@ -13,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Modules\Kas\Domain\Services\AutoJournalService;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\CafePayment;
 use Modules\MasterData\Domain\Models\CafeSale;
@@ -682,6 +683,21 @@ class AdminSaleController extends Controller
             'user_agent' => $request->userAgent() ?? 'Admin ERP MGK',
             'created_at' => now(),
         ]));
+
+        // Bukukan Jurnal Umum Akuntansi SAK jika diverifikasi diterima
+        if ($status === 'verified') {
+            rescue(function () use ($summary): void {
+                $autoJournal = app(AutoJournalService::class);
+                $amount = (float) ($summary->deposited_amount ?: ($summary->blind_cash_count ?? $summary->cash_in_drawer));
+                $autoJournal->journalShiftDeposit(
+                    $summary,
+                    $amount,
+                    $summary->deposit_receipt_no,
+                    $summary->deposit_method ?: 'bank_transfer',
+                    "Verifikasi Admin: {$summary->deposit_verified_by}"
+                );
+            });
+        }
 
         $label = $status === 'verified' ? 'Diverifikasi & Diterima' : 'Ditolak / Perlu Revisi';
         $message = "Setoran kas shift #{$summary->id} berhasil {$label} oleh {$adminName}.";

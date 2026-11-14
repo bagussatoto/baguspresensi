@@ -54,8 +54,8 @@ Berikut adalah daftar pekerjaan prioritas yang dapat kita eksekusi hari ini:
   - Banner peringatan mode demo (`🧪 MODE DEMO / SIMULASI AKTIF`) telah dipasang terpusat di `resources/views/layouts/presensi2.blade.php`, dan seluruh halaman operasional mobile bersih dari kebocoran tombol simulasi pada mode produksi. (Commit `3b6e4f4`)
 
 ### 🟡 Prioritas Menengah (Integrasi Akuntansi & Pelaporan)
-- [ ] **Tugas 4 — Integrasi Otomatis Setoran Shift ke Jurnal Kas/Bank (`AutoJournalService`)**:
-  - Saat setoran shift dikonfirmasi diterima oleh Admin/Owner, otomatis menerbitkan jurnal *Debit: Kas Besar / Bank BCA* dan *Kredit: Kas Laci Outlet*.
+- [x] **Tugas 4 — Integrasi Otomatis Setoran Shift ke Jurnal Kas/Bank (`AutoJournalService`)**:
+  - Saat setoran shift dikonfirmasi/disimpan via batch setor (`/presensi2/serah-terima-v2`) atau diverifikasi oleh Admin, otomatis menerbitkan jurnal akuntansi pembukuan berpasangan (Double-Entry GL) *Debit: Rekening Bank BCA (1-11001) / Kas Operasional (1-10002)* dan *Kredit: Kas Laci Kasir (1-10001)*.
 - [ ] **Tugas 5 — Rapikan Hak Akses Direktori `docs/2026-11/`**:
   - Menyatukan folder dokumentasi November (`2026-11-03` s/d `2026-11-14`) ke dalam `docs/2026-11/` setelah izin kepemilikan folder (`chown`) diperbaiki.
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Kas\Domain\Services;
 
+use App\Models\ShiftSalesSummary;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Modules\Kas\Domain\Enums\NormalBalance;
@@ -419,6 +420,84 @@ class AutoJournalService
                 $this->createLine($entry, $cashAccount, $settledAmount, 0, "Penerimaan Kas Setoran Reseller {$partnerName}");
                 $this->createLine($entry, $revenueAccount, 0, $settledAmount, "Pendapatan Konsinyasi Reseller {$partnerName}");
             }
+
+            $totalDebit = (float) $entry->lines()->sum('debit');
+            $totalCredit = (float) $entry->lines()->sum('credit');
+
+            $entry->update([
+                'total_debit' => $totalDebit,
+                'total_credit' => $totalCredit,
+            ]);
+
+            return $entry;
+        });
+    }
+
+    /**
+     * Jurnal otomatis penyetoran kas shift kasir ke Bank atau Kas Besar Pusat.
+     *
+     * Debit: 1-11001 (Rekening Bank BCA) jika transfer bank, atau 1-10002 (Kas Operasional Kantor) jika setor tunai/kolektor
+     * Kredit: 1-10001 (Kas Laci Kasir Outlet)
+     */
+    public function journalShiftDeposit(ShiftSalesSummary $summary, float $amount, ?string $receiptNo = null, ?string $method = 'bank_transfer', ?string $memo = null): ?JournalEntry
+    {
+        if ($amount <= 0) {
+            return null;
+        }
+
+        $receiptNo = $receiptNo ?: ($summary->deposit_receipt_no ?: "DEP-{$summary->id}");
+
+        // Hindari duplikasi jurnal untuk bukti setoran atau summary yang sama
+        $existing = JournalEntry::where('reference_type', ShiftSalesSummary::class)
+            ->where('reference_id', $summary->id)
+            ->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        return DB::transaction(function () use ($summary, $amount, $receiptNo, $method, $memo): JournalEntry {
+            $entryDate = $summary->deposited_at
+                ? Carbon::parse($summary->deposited_at)->toDateString()
+                : ($summary->work_date ? Carbon::parse($summary->work_date)->toDateString() : Carbon::today()->toDateString());
+
+            $entryNumber = $this->generateEntryNumber('JRN-DEP', Carbon::parse($entryDate));
+            $methodLabel = match ($method) {
+                'bank_transfer' => 'Transfer Bank',
+                'cash_collector' => 'Setor Kolektor Kas',
+                'safe_dropbox' => 'Drop Box Brankas',
+                default => 'Setor Kasir',
+            };
+
+            $description = "Penyetoran Kas Shift #{$summary->id} [{$receiptNo}] ({$methodLabel})".($memo ? " - {$memo}" : '');
+
+            $entry = JournalEntry::create([
+                'entry_number' => $entryNumber,
+                'entry_date' => $entryDate,
+                'reference_type' => ShiftSalesSummary::class,
+                'reference_id' => $summary->id,
+                'branch_id' => $summary->branch_id,
+                'creator_employee_id' => $summary->employee_id,
+                'description' => $description,
+                'status' => 'posted',
+                'total_debit' => 0,
+                'total_credit' => 0,
+            ]);
+
+            // 1. DEBIT: Akun Tujuan (Rekening Bank atau Kas Besar)
+            if ($method === 'bank_transfer') {
+                $destAccount = $this->getAccountByCode('1-11001', 'Rekening Bank BCA', 'asset', 'debit');
+                $destMemo = "Penerimaan Setoran Kas Kasir via Bank BCA [{$receiptNo}]";
+            } else {
+                $destAccount = $this->getAccountByCode('1-10002', 'Kas Operasional Kantor', 'asset', 'debit');
+                $destMemo = "Penerimaan Setoran Kas Kasir ke Kas Kantor/Kolektor [{$receiptNo}]";
+            }
+            $this->createLine($entry, $destAccount, $amount, 0, $destMemo);
+
+            // 2. KREDIT: Akun Asal (Kas Laci Kasir Outlet)
+            $sourceAccount = $this->getAccountByCode('1-10001', 'Kas Laci Kasir (Outlet)', 'asset', 'debit');
+            $sourceMemo = "Pengeluaran Kas Laci Kasir untuk Setoran Shift #{$summary->id} [{$receiptNo}]";
+            $this->createLine($entry, $sourceAccount, 0, $amount, $sourceMemo);
 
             $totalDebit = (float) $entry->lines()->sum('debit');
             $totalCredit = (float) $entry->lines()->sum('credit');

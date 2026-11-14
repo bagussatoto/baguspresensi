@@ -7079,6 +7079,31 @@ BAT;
                 'created_at' => $now,
             ]));
 
+            // Bukukan Jurnal Umum Akuntansi SAK untuk penyetoran kas shift
+            rescue(function () use ($summary, $depositedAmount, $receiptNo, $method, $recipient, $otherSummaries): void {
+                $autoJournal = app(AutoJournalService::class);
+                $autoJournal->journalShiftDeposit(
+                    $summary,
+                    $depositedAmount,
+                    $receiptNo,
+                    $method,
+                    "Penerima: {$recipient}"
+                );
+
+                foreach ($otherSummaries as $otherSum) {
+                    $otherAmount = (float) $otherSum->deposited_amount;
+                    if ($otherAmount > 0) {
+                        $autoJournal->journalShiftDeposit(
+                            $otherSum,
+                            $otherAmount,
+                            $receiptNo,
+                            $method,
+                            "Penerima: {$recipient} (Batch: {$receiptNo})"
+                        );
+                    }
+                }
+            });
+
             rescue(fn () => app(EarlyWarningNotificationService::class)->sendShiftDepositAlert($summary));
 
             $countShifts = count($summaryIdsToDeposit);
