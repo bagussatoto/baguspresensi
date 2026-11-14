@@ -9,6 +9,7 @@ use App\Domains\Employee\Models\Shift;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 use Modules\MasterData\Domain\Models\Branch;
 use Modules\MasterData\Domain\Models\Employee;
 
@@ -452,5 +453,40 @@ class ShiftSalesSummary extends Model
         }
 
         return null;
+    }
+
+    /**
+     * Cek apakah shift telah disetorkan ke bank (memiliki nomor tanda terima atau status verified).
+     */
+    public function isDepositedToBank(): bool
+    {
+        return ! empty($this->deposit_receipt_no)
+            || ! empty($this->deposit_batch_id)
+            || $this->deposit_status === 'verified';
+    }
+
+    /**
+     * Ambil timestamp penutupan atau penguncian shift untuk referensi batas waktu (time-lock).
+     */
+    public function lockReferenceTimestamp(): ?Carbon
+    {
+        return $this->locked_sales_at
+            ?? $this->closed_at
+            ?? $this->handover_at
+            ?? ($this->work_date ? $this->work_date->copy()->endOfDay() : null);
+    }
+
+    /**
+     * Cek apakah shift telah terkunci melewati batas waktu maksimal (default: 24 jam).
+     */
+    public function isPastUnlockTimeLimit(int $maxHours = 24): bool
+    {
+        $lockTime = $this->lockReferenceTimestamp();
+
+        if (! $lockTime) {
+            return false;
+        }
+
+        return $lockTime->copy()->addHours($maxHours)->isPast();
     }
 }

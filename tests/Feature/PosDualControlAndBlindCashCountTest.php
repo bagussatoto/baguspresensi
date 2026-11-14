@@ -1384,4 +1384,130 @@ class PosDualControlAndBlindCashCountTest extends TestCase
             'status' => 'open',
         ]);
     }
+
+    public function test_admin_can_unlock_shift_within_24h_when_not_deposited(): void
+    {
+        $summary = ShiftSalesSummary::create([
+            'employee_id' => $this->cashier->id,
+            'branch_id' => $this->branch->id,
+            'work_date' => Carbon::today()->toDateString(),
+            'total_fnb_sales' => 50000,
+            'total_internet_sales' => 100000,
+            'total_revenue' => 150000,
+            'is_sales_locked' => true,
+            'locked_sales_at' => Carbon::now()->subHours(2),
+            'status' => 'closed',
+        ]);
+
+        $response = $this->withSession(['admin_role' => 'Branch Admin'])
+            ->post(route('admin.penjualan.unlock-sales', $summary->id));
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $summary->refresh();
+        $this->assertFalse($summary->is_sales_locked);
+        $this->assertEquals('open', $summary->status);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'auditable_id' => $summary->id,
+            'action' => 'shift_sales_unlocked',
+        ]);
+    }
+
+    public function test_admin_cannot_unlock_shift_if_cash_already_deposited_to_bank(): void
+    {
+        $summary = ShiftSalesSummary::create([
+            'employee_id' => $this->cashier->id,
+            'branch_id' => $this->branch->id,
+            'work_date' => Carbon::today()->toDateString(),
+            'total_fnb_sales' => 50000,
+            'total_internet_sales' => 100000,
+            'total_revenue' => 150000,
+            'is_sales_locked' => true,
+            'locked_sales_at' => Carbon::now()->subHour(),
+            'status' => 'closed',
+            'deposit_status' => 'verified',
+            'deposit_receipt_no' => 'STR-20261114-BANK-01',
+        ]);
+
+        $this->assertTrue($summary->isDepositedToBank());
+
+        $response = $this->withSession(['admin_role' => 'Super Admin'])
+            ->post(route('admin.penjualan.unlock-sales', $summary->id));
+
+        $response->assertRedirect();
+        $response->assertSessionHas('error');
+
+        $summary->refresh();
+        $this->assertTrue($summary->is_sales_locked);
+        $this->assertEquals('closed', $summary->status);
+    }
+
+    public function test_branch_admin_cannot_unlock_shift_past_24h(): void
+    {
+        $summary = ShiftSalesSummary::create([
+            'employee_id' => $this->cashier->id,
+            'branch_id' => $this->branch->id,
+            'work_date' => Carbon::today()->subDays(2)->toDateString(),
+            'total_fnb_sales' => 50000,
+            'total_internet_sales' => 100000,
+            'total_revenue' => 150000,
+            'is_sales_locked' => true,
+            'locked_sales_at' => Carbon::now()->subHours(30),
+            'status' => 'closed',
+        ]);
+
+        $this->assertTrue($summary->isPastUnlockTimeLimit(24));
+
+        $response = $this->withSession(['admin_role' => 'Branch Admin'])
+            ->post(route('admin.penjualan.unlock-sales', $summary->id));
+
+        $response->assertRedirect();
+        $response->assertSessionHas('error');
+
+        $summary->refresh();
+        $this->assertTrue($summary->is_sales_locked);
+    }
+
+    public function test_super_admin_can_unlock_shift_past_24h_with_reason_and_audit_log(): void
+    {
+        $summary = ShiftSalesSummary::create([
+            'employee_id' => $this->cashier->id,
+            'branch_id' => $this->branch->id,
+            'work_date' => Carbon::today()->subDays(2)->toDateString(),
+            'total_fnb_sales' => 50000,
+            'total_internet_sales' => 100000,
+            'total_revenue' => 150000,
+            'is_sales_locked' => true,
+            'locked_sales_at' => Carbon::now()->subHours(36),
+            'status' => 'closed',
+        ]);
+
+        // Tanpa alasan -> gagal
+        $responseNoReason = $this->withSession(['admin_role' => 'Super Admin'])
+            ->post(route('admin.penjualan.unlock-sales', $summary->id), [
+                'reason' => '',
+            ]);
+        $responseNoReason->assertRedirect();
+        $responseNoReason->assertSessionHas('error');
+
+        // Dengan alasan otorisasi Super Admin -> berhasil
+        $responseWithReason = $this->withSession(['admin_role' => 'Super Admin'])
+            ->post(route('admin.penjualan.unlock-sales', $summary->id), [
+                'reason' => 'Otorisasi koreksi transaksi tertinggal atas izin Owner MGK',
+            ]);
+
+        $responseWithReason->assertRedirect();
+        $responseWithReason->assertSessionHas('success');
+
+        $summary->refresh();
+        $this->assertFalse($summary->is_sales_locked);
+        $this->assertEquals('open', $summary->status);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'auditable_id' => $summary->id,
+            'action' => 'shift_sales_unlocked_override_past_24h',
+        ]);
+    }
 }

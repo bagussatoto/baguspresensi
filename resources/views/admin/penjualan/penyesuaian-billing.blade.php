@@ -422,12 +422,35 @@
                                         </button>
                                     @endif
 
-                                    <form method="POST" action="{{ route('admin.penjualan.unlock-sales', $lockedSummary->id) }}" onsubmit="return confirm('Buka kembali kunci penjualan untuk shift ini agar kasir dapat menginput transaksi lagi?');" style="display: inline;">
-                                        @csrf
-                                        <button type="submit" class="btn-action-sm" style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.5); color: #34d399; font-weight: 700; cursor: pointer;">
-                                            🔓 Buka Kunci Shift
-                                        </button>
-                                    </form>
+                                    @php
+                                        $isDeposited = $lockedSummary->isDepositedToBank();
+                                        $isPast24h = $lockedSummary->isPastUnlockTimeLimit(24);
+                                        $userRole = strtolower((string) ($profileData['role'] ?? session('admin_role', '')));
+                                        $canOverride = in_array($userRole, ['super admin', 'super_admin', 'owner', 'manager']);
+                                    @endphp
+
+                                    @if($isDeposited)
+                                        <span class="badge-status" style="background: rgba(100, 116, 139, 0.2); border: 1px solid rgba(100, 116, 139, 0.4); color: #94a3b8; font-size: 11px; padding: 4px 8px;" title="Kas shift telah disetor ke bank (Ref: {{ $lockedSummary->deposit_receipt_no ?: '-' }}). Rekap terkunci permanen demi integritas laporan keuangan.">
+                                            🔒 Kas Disetor ({{ $lockedSummary->deposit_receipt_no ?: 'Bank' }})
+                                        </span>
+                                    @elseif($isPast24h)
+                                        @if($canOverride)
+                                            <button type="button" onclick="openOverrideUnlockModal({{ $lockedSummary->id }}, '{{ $lockedSummary->employee?->name ?? 'Kasir' }}', '{{ $lockedSummary->shift?->name ?? 'Shift' }}')" class="btn-action-sm" style="background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.5); color: #fbbf24; font-weight: 700; cursor: pointer;" title="Shift telah lewat batas 24 jam. Buka kunci memerlukan catatan alasan otorisasi Super Admin.">
+                                                ⚠️ Override Buka (>24 Jam)
+                                            </button>
+                                        @else
+                                            <span class="badge-status" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; font-size: 11px; padding: 4px 8px;" title="Shift telah terkunci lebih dari 24 jam. Pembukaan kunci hanya dapat dilakukan oleh Super Admin / Owner.">
+                                                ⌛ Terkunci >24 Jam
+                                            </span>
+                                        @endif
+                                    @else
+                                        <form method="POST" action="{{ route('admin.penjualan.unlock-sales', $lockedSummary->id) }}" onsubmit="return confirm('Buka kembali kunci penjualan untuk shift ini agar kasir dapat menginput transaksi lagi?');" style="display: inline;">
+                                            @csrf
+                                            <button type="submit" class="btn-action-sm" style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.5); color: #34d399; font-weight: 700; cursor: pointer;">
+                                                🔓 Buka Kunci Shift
+                                            </button>
+                                        </form>
+                                    @endif
                                 </div>
                             </td>
                         </tr>
@@ -488,7 +511,61 @@
     </div>
 </div>
 
+{{-- MODAL OVERRIDE BUKA KUNCI SHIFT > 24 JAM --}}
+<div id="modal-override-unlock" style="display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(4px); align-items: center; justify-content: center;">
+    <div style="background: #1e293b; border: 1px solid var(--border-color); border-radius: 16px; width: 100%; max-width: 480px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); overflow: hidden;">
+        <div style="padding: 16px 20px; background: rgba(245, 158, 11, 0.15); border-bottom: 1px solid rgba(245, 158, 11, 0.3); display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 18px;">⚠️</span>
+                <span style="font-weight: 700; color: #fbbf24; font-size: 14px;">Otorisasi Khusus Buka Kunci (>24 Jam)</span>
+            </div>
+            <button type="button" onclick="closeOverrideUnlockModal()" style="background: transparent; border: none; color: #94a3b8; font-size: 18px; cursor: pointer;">✕</button>
+        </div>
+        <form id="form-override-unlock" method="POST" style="padding: 20px;">
+            @csrf
+            <div style="font-size: 13px; color: #e2e8f0; margin-bottom: 14px; line-height: 1.5;">
+                Shift ini telah terkunci lebih dari 24 jam. Sebagai <strong>Super Admin / Owner</strong>, Anda diwajibkan menyertakan alasan pembukaan kunci untuk keperluan kepatuhan audit ISO 27001.
+            </div>
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); margin-bottom: 16px; font-size: 12px;">
+                <div style="color: var(--text-sub);">Kasir: <strong id="override-employee-name" style="color: #fff;">-</strong></div>
+                <div style="color: var(--text-sub); margin-top: 4px;">Shift: <strong id="override-shift-name" style="color: #fff;">-</strong></div>
+            </div>
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; font-size: 12px; font-weight: 600; color: #94a3b8; margin-bottom: 6px;">Catatan Alasan Otorisasi (Wajib):</label>
+                <textarea name="reason" id="override-reason" rows="3" required placeholder="Contoh: Koreksi transaksi yang terlewat atas persetujuan Manager Operasional..." style="width: 100%; padding: 10px; border-radius: 8px; background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-color); color: #fff; font-size: 13px; resize: vertical; box-sizing: border-box;"></textarea>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" onclick="closeOverrideUnlockModal()" class="btn-action-sm" style="background: rgba(100, 116, 139, 0.2); border: 1px solid rgba(100, 116, 139, 0.4); color: #cbd5e1; cursor: pointer;">Batal</button>
+                <button type="submit" class="btn-action-sm" style="background: rgba(245, 158, 11, 0.3); border: 1px solid rgba(245, 158, 11, 0.6); color: #fbbf24; font-weight: 700; cursor: pointer;">
+                    🔓 Setujui Buka Kunci
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
+function openOverrideUnlockModal(summaryId, kasirName, shiftName) {
+    const modal = document.getElementById('modal-override-unlock');
+    const form = document.getElementById('form-override-unlock');
+    const empEl = document.getElementById('override-employee-name');
+    const shiftEl = document.getElementById('override-shift-name');
+    const reasonEl = document.getElementById('override-reason');
+
+    if (form) {
+        form.action = '{{ url("admin/penjualan/rekap-shift") }}/' + summaryId + '/unlock-sales';
+    }
+    if (empEl) empEl.innerText = kasirName;
+    if (shiftEl) shiftEl.innerText = shiftName;
+    if (reasonEl) reasonEl.value = '';
+
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeOverrideUnlockModal() {
+    const modal = document.getElementById('modal-override-unlock');
+    if (modal) modal.style.display = 'none';
+}
 function openDiscrepancyModal(summaryId, kasirName, diffAmount) {
     const modal = document.getElementById('modal-discrepancy-resolution');
     const form = document.getElementById('form-discrepancy-resolution');

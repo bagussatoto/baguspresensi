@@ -232,6 +232,8 @@ Route::middleware(['web', 'auditor.readonly'])->group(function () {
     Route::post('/bagus/admin/penjualan/penyesuaian-billing/{summary}/reject', [AdminSaleController::class, 'rejectBillingAdjustment']);
     Route::post('/bagus/admin/penjualan/penyesuaian-print/{summary}/approve', [AdminSaleController::class, 'approvePrintAdjustment']);
     Route::post('/bagus/admin/penjualan/penyesuaian-print/{summary}/reject', [AdminSaleController::class, 'rejectPrintAdjustment']);
+    Route::post('/bagus/admin/penjualan/rekap-shift/{summary}/unlock-sales', [AdminSaleController::class, 'unlockShiftSales']);
+    Route::post('/bagus/admin/penjualan/rekap-shift/{summary}/resolve-discrepancy', [AdminSaleController::class, 'resolveDiscrepancy']);
 
     // Alias URL admin distribusi dengan prefix /bagus/admin/...
     Route::post('/bagus/admin/distribusi/kirim', [AdminDashboardController::class, 'storeTransfer']);

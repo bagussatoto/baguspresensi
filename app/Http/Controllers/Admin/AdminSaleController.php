@@ -707,7 +707,45 @@ class AdminSaleController extends Controller
             return redirect()->back()->with('error', 'Anda tidak memiliki otorisasi cabang untuk membuka kunci shift ini.');
         }
 
-        $adminName = auth()->user()?->name ?? 'Admin ERP';
+        // 1. Proteksi Setoran Bank: Jika kas fisik sudah disetor, shift TIDAK BOLEH dibuka kembali
+        if ($summary->isDepositedToBank()) {
+            $receiptInfo = $summary->deposit_receipt_no ? " (No. Tanda Terima: {$summary->deposit_receipt_no})" : '';
+            $msg = "Shift ini tidak dapat dibuka kuncinya karena kas fisik telah disetorkan ke bank{$receiptInfo}. Rekap shift terkunci permanen demi integritas laporan keuangan.";
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 422);
+            }
+
+            return redirect()->back()->with('error', $msg);
+        }
+
+        // 2. Proteksi Batas Waktu 1x24 Jam
+        $isPast24h = $summary->isPastUnlockTimeLimit(24);
+        $user = auth()->user();
+        $sessionRole = session('admin_role');
+        $isSuperAdmin = ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
+            || in_array(strtolower((string) $sessionRole), ['super admin', 'super_admin', 'owner', 'manager']);
+
+        $overrideReason = trim((string) $request->input('reason', $request->input('override_reason', '')));
+
+        if ($isPast24h && ! $isSuperAdmin) {
+            $msg = 'Shift ini telah terkunci lebih dari 24 jam. Batas waktu pembukaan kunci mandiri oleh Admin Cabang telah berakhir. Diperlukan otorisasi khusus Super Admin / Owner.';
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 403);
+            }
+
+            return redirect()->back()->with('error', $msg);
+        }
+
+        if ($isPast24h && $isSuperAdmin && empty($overrideReason)) {
+            $msg = 'Membuka kunci shift yang telah melewati batas 24 jam memerlukan catatan alasan otorisasi Super Admin (override reason).';
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 422);
+            }
+
+            return redirect()->back()->with('error', $msg);
+        }
+
+        $adminName = auth()->user()?->name ?? ($sessionRole ?: 'Admin ERP');
 
         $summary->update([
             'is_sales_locked' => false,
@@ -725,12 +763,14 @@ class AdminSaleController extends Controller
             'user_id' => auth()->id(),
             'auditable_type' => ShiftSalesSummary::class,
             'auditable_id' => $summary->id,
-            'action' => 'shift_sales_unlocked',
+            'action' => $isPast24h ? 'shift_sales_unlocked_override_past_24h' : 'shift_sales_unlocked',
             'new_values' => [
                 'summary_id' => $summary->id,
                 'employee_id' => $summary->employee_id,
                 'shift_id' => $summary->shift_id,
                 'unlocked_by' => $adminName,
+                'is_past_24h' => $isPast24h,
+                'override_reason' => $overrideReason ?: null,
             ],
             'ip_address' => $request->ip() ?? '127.0.0.1',
             'user_agent' => $request->userAgent() ?? 'Admin ERP MGK',
@@ -739,7 +779,8 @@ class AdminSaleController extends Controller
 
         $shiftLabel = $summary->shift?->name ?? 'Shift';
         $empLabel = $summary->employee?->name ?? 'Kasir';
-        $message = "Kunci penjualan untuk {$shiftLabel} ({$empLabel}) berhasil dibuka kembali oleh {$adminName}!";
+        $overrideNotice = $isPast24h ? ' [Otorisasi Khusus Super Admin >24 Jam]' : '';
+        $message = "Kunci penjualan untuk {$shiftLabel} ({$empLabel}) berhasil dibuka kembali oleh {$adminName}{$overrideNotice}!";
 
         if ($request->wantsJson()) {
             return response()->json([
