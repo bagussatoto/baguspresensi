@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Domains\Attendance\Enums\AdminRole;
 use App\Domains\Attendance\Enums\AttendanceStatus;
 use App\Domains\Attendance\Models\AttendanceRecord;
 use App\Domains\Attendance\Models\AuditLog;
 use App\Domains\Employee\Models\Shift;
 use App\Models\ShiftSalesSummary;
 use App\Models\ShiftStockRequest;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -1508,6 +1510,78 @@ class PosDualControlAndBlindCashCountTest extends TestCase
         $this->assertDatabaseHas('audit_logs', [
             'auditable_id' => $summary->id,
             'action' => 'shift_sales_unlocked_override_past_24h',
+        ]);
+    }
+
+    public function test_admin_can_view_pending_deposits_in_verification_hub(): void
+    {
+        $summary = ShiftSalesSummary::create([
+            'employee_id' => $this->cashier->id,
+            'branch_id' => $this->branch->id,
+            'work_date' => Carbon::today()->toDateString(),
+            'total_revenue' => 450000,
+            'cash_in_drawer' => 450000,
+            'deposited_amount' => 450000,
+            'deposit_receipt_no' => 'STR-20261114-HUB-01',
+            'deposit_method' => 'bank_transfer',
+            'deposit_recipient' => 'BCA MayaNet Pusat',
+            'deposit_status' => 'pending_verification',
+            'deposited_at' => Carbon::now(),
+            'status' => 'closed',
+        ]);
+
+        $adminUser = User::first() ?? User::factory()->create([
+            'role' => AdminRole::SuperAdmin,
+        ]);
+
+        $response = $this->actingAs($adminUser)
+            ->withSession(['admin_role' => 'Super Admin', 'admin_logged_in' => true])
+            ->get(route('admin.penjualan.serah-terima'));
+
+        $response->assertOk();
+        $response->assertSee('Antrean Verifikasi Penerimaan Setoran Kas Cabang');
+        $response->assertSee('STR-20261114-HUB-01');
+        $response->assertSee('450.000');
+    }
+
+    public function test_admin_can_reject_shift_deposit_with_notes_and_audit_trail(): void
+    {
+        $summary = ShiftSalesSummary::create([
+            'employee_id' => $this->cashier->id,
+            'branch_id' => $this->branch->id,
+            'work_date' => Carbon::today()->toDateString(),
+            'total_revenue' => 300000,
+            'cash_in_drawer' => 300000,
+            'deposited_amount' => 300000,
+            'deposit_receipt_no' => 'STR-20261114-REJ-01',
+            'deposit_method' => 'bank_transfer',
+            'deposit_recipient' => 'BCA MayaNet Pusat',
+            'deposit_status' => 'pending_verification',
+            'deposited_at' => Carbon::now(),
+            'status' => 'closed',
+        ]);
+
+        $adminUser = User::first() ?? User::factory()->create([
+            'role' => AdminRole::SuperAdmin,
+        ]);
+
+        $response = $this->actingAs($adminUser)
+            ->withSession(['admin_role' => 'Super Admin', 'admin_logged_in' => true])
+            ->post(route('admin.penjualan.verify-setor', $summary->id), [
+                'deposit_status' => 'rejected',
+                'notes' => 'Bukti mutasi rekening BCA belum masuk. Mohon upload ulang struk mutasi m-banking yang jelas.',
+            ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $summary->refresh();
+        $this->assertEquals('rejected', $summary->deposit_status);
+        $this->assertStringContainsString('Bukti mutasi rekening BCA belum masuk', (string) $summary->deposit_notes);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'auditable_id' => $summary->id,
+            'action' => 'shift_deposit_rejected',
         ]);
     }
 }

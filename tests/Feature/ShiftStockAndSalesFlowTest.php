@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Domains\Attendance\Actions\ClockInAction;
 use App\Domains\Attendance\DataTransferObjects\ClockInDTO;
+use App\Domains\Attendance\Enums\AdminRole;
 use App\Domains\Attendance\Enums\AttendanceStatus;
 use App\Domains\Attendance\Enums\VerificationMethod;
 use App\Domains\Attendance\Models\AttendanceRecord;
@@ -1745,8 +1746,8 @@ class ShiftStockAndSalesFlowTest extends TestCase
         $summary1->refresh();
         $summary2->refresh();
 
-        $this->assertEquals('verified', $summary1->deposit_status);
-        $this->assertEquals('verified', $summary2->deposit_status);
+        $this->assertEquals('pending_verification', $summary1->deposit_status);
+        $this->assertEquals('pending_verification', $summary2->deposit_status);
         $this->assertNotEmpty($summary1->deposit_receipt_no);
         $this->assertEquals($summary1->deposit_receipt_no, $summary2->deposit_receipt_no);
         $this->assertNotEmpty($summary1->deposit_batch_id);
@@ -1764,7 +1765,26 @@ class ShiftStockAndSalesFlowTest extends TestCase
         $afterResponse->assertStatus(200);
         $afterResponse->assertSee($summary1->deposit_receipt_no);
 
-        // 4. Pastikan Jurnal Umum Akuntansi SAK (Double-Entry GL) otomatis terbit dan berimbang
+        // 4. Admin Pusat melakukan Verifikasi Penerimaan Setoran di Admin ERP
+        $adminUser = User::first() ?? User::factory()->create([
+            'role' => AdminRole::SuperAdmin,
+        ]);
+
+        $verifyResponse = $this->actingAs($adminUser)
+            ->withSession(['admin_role' => 'Super Admin', 'admin_logged_in' => true])
+            ->post(route('admin.penjualan.verify-setor', $summary1->id), [
+                'deposit_status' => 'verified',
+                'notes' => 'Dana setoran batch telah masuk rekening BCA Pusat',
+            ]);
+
+        $verifyResponse->assertRedirect();
+
+        $summary1->refresh();
+        $summary2->refresh();
+        $this->assertEquals('verified', $summary1->deposit_status);
+        $this->assertEquals('verified', $summary2->deposit_status);
+
+        // 5. Pastikan Jurnal Umum Akuntansi SAK (Double-Entry GL) otomatis terbit dan berimbang
         $this->assertDatabaseHas('journal_entries', [
             'reference_type' => ShiftSalesSummary::class,
             'reference_id' => $summary1->id,

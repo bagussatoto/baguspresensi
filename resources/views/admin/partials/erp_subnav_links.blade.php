@@ -45,6 +45,21 @@
     @endif
 </a>
 
+{{-- 4c. VERIFIKASI SETORAN KAS PUSAT --}}
+@php
+    $subnavPendingDepositsCount = \App\Models\ShiftSalesSummary::where('deposit_status', 'pending_verification')->count();
+@endphp
+<a href="{{ route('admin.penjualan.serah-terima') }}" 
+   class="subnav-item {{ request()->routeIs('admin.penjualan.serah-terima*') ? 'active' : '' }}" 
+   title="Verifikasi Penerimaan Setoran Kas Cabang ke Rekening Bank / Brankas Pusat">
+    📥 verifikasi setoran
+    @if($subnavPendingDepositsCount > 0)
+        <span style="background: #10b981; color: #fff; font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 999px; margin-left: 3px;">
+            {{ $subnavPendingDepositsCount }}
+        </span>
+    @endif
+</a>
+
 {{-- 5. PRODUK --}}
 <a href="{{ route('admin.produk') }}" 
    class="subnav-item {{ request()->routeIs('admin.produk*') || request()->is('*admin/produk*') ? 'active' : '' }}" 

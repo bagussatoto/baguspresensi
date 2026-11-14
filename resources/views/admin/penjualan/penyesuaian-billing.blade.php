@@ -74,6 +74,117 @@
     </div>
 
     <!-- ========================================== -->
+    <!-- BAGIAN 0: ANTREAN VERIFIKASI SETORAN KAS PUSAT -->
+    <!-- ========================================== -->
+    <div style="padding: 24px 24px 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+            <h3 style="font-size: 16px; font-weight: 700; color: #10b981; margin: 0; display: flex; align-items: center; gap: 8px;">
+                <span>📥</span> Antrean Verifikasi Penerimaan Setoran Kas Cabang (Bank & Brankas Pusat)
+            </h3>
+            <span class="badge-status {{ (isset($pendingDeposits) && $pendingDeposits->count() > 0) ? 'badge-emerald' : 'badge-slate' }}">
+                {{ isset($pendingDeposits) ? $pendingDeposits->count() : 0 }} Menunggu Verifikasi
+            </span>
+        </div>
+        <div style="overflow-x: auto; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 14px;">
+            <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border-color); background: rgba(16, 185, 129, 0.08);">
+                        <th style="padding: 12px 16px; color: #10b981;">Tanggal & Waktu</th>
+                        <th style="padding: 12px 16px; color: #10b981;">No. Kwitansi / Batch</th>
+                        <th style="padding: 12px 16px; color: #10b981;">Cabang & Kasir</th>
+                        <th style="padding: 12px 16px; color: #10b981; text-align: center;">Shift Dicakup</th>
+                        <th style="padding: 12px 16px; color: #10b981;">Tujuan & Metode</th>
+                        <th style="padding: 12px 16px; color: #10b981; text-align: right;">Nominal Disetor</th>
+                        <th style="padding: 12px 16px; color: #10b981; text-align: center;">Bukti Transfer</th>
+                        <th style="padding: 12px 16px; color: #10b981; text-align: center;">Aksi Verifikasi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($pendingDeposits ?? [] as $dep)
+                        @php
+                            $depAmt = (float) ($dep->deposited_amount ?: $dep->handoverAmount());
+                            $shifts = $dep->depositShiftsCovered();
+                            $proofUrl = $dep->depositProofUrl();
+                        @endphp
+                        <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
+                            <td style="padding: 12px 16px;">
+                                <strong style="color: #fff;">{{ $dep->deposited_at?->format('d/m/Y') ?? $dep->work_date?->format('d/m/Y') }}</strong>
+                                <div style="font-size: 11px; color: var(--text-sub); font-family: monospace;">
+                                    {{ $dep->deposited_at?->format('H:i') ?? '-' }} WIB
+                                </div>
+                            </td>
+                            <td style="padding: 12px 16px; font-family: monospace;">
+                                <strong style="color: #38bdf8;">{{ $dep->deposit_receipt_no ?: "DEP-{$dep->id}" }}</strong>
+                                @if($dep->deposit_batch_id)
+                                    <div style="font-size: 10.5px; color: var(--text-sub);">Batch: {{ $dep->deposit_batch_id }}</div>
+                                @endif
+                            </td>
+                            <td style="padding: 12px 16px;">
+                                <div style="font-weight: 600; color: #fff;">{{ $dep->branch->name ?? 'Cabang' }}</div>
+                                <div style="font-size: 11px; color: var(--text-sub);">Oleh: {{ $dep->employee->name ?? 'Kasir' }}</div>
+                            </td>
+                            <td style="padding: 12px 16px; text-align: center;">
+                                <div style="display: inline-flex; gap: 4px;">
+                                    @for($s = 1; $s <= 4; $s++)
+                                        <span style="display: inline-block; width: 20px; height: 20px; line-height: 18px; text-align: center; border-radius: 4px; font-size: 11px; font-weight: 700; border: 1px solid {{ in_array($s, $shifts, true) ? '#38bdf8' : 'rgba(255,255,255,0.1)' }}; background: {{ in_array($s, $shifts, true) ? 'rgba(56, 189, 248, 0.25)' : 'transparent' }}; color: {{ in_array($s, $shifts, true) ? '#38bdf8' : '#64748b' }};">
+                                            {{ $s }}
+                                        </span>
+                                    @endfor
+                                </div>
+                            </td>
+                            <td style="padding: 12px 16px;">
+                                <div style="font-weight: 600; color: #fff;">{{ $dep->deposit_recipient ?: '-' }}</div>
+                                <span class="badge-status badge-cyan" style="font-size: 10px; margin-top: 2px;">
+                                    {{ $dep->depositMethodLabel() }}
+                                </span>
+                            </td>
+                            <td style="padding: 12px 16px; text-align: right;">
+                                <div style="font-weight: 800; color: #10b981; font-family: monospace; font-size: 14px;">
+                                    Rp {{ number_format($depAmt, 0, ',', '.') }}
+                                </div>
+                            </td>
+                            <td style="padding: 12px 16px; text-align: center;">
+                                @if($proofUrl)
+                                    <a href="{{ $proofUrl }}" target="_blank" class="btn-action-sm" style="background: rgba(56, 189, 248, 0.2); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 11px;" title="Lihat Foto Bukti Transfer / Struk">
+                                        🖼️ Bukti Struk
+                                    </a>
+                                @else
+                                    <span style="color: var(--text-sub); font-size: 11px;">Tanpa Foto</span>
+                                @endif
+                            </td>
+                            <td style="padding: 12px 16px; text-align: center;">
+                                <div style="display: inline-flex; gap: 6px;">
+                                    <form method="POST" action="{{ route('admin.penjualan.verify-setor', $dep->id) }}" onsubmit="return confirm('Konfirmasi bahwa dana setoran Rp {{ number_format($depAmt, 0, ',', '.') }} telah masuk rekening/brankas pusat?');">
+                                        @csrf
+                                        <input type="hidden" name="deposit_status" value="verified">
+                                        <button type="submit" class="btn-action-sm" style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.5); color: #34d399; font-weight: 700; cursor: pointer;">
+                                            ✓ Terima Dana
+                                        </button>
+                                    </form>
+
+                                    <form method="POST" action="{{ route('admin.penjualan.verify-setor', $dep->id) }}" onsubmit="return confirm('Tolak setoran ini? Kasir harus mengonfirmasi ulang bukti setor.');">
+                                        @csrf
+                                        <input type="hidden" name="deposit_status" value="rejected">
+                                        <button type="submit" class="btn-action-sm" style="background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #f87171; font-weight: 700; cursor: pointer;">
+                                            ✕ Tolak
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="8" style="padding: 24px 16px; text-align: center; color: var(--text-sub);">
+                                Tidak ada setoran kas cabang yang sedang menunggu verifikasi penerimaan pusat.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
     <!-- BAGIAN 1: ANTREAN PENYESUAIAN BILLING -->
     <!-- ========================================== -->
     <div style="padding: 24px 24px 12px;">

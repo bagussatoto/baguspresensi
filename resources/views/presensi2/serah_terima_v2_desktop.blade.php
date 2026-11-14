@@ -756,6 +756,13 @@
                             </td>
                             <td style="text-align: right; font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 13px;">
                                 {{ number_format($hsNilai, 0, ',', '.') }}
+                                @if($hs->deposit_status === 'verified')
+                                    <div style="font-size: 10px; color: #10b981; font-weight: 700; margin-top: 2px;">✓ Terverifikasi</div>
+                                @elseif($hs->deposit_status === 'rejected')
+                                    <div style="font-size: 10px; color: #ef4444; font-weight: 700; margin-top: 2px;">✕ Ditolak Pusat</div>
+                                @else
+                                    <div style="font-size: 10px; color: #f59e0b; font-weight: 700; margin-top: 2px;">⏳ Menunggu Verifikasi</div>
+                                @endif
                             </td>
                             <td style="text-align: center;">
                                 <div style="display: inline-flex; gap: 4px;">

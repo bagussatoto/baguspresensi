@@ -6609,6 +6609,8 @@ BAT;
                     ->orWhere('deposit_method', 'next_shift_handover');
             })
             ->where('handover_status', 'completed')
+            ->whereNull('deposit_receipt_no')
+            ->whereNotIn('deposit_status', ['verified', 'pending_verification'])
             ->orderByDesc('work_date')
             ->orderByDesc('id')
             ->take(12)
@@ -6617,7 +6619,8 @@ BAT;
         if ($readyToDepositSummaries->isEmpty()) {
             $readyToDepositSummaries = ShiftSalesSummary::with(['employee', 'shift', 'branch'])
                 ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-                ->where('deposit_status', '!=', 'verified')
+                ->whereNotIn('deposit_status', ['verified', 'pending_verification'])
+                ->whereNull('deposit_receipt_no')
                 ->orderByDesc('work_date')
                 ->orderByDesc('id')
                 ->take(12)
@@ -6630,8 +6633,8 @@ BAT;
         $historyDepositSummaries = ShiftSalesSummary::with(['employee', 'shift', 'branch'])
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->where(function ($q) {
-                $q->where('deposit_status', 'verified')
-                    ->orWhere('deposit_status', 'submitted');
+                $q->whereIn('deposit_status', ['verified', 'submitted', 'pending_verification'])
+                    ->orWhereNotNull('deposit_receipt_no');
             })
             ->where('deposit_method', '!=', 'next_shift_handover')
             ->orderByDesc('deposited_at')
@@ -7030,7 +7033,7 @@ BAT;
             foreach ($otherSummaries as $otherSum) {
                 $otherSumAmount = (float) $otherSum->handoverAmount();
                 $otherSum->update([
-                    'deposit_status' => 'verified',
+                    'deposit_status' => 'pending_verification',
                     'deposit_receipt_no' => $receiptNo,
                     'deposit_batch_id' => $batchId,
                     'deposited_amount' => $otherSumAmount,
@@ -7038,13 +7041,11 @@ BAT;
                     'deposit_recipient' => $recipient,
                     'deposit_notes' => $depositNotes." (Batch Setor: {$receiptNo})",
                     'deposited_at' => $now,
-                    'deposit_verified_at' => $now,
-                    'deposit_verified_by' => $recipient,
                 ]);
             }
 
             $summary->update([
-                'deposit_status' => 'verified',
+                'deposit_status' => 'pending_verification',
                 'deposit_receipt_no' => $receiptNo,
                 'deposit_batch_id' => $batchId,
                 'deposited_amount' => $depositedAmount,
@@ -7052,8 +7053,6 @@ BAT;
                 'deposit_recipient' => $recipient,
                 'deposit_notes' => $depositNotes,
                 'deposited_at' => $now,
-                'deposit_verified_at' => $now,
-                'deposit_verified_by' => $recipient,
             ]);
 
             rescue(fn () => AuditLog::create([
@@ -7070,7 +7069,7 @@ BAT;
                     'deposit_recipient' => $recipient,
                     'deposit_receipt_no' => $receiptNo,
                     'deposit_batch_id' => $batchId,
-                    'deposit_status' => 'verified',
+                    'deposit_status' => 'pending_verification',
                     'deposit_proof' => $proofPath,
                     'summary_ids_included' => $summaryIdsToDeposit,
                 ],

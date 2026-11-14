@@ -234,6 +234,8 @@ Route::middleware(['web', 'auditor.readonly'])->group(function () {
     Route::post('/bagus/admin/penjualan/penyesuaian-print/{summary}/reject', [AdminSaleController::class, 'rejectPrintAdjustment']);
     Route::post('/bagus/admin/penjualan/rekap-shift/{summary}/unlock-sales', [AdminSaleController::class, 'unlockShiftSales']);
     Route::post('/bagus/admin/penjualan/rekap-shift/{summary}/resolve-discrepancy', [AdminSaleController::class, 'resolveDiscrepancy']);
+    Route::get('/bagus/admin/penjualan/serah-terima', [AdminSaleController::class, 'billingAdjustmentIndex']);
+    Route::post('/bagus/admin/penjualan/rekap-shift/{summary}/verify-setor', [AdminSaleController::class, 'verifyShiftDeposit']);
 
     // Alias URL admin distribusi dengan prefix /bagus/admin/...
     Route::post('/bagus/admin/distribusi/kirim', [AdminDashboardController::class, 'storeTransfer']);
@@ -423,6 +425,7 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::post('/penjualan/rekap-shift/{summary}/unlock-sales', [AdminSaleController::class, 'unlockShiftSales'])->name('admin.penjualan.unlock-sales');
     Route::post('/penjualan/rekap-shift/{summary}/resolve-discrepancy', [AdminSaleController::class, 'resolveDiscrepancy'])->name('admin.penjualan.resolve-discrepancy');
     Route::get('/penjualan/penyesuaian-billing', [AdminSaleController::class, 'billingAdjustmentIndex'])->name('admin.penjualan.penyesuaian-billing');
+    Route::get('/penjualan/serah-terima', [AdminSaleController::class, 'billingAdjustmentIndex'])->name('admin.penjualan.serah-terima');
     Route::post('/penjualan/penyesuaian-billing/{summary}/approve', [AdminSaleController::class, 'approveBillingAdjustment'])->name('admin.penjualan.penyesuaian-billing.approve');
     Route::post('/penjualan/penyesuaian-billing/{summary}/reject', [AdminSaleController::class, 'rejectBillingAdjustment'])->name('admin.penjualan.penyesuaian-billing.reject');
     Route::post('/penjualan/penyesuaian-print/{summary}/approve', [AdminSaleController::class, 'approvePrintAdjustment'])->name('admin.penjualan.penyesuaian-print.approve');

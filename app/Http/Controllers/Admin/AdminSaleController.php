@@ -392,6 +392,21 @@ class AdminSaleController extends Controller
             ->limit(30)
             ->get();
 
+        $pendingDeposits = (clone $baseQuery)
+            ->where('deposit_status', 'pending_verification')
+            ->whereNotNull('deposit_receipt_no')
+            ->orderByDesc('deposited_at')
+            ->orderByDesc('id')
+            ->get();
+
+        $verifiedDeposits = (clone $baseQuery)
+            ->whereIn('deposit_status', ['verified', 'rejected'])
+            ->whereNotNull('deposit_receipt_no')
+            ->orderByDesc('deposit_verified_at')
+            ->orderByDesc('id')
+            ->limit(20)
+            ->get();
+
         $profileData = AdminDashboardController::getProfileData($request);
 
         return view('admin.penjualan.penyesuaian-billing', compact(
@@ -400,6 +415,8 @@ class AdminSaleController extends Controller
             'pendingPrintAdjustments',
             'processedPrintAdjustments',
             'lockedShiftSummaries',
+            'pendingDeposits',
+            'verifiedDeposits',
             'profileData'
         ));
     }
@@ -653,18 +670,30 @@ class AdminSaleController extends Controller
 
         $adminName = auth()->user()?->name ?? 'Admin Keuangan';
         $status = $validated['deposit_status'];
+        $now = now();
 
         $summary->deposit_status = $status;
-        $summary->deposit_verified_at = now();
+        $summary->deposit_verified_at = $now;
         $summary->deposit_verified_by = $adminName;
         if (! empty($validated['notes'])) {
             $summary->deposit_notes = trim(($summary->deposit_notes ? $summary->deposit_notes.' | ' : '').'Verifikasi Admin: '.$validated['notes']);
         }
         if ($summary->deposited_amount === null) {
             $summary->deposited_amount = $summary->blind_cash_count ?? $summary->cash_in_drawer;
-            $summary->deposited_at = now();
+            $summary->deposited_at = $now;
         }
         $summary->save();
+
+        // Update seluruh shift yang tergabung dalam batch yang sama (jika multi-shift batch)
+        if (! empty($summary->deposit_batch_id)) {
+            ShiftSalesSummary::where('deposit_batch_id', $summary->deposit_batch_id)
+                ->where('id', '!=', $summary->id)
+                ->update([
+                    'deposit_status' => $status,
+                    'deposit_verified_at' => $now,
+                    'deposit_verified_by' => $adminName,
+                ]);
+        }
 
         rescue(fn () => AuditLog::create([
             'user_id' => auth()->id(),
@@ -677,30 +706,39 @@ class AdminSaleController extends Controller
                 'deposited_amount' => $summary->deposited_amount,
                 'deposit_status' => $status,
                 'verified_by' => $adminName,
-                'verified_at' => $summary->deposit_verified_at?->toDateTimeString(),
+                'verified_at' => $now->toDateTimeString(),
             ],
             'ip_address' => $request->ip() ?? '127.0.0.1',
             'user_agent' => $request->userAgent() ?? 'Admin ERP MGK',
-            'created_at' => now(),
+            'created_at' => $now,
         ]));
 
-        // Bukukan Jurnal Umum Akuntansi SAK jika diverifikasi diterima
+        // Bukukan Jurnal Umum Akuntansi SAK jika diverifikasi diterima (Bank BCA / Kas Besar)
         if ($status === 'verified') {
             rescue(function () use ($summary): void {
                 $autoJournal = app(AutoJournalService::class);
-                $amount = (float) ($summary->deposited_amount ?: ($summary->blind_cash_count ?? $summary->cash_in_drawer));
-                $autoJournal->journalShiftDeposit(
-                    $summary,
-                    $amount,
-                    $summary->deposit_receipt_no,
-                    $summary->deposit_method ?: 'bank_transfer',
-                    "Verifikasi Admin: {$summary->deposit_verified_by}"
-                );
+                $batchSummaries = ! empty($summary->deposit_batch_id)
+                    ? ShiftSalesSummary::where('deposit_batch_id', $summary->deposit_batch_id)->get()
+                    : collect([$summary]);
+
+                foreach ($batchSummaries as $bs) {
+                    $amount = (float) ($bs->deposited_amount ?: ($bs->blind_cash_count ?? $bs->cash_in_drawer));
+                    if ($amount > 0) {
+                        $autoJournal->journalShiftDeposit(
+                            $bs,
+                            $amount,
+                            $bs->deposit_receipt_no,
+                            $bs->deposit_method ?: 'bank_transfer',
+                            "Verifikasi Admin: {$bs->deposit_verified_by}"
+                        );
+                    }
+                }
             });
         }
 
-        $label = $status === 'verified' ? 'Diverifikasi & Diterima' : 'Ditolak / Perlu Revisi';
-        $message = "Setoran kas shift #{$summary->id} berhasil {$label} oleh {$adminName}.";
+        $label = $status === 'verified' ? 'Diverifikasi & Diterima Pusat' : 'Ditolak / Perlu Revisi Kasir';
+        $receiptLabel = $summary->deposit_receipt_no ? " [No: {$summary->deposit_receipt_no}]" : '';
+        $message = "Setoran kas shift #{$summary->id}{$receiptLabel} berhasil {$label} oleh {$adminName}.";
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -710,7 +748,7 @@ class AdminSaleController extends Controller
             ]);
         }
 
-        return redirect()->route('admin.penjualan')->with('success', $message);
+        return redirect()->back()->with('success', $message);
     }
 
     /**
