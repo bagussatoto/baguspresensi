@@ -84,6 +84,7 @@
     </div>
     @endif
 
+    @if(request()->boolean('demo') || request()->boolean('simulasi'))
     {{-- BILAH MODE SIMULASI & PENGUJIAN STOK CEPAT --}}
     <div class="glass-card" style="background: rgba(139, 92, 246, 0.08); border: 1px solid rgba(139, 92, 246, 0.35); padding: 12px 18px; margin-bottom: 16px; border-radius: 12px;">
         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
@@ -117,6 +118,7 @@
             </div>
         </div>
     </div>
+    @endif
 
     {{-- KARTU NOTIFIKASI & PENERIMAAN TRANSFER DARI DC (STORE GOODS RECEIPT) --}}
     @if(!empty($pendingStoreTransfers) && $pendingStoreTransfers->count() > 0)

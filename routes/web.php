@@ -401,6 +401,7 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::post('/penjualan', [AdminSaleController::class, 'store'])->name('admin.penjualan.store');
     Route::post('/penjualan/permintaan-stok/{stockRequest}/status', [AdminSaleController::class, 'updateStockRequestStatus'])->name('admin.penjualan.stock-request.status');
     Route::post('/penjualan/rekap-shift/{summary}/verify-setor', [AdminSaleController::class, 'verifyShiftDeposit'])->name('admin.penjualan.verify-setor');
+    Route::post('/penjualan/rekap-shift/{summary}/unlock-sales', [AdminSaleController::class, 'unlockShiftSales'])->name('admin.penjualan.unlock-sales');
     Route::get('/penjualan/penyesuaian-billing', [AdminSaleController::class, 'billingAdjustmentIndex'])->name('admin.penjualan.penyesuaian-billing');
     Route::post('/penjualan/penyesuaian-billing/{summary}/approve', [AdminSaleController::class, 'approveBillingAdjustment'])->name('admin.penjualan.penyesuaian-billing.approve');
     Route::post('/penjualan/penyesuaian-billing/{summary}/reject', [AdminSaleController::class, 'rejectBillingAdjustment'])->name('admin.penjualan.penyesuaian-billing.reject');

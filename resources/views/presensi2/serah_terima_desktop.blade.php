@@ -561,6 +561,7 @@
         </div>
     </header>
 
+    @if(request()->boolean('demo') || request()->boolean('simulasi'))
     {{-- BILAH MODE SIMULASI & PENGUJIAN SHIFT KASIR (DESKTOP) --}}
     <div style="background: linear-gradient(90deg, #1e1b4b, #31104b); border-bottom: 1px solid rgba(168, 85, 247, 0.4); padding: 8px 16px; color: #fff;">
         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
@@ -612,6 +613,7 @@
             </div>
         </div>
     </div>
+    @endif
 
     {{-- ALERT STATUS KUNCI BILLING & PRINT --}}
     @if(!$isBillingLocked || !$isPrintLocked)

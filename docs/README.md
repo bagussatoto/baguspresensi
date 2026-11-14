@@ -138,6 +138,11 @@ Dokumentasi proyek **Bagus (Sistem Presensi, POS Kasir, & ERP MGK)** diorganisas
 
 ---
 
+### 📁 `docs/2026-11-14/` — Kunci Penjualan Shift, Penyesuaian Billing PLN, Mode Demo (`?demo=1`), & Audit Stok
+* [`ringkasan_percakapan.md`](2026-11-14/ringkasan_percakapan.md) — Ringkasan perbaikan kunci shift per `shift_id`, fitur buka kunci shift Admin, persetujuan billing PLN Rp 0, penyembunyian panel simulasi (`?demo=1`), monitoring selisih kas & stok oleh Admin, serta pemisahan fungsi Presensi vs Modal/Setoran Kasir.
+
+---
+
 ## 📌 Standar Konvensi Pembuatan Dokumen Baru
 
 Saat Anda membuat dokumen baru atau melakukan evaluasi teknis, ikuti konvensi berikut agar arsip selalu rapi dan mudah dicari:

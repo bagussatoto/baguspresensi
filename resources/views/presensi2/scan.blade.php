@@ -94,7 +94,7 @@
         <div style="font-size: 12px; color: var(--text-sub); margin-top: 4px;">{{ now()->translatedFormat('l, d F Y') }} (WIB)</div>
     </div>
 
-    @if(config('app.debug') || app()->environment('local', 'testing'))
+    @if(request()->boolean('demo') || request()->boolean('simulasi'))
     {{-- DEV / QA TIME TRAVEL SIMULATOR --}}
     <div class="glass-card" style="padding: 14px 16px; margin-bottom: 16px; border: 1px dashed rgba(245, 158, 11, 0.45); background: rgba(245, 158, 11, 0.05);">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
@@ -394,26 +394,40 @@
 
                 @php
                     $canCheckOutByTime = ($minutesWorked ?? 0) >= ($minCheckoutMinutes ?? 30);
-                    $canCheckOut = $canCheckOutByTime && ($hasCompletedHandover ?? false);
+                    $canCheckOutStrict = $canCheckOutByTime && ($hasCompletedHandover ?? false);
+                    $isDemoParam = request()->boolean('demo') || request()->boolean('simulasi');
                 @endphp
 
-                @if(!$canCheckOutByTime)
-                    <div style="background: rgba(245, 158, 11, 0.14); border: 1px solid rgba(245, 158, 11, 0.45); border-radius: 10px; padding: 11px 13px; margin-bottom: 12px; font-size: 12px; color: #fde68a; line-height: 1.5;">
-                        <strong>⏳ Belum Bisa Check-Out (Baru {{ $minutesWorked ?? 0 }} menit bekerja)</strong><br>
-                        Minimal durasi kerja adalah <strong>{{ $minCheckoutMinutes ?? 30 }} menit</strong> setelah Check-In agar tidak terjadi salah klik atau absen formalitas.
-                    </div>
-                @elseif(!($hasCompletedHandover ?? false))
-                    <div style="background: rgba(244, 63, 94, 0.14); border: 1px solid rgba(244, 63, 94, 0.45); border-radius: 10px; padding: 11px 13px; margin-bottom: 12px; font-size: 12px; color: #fecdd3; line-height: 1.5;">
-                        <strong>🔒 Wajib Rekap &amp; Serah Terima Shift Terlebih Dahulu</strong><br>
-                        Sebelum Check-Out, Anda wajib menyelesaikan <a href="{{ route('presensi2.rekap') }}" style="color: #93c5fd; font-weight: 700; text-decoration: underline;">Rekap</a> dan <a href="{{ route('presensi2.serah-terima') }}" style="color: #93c5fd; font-weight: 700; text-decoration: underline;">Serah Terima Shift</a> terlebih dahulu (meski penjualan Rp 0).
-                    </div>
-                @else
-                    <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px; text-align: center;">
-                        Pastikan durasi jam kerja di atas sudah sesuai sebelum konfirmasi pulang / serah terima:
+                @if($isDemoParam)
+                    {{-- MODE SIMULASI TOGGLE AGAR BISA LANGSUNG CHECK-OUT SAAT UJI COBA --}}
+                    <div style="background: rgba(124, 58, 237, 0.14); border: 1px solid rgba(167, 139, 250, 0.4); border-radius: 10px; padding: 10px 13px; margin-bottom: 10px; font-size: 12px; color: #ddd6fe;">
+                        <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; margin: 0;">
+                            <input type="checkbox" id="simulation_checkout_cb" checked onchange="toggleSimulationCheckOut()" style="width: 16px; height: 16px; margin-top: 2px; accent-color: #8b5cf6; cursor: pointer;">
+                            <span>
+                                <strong>🧪 Mode Simulasi Check-Out Aktif</strong><br>
+                                <span style="font-size: 11px; color: #c4b5fd;">Izinkan langsung Check-Out menggunakan pilihan durasi jam di atas tanpa harus menunggu 30 menit / serah terima. (Hapus centang untuk menguji mode pembatasan ketat).</span>
+                            </span>
+                        </label>
                     </div>
                 @endif
 
-                <button type="button" id="btn-clock-out" onclick="submitAttendance('out')" class="btn btn-rose" {{ $canCheckOut ? '' : 'disabled' }} style="padding: 14px; font-size: 14.5px; width: 100%; font-weight: 700; box-shadow: 0 4px 14px rgba(244, 63, 94, 0.35); {{ $canCheckOut ? '' : 'opacity: 0.45; cursor: not-allowed;' }}">
+                @if(!$canCheckOutStrict)
+                    <div id="strict-checkout-warning" style="display: none; background: rgba(245, 158, 11, 0.14); border: 1px solid rgba(245, 158, 11, 0.45); border-radius: 10px; padding: 11px 13px; margin-bottom: 12px; font-size: 12px; color: #fde68a; line-height: 1.5;">
+                        @if(!$canCheckOutByTime)
+                            <strong>⏳ Mode Ketat: Belum 30 Menit Bekerja (Baru {{ $minutesWorked ?? 0 }} menit)</strong><br>
+                            Minimal durasi kerja adalah <strong>{{ $minCheckoutMinutes ?? 30 }} menit</strong> setelah Check-In.
+                        @else
+                            <strong>🔒 Mode Ketat: Wajib Rekap &amp; Serah Terima Shift Terlebih Dahulu</strong><br>
+                            Selesaikan <a href="{{ route('presensi2.rekap') }}" style="color: #93c5fd; font-weight: 700; text-decoration: underline;">Rekap</a> dan <a href="{{ route('presensi2.serah-terima') }}" style="color: #93c5fd; font-weight: 700; text-decoration: underline;">Serah Terima Shift</a> terlebih dahulu.
+                        @endif
+                    </div>
+                @endif
+
+                <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 10px; text-align: center;">
+                    Pastikan durasi jam kerja di atas sudah sesuai sebelum konfirmasi pulang / serah terima:
+                </div>
+
+                <button type="button" id="btn-clock-out" data-can-strict="{{ $canCheckOutStrict ? '1' : '0' }}" onclick="submitAttendance('out')" class="btn btn-rose" style="padding: 14px; font-size: 14.5px; width: 100%; font-weight: 700; box-shadow: 0 4px 14px rgba(244, 63, 94, 0.35);">
                     <span>🏁</span> Konfirmasi Check-Out (Selesai Dinas)
                 </button>
             </div>
@@ -660,7 +674,10 @@
                 payload.shift_id = parseInt(shiftSelect.value, 10);
             }
         } else if (mode === 'out') {
-            payload.enforce_handover = true;
+            const simCb = document.getElementById('simulation_checkout_cb');
+            const isSim = simCb ? simCb.checked : true;
+            payload.simulation_mode = isSim;
+            payload.enforce_handover = !isSim;
             const durInput = document.getElementById('duration_hours_input');
             if (durInput && durInput.value) {
                 payload.duration_hours = parseInt(durInput.value, 10);
@@ -763,6 +780,24 @@
             btn.innerHTML = mode === 'in'
                 ? '<span>⚡</span> Konfirmasi Check-In'
                 : '<span>🏁</span> Konfirmasi Check-Out';
+        }
+    }
+
+    function toggleSimulationCheckOut() {
+        const simCb = document.getElementById('simulation_checkout_cb');
+        const btn = document.getElementById('btn-clock-out');
+        const warn = document.getElementById('strict-checkout-warning');
+        if (!btn) return;
+
+        const isSim = simCb ? simCb.checked : true;
+        const canStrict = btn.getAttribute('data-can-strict') === '1';
+        const allow = isSim || canStrict;
+
+        btn.disabled = !allow;
+        btn.style.opacity = allow ? '1' : '0.45';
+        btn.style.cursor = allow ? 'pointer' : 'not-allowed';
+        if (warn) {
+            warn.style.display = (!isSim && !canStrict) ? 'block' : 'none';
         }
     }
 

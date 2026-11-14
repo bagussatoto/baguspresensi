@@ -651,9 +651,11 @@
             <a href="{{ route('presensi2.stok') }}" class="btn-nav-pill" title="Cek Stok Fisik Shift">
                 <span>📦</span> Cek Stok
             </a>
-            <button type="button" onclick="togglePosSimulation()" class="btn-nav-pill" style="color: #7c3aed; border-color: #c4b5fd; background: #f5f3ff;" title="Buka / Tutup Panel Uji Coba Transaksi">
-                <span>🧪</span> <span id="btn-toggle-sim-label">Mode Simulasi</span>
-            </button>
+            @if(request()->boolean('demo') || request()->boolean('simulasi'))
+                <button type="button" onclick="togglePosSimulation()" class="btn-nav-pill" style="color: #7c3aed; border-color: #c4b5fd; background: #f5f3ff;" title="Buka / Tutup Panel Uji Coba Transaksi">
+                    <span>🧪</span> <span id="btn-toggle-sim-label">Mode Simulasi</span>
+                </button>
+            @endif
         </div>
 
         <h1 class="pos-top-title">Orderan POS</h1>
@@ -680,9 +682,16 @@
                     </div>
                 </div>
             </div>
-            <span style="background: #e11d48; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 11px; text-transform: uppercase; font-weight: 800;">
-                Mode Kunci / Read-Only
-            </span>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <a href="{{ request()->fullUrlWithQuery(['action' => 'reset_sales']) }}"
+                   onclick="return confirm('Buka kembali kunci shift hari ini & reset simulasi transaksi testing?')"
+                   style="background: #ffffff; border: 1px solid #f43f5e; color: #be123c; padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; text-decoration: none;">
+                    🔓 Buka Kunci / Reset Testing
+                </a>
+                <span style="background: #e11d48; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 11px; text-transform: uppercase; font-weight: 800;">
+                    Mode Kunci / Read-Only
+                </span>
+            </div>
         </div>
     @endif
 
@@ -696,6 +705,7 @@
             <button type="button" onclick="this.parentElement.remove()" style="background: none; border: none; font-size: 16px; cursor: pointer; color: #166534;">✕</button>
         </div>
     @endif
+    
     @if (session('error'))
         <div style="background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; padding: 10px 16px; border-radius: 6px; margin: 0 20px 12px 20px; font-weight: 500; font-size: 13px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
             <div style="display: flex; align-items: center; gap: 8px;">
@@ -706,6 +716,7 @@
         </div>
     @endif
 
+    @if(request()->boolean('demo') || request()->boolean('simulasi'))
     {{-- PANEL MODE SIMULASI & PENGUJIAN TRANSAKSI POS --}}
     <div id="pos-simulation-container" class="pos-simulation-bar" style="display: block;">
         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
@@ -734,6 +745,7 @@
             </div>
         </div>
     </div>
+    @endif
 
     {{-- MAIN 2-COLUMN GRID --}}
     <main class="pos-main-container">

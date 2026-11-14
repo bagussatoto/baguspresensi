@@ -179,7 +179,7 @@ class ShiftSalesSummary extends Model
 
     public function isBillingAdjustmentPending(): bool
     {
-        return $this->hasBillingAdjustment() && $this->billing_adjustment_status === 'pending_approval';
+        return $this->billing_adjustment_status === 'pending_approval';
     }
 
     public function hasPrintAdjustment(): bool
@@ -194,7 +194,7 @@ class ShiftSalesSummary extends Model
 
     public function isPrintAdjustmentPending(): bool
     {
-        return $this->hasPrintAdjustment() && $this->print_adjustment_status === 'pending_approval';
+        return $this->print_adjustment_status === 'pending_approval';
     }
 
     public function isBillingAdjustmentRejected(): bool

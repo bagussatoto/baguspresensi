@@ -180,6 +180,7 @@
         </div>
     </div>
 
+    @if(request()->boolean('demo') || request()->boolean('simulasi'))
     {{-- BILAH MODE SIMULASI & PENGUJIAN SHIFT KASIR (MOBILE / RESPONSIVE) --}}
     <div class="st-card" style="background: linear-gradient(135deg, rgba(88, 28, 135, 0.35), rgba(49, 16, 75, 0.45)); border-color: rgba(168, 85, 247, 0.5); padding: 12px 16px; margin-top: 14px;">
         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
@@ -220,6 +221,7 @@
             </div>
         </div>
     </div>
+    @endif
 
     {{-- BANNER DUAL-CONTROL: PERMINTAAN PERSETUJUAN PENYESUAIAN BILLING MATI LISTRIK --}}
     @if($salesSummary && $salesSummary->isBillingAdjustmentPending() && $currentEmployee->canApproveBillingAdjustment())

@@ -1800,7 +1800,7 @@ class AttendanceWebV2Controller extends Controller
 
         $minCheckoutMinutes = 30;
         $minutesWorked = ($attendanceToday && $attendanceToday->clock_in_at && ! $attendanceToday->clock_out_at)
-            ? (int) $attendanceToday->clock_in_at->diffInMinutes($now)
+            ? max(0, (int) $attendanceToday->clock_in_at->diffInMinutes($now, false))
             : 0;
 
         $hasCompletedHandover = false;
@@ -1956,9 +1956,9 @@ class AttendanceWebV2Controller extends Controller
             ->latest('id')
             ->first();
 
-        if ($openAttendance && $openAttendance->clock_in_at) {
-            $minutesSinceClockIn = (int) $openAttendance->clock_in_at->diffInMinutes(Carbon::now());
-            if ($minutesSinceClockIn < 30) {
+        if ($openAttendance && $openAttendance->clock_in_at && ! $request->boolean('simulation_mode')) {
+            $minutesSinceClockIn = max(0, (int) $openAttendance->clock_in_at->diffInMinutes(Carbon::now(), false));
+            if ($minutesSinceClockIn < 30 && ! $request->filled('duration_hours')) {
                 $remaining = 30 - $minutesSinceClockIn;
 
                 return response()->json([
@@ -3341,9 +3341,18 @@ class AttendanceWebV2Controller extends Controller
             ->latest('id')
             ->get();
 
-        // Rekapitulasi penjualan shift saat ini di cabang ini jika sudah tersimpan
+        // Rekapitulasi penjualan shift saat ini di cabang ini jika sudah tersimpan (filter per shift aktif)
+        $currentShiftId = $attendanceToday?->shift_id ?? $activeShift?->id;
         $salesSummary = ShiftSalesSummary::whereDate('work_date', $workDate->toDateString())
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+            ->when(
+                $currentShiftId,
+                fn ($q) => $q->where(function ($sq) use ($currentShiftId, $employee) {
+                    $sq->where('shift_id', $currentShiftId)
+                        ->orWhere(fn ($nq) => $nq->whereNull('shift_id')->where('employee_id', $employee->id));
+                }),
+                fn ($q) => $q->where('employee_id', $employee->id)
+            )
             ->latest('id')
             ->first();
 
@@ -3550,8 +3559,10 @@ class AttendanceWebV2Controller extends Controller
         $deletedCount = $todaySales->count();
         $restoredItemsCount = 0;
 
-        if ($deletedCount > 0) {
-            DB::transaction(function () use ($todaySales, $warehouseId, &$restoredItemsCount, $workDate, $branchId, $employee) {
+        $deletedSummariesCount = 0;
+
+        DB::transaction(function () use ($todaySales, $deletedCount, $warehouseId, &$restoredItemsCount, &$deletedSummariesCount, $workDate, $branchId, $employee) {
+            if ($deletedCount > 0) {
                 foreach ($todaySales as $sale) {
                     if ($sale->payment_status !== 'cancelled') {
                         foreach ($sale->items as $item) {
@@ -3568,18 +3579,18 @@ class AttendanceWebV2Controller extends Controller
                     $sale->items()->delete();
                     $sale->delete();
                 }
+            }
 
-                // Reset rekap settlement penjualan shift hari ini agar omset kembali bersih
-                ShiftSalesSummary::whereDate('work_date', $workDate->toDateString())
-                    ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
-                    ->delete();
-            });
-        }
+            // Reset rekap settlement & buka kunci penjualan shift hari ini agar omset kembali bersih
+            $deletedSummariesCount = ShiftSalesSummary::whereDate('work_date', $workDate->toDateString())
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+                ->delete();
+        });
 
         $queryParams = $request->except(['action', 'reset_sales']);
 
-        $msg = $deletedCount > 0
-            ? "Simulasi POS berhasil di-reset! Sebanyak {$deletedCount} transaksi testing telah dibersihkan, {$restoredItemsCount} pcs stok dikembalikan ke gudang, dan omset shift kembali bersih."
+        $msg = ($deletedCount > 0 || $deletedSummariesCount > 0)
+            ? "Simulasi POS berhasil di-reset! Sebanyak {$deletedCount} transaksi testing telah dibersihkan, {$restoredItemsCount} pcs stok dikembalikan ke gudang, dan kunci/rekap shift dibuka kembali."
             : 'Tidak ada data transaksi penjualan shift hari ini yang perlu di-reset.';
 
         return redirect()->route($redirectRoute, $queryParams)->with('status', $msg);
@@ -3820,9 +3831,18 @@ class AttendanceWebV2Controller extends Controller
         $type = (string) $request->input('transaction_type', 'fnb');
         $branchId = (int) ($employee->branch_id ?? Branch::value('id') ?? 1);
 
-        // Validasi Status Penguncian Penjualan Saat Rekap Shift (Freeze Closed Shift Sales)
+        // Validasi Status Penguncian Penjualan Saat Rekap Shift (Freeze Closed Shift Sales per Shift Aktif)
+        $currentShiftId = $attendanceToday?->shift_id ?? $activeShift?->id;
         $salesSummary = ShiftSalesSummary::whereDate('work_date', $workDate->toDateString())
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+            ->when(
+                $currentShiftId,
+                fn ($q) => $q->where(function ($sq) use ($currentShiftId, $employee) {
+                    $sq->where('shift_id', $currentShiftId)
+                        ->orWhere(fn ($nq) => $nq->whereNull('shift_id')->where('employee_id', $employee->id));
+                }),
+                fn ($q) => $q->where('employee_id', $employee->id)
+            )
             ->latest('id')
             ->first();
 

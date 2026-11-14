@@ -351,5 +351,71 @@
             </table>
         </div>
     </div>
+
+    <!-- ========================================== -->
+    <!-- BAGIAN 4: BUKA KUNCI PENJUALAN SHIFT POS -->
+    <!-- ========================================== -->
+    <div style="padding: 12px 24px 28px;">
+        <h3 style="font-size: 16px; font-weight: 700; color: #f43f5e; margin: 0 0 14px; display: flex; align-items: center; gap: 8px;">
+            <span>🔓</span> 4. Buka Kunci Penjualan Shift (Re-Open Shift Terkunci)
+        </h3>
+        <div style="overflow-x: auto; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 14px;">
+            <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border-color); background: rgba(255, 255, 255, 0.02);">
+                        <th style="padding: 12px 16px; color: var(--text-sub);">Tanggal / Shift</th>
+                        <th style="padding: 12px 16px; color: var(--text-sub);">Kasir / Cabang</th>
+                        <th style="padding: 12px 16px; color: var(--text-sub); text-align: right;">Total Omset</th>
+                        <th style="padding: 12px 16px; color: var(--text-sub); text-align: right;">Selisih Kas Laci</th>
+                        <th style="padding: 12px 16px; color: var(--text-sub);">Status Kunci</th>
+                        <th style="padding: 12px 16px; color: var(--text-sub); text-align: center;">Aksi Admin</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($lockedShiftSummaries ?? [] as $lockedSummary)
+                        @php
+                            $cashDiff = (float) ($lockedSummary->cash_difference ?? 0);
+                        @endphp
+                        <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.04);">
+                            <td style="padding: 10px 16px; color: #fff; font-weight: 600;">
+                                {{ $lockedSummary->work_date?->format('d M Y') }} &bull; {{ $lockedSummary->shift?->name ?? 'Shift #'.$lockedSummary->shift_id }}
+                            </td>
+                            <td style="padding: 10px 16px;">
+                                <span style="color: #fff; font-weight: 600;">{{ $lockedSummary->employee?->name ?? '-' }}</span>
+                                <span style="font-size: 11px; color: var(--text-sub);">({{ $lockedSummary->branch?->name ?? '-' }})</span>
+                            </td>
+                            <td style="padding: 10px 16px; text-align: right; font-family: monospace; color: #34d399; font-weight: 700;">
+                                Rp {{ number_format((float) $lockedSummary->total_revenue, 0, ',', '.') }}
+                            </td>
+                            <td style="padding: 10px 16px; text-align: right; font-family: monospace; font-weight: 700;">
+                                @if(abs($cashDiff) < 1)
+                                    <span class="badge-status badge-emerald">✓ Pas (Rp 0)</span>
+                                @elseif($cashDiff < 0)
+                                    <span class="badge-status badge-rose">⚠️ Kurang -Rp {{ number_format(abs($cashDiff), 0, ',', '.') }}</span>
+                                @else
+                                    <span class="badge-status badge-cyan">+Rp {{ number_format($cashDiff, 0, ',', '.') }} (Lebih)</span>
+                                @endif
+                            </td>
+                            <td style="padding: 10px 16px;">
+                                <span class="badge-status badge-rose">🔒 Terkunci ({{ strtoupper((string) $lockedSummary->status) }})</span>
+                            </td>
+                            <td style="padding: 10px 16px; text-align: center;">
+                                <form method="POST" action="{{ route('admin.penjualan.unlock-sales', $lockedSummary->id) }}" onsubmit="return confirm('Buka kembali kunci penjualan untuk shift ini agar kasir dapat menginput transaksi lagi?');" style="display: inline;">
+                                    @csrf
+                                    <button type="submit" class="btn-action-sm" style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.5); color: #34d399; font-weight: 700; cursor: pointer;">
+                                        🔓 Buka Kunci Shift
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="6" style="padding: 20px 16px; text-align: center; color: var(--text-sub);">Tidak ada shift penjualan yang sedang terkunci.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 @endsection

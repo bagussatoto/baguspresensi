@@ -382,6 +382,15 @@ class AdminSaleController extends Controller
             ->limit(50)
             ->get();
 
+        $lockedShiftSummaries = (clone $baseQuery)
+            ->where(function ($q): void {
+                $q->where('is_sales_locked', true)
+                    ->orWhere('status', 'closed');
+            })
+            ->orderByDesc('id')
+            ->limit(30)
+            ->get();
+
         $profileData = AdminDashboardController::getProfileData($request);
 
         return view('admin.penjualan.penyesuaian-billing', compact(
@@ -389,6 +398,7 @@ class AdminSaleController extends Controller
             'processedAdjustments',
             'pendingPrintAdjustments',
             'processedPrintAdjustments',
+            'lockedShiftSummaries',
             'profileData'
         ));
     }
@@ -685,5 +695,60 @@ class AdminSaleController extends Controller
         }
 
         return redirect()->route('admin.penjualan')->with('success', $message);
+    }
+
+    /**
+     * Buka Kunci Penjualan Shift (Re-open Shift Terkunci dari Admin ERP).
+     */
+    public function unlockShiftSales(Request $request, ShiftSalesSummary $summary): JsonResponse|RedirectResponse
+    {
+        $assignedBranchId = $this->assignedBranchId();
+        if ($assignedBranchId && (int) $summary->branch_id !== (int) $assignedBranchId) {
+            return redirect()->back()->with('error', 'Anda tidak memiliki otorisasi cabang untuk membuka kunci shift ini.');
+        }
+
+        $adminName = auth()->user()?->name ?? 'Admin ERP';
+
+        $summary->update([
+            'is_sales_locked' => false,
+            'status' => 'open',
+            'handover_status' => 'pending',
+        ]);
+
+        if ($summary->work_date) {
+            CafeSale::whereDate('created_at', $summary->work_date->toDateString())
+                ->when($summary->branch_id, fn ($q) => $q->where('branch_id', $summary->branch_id))
+                ->update(['is_locked' => false, 'locked_at' => null]);
+        }
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => ShiftSalesSummary::class,
+            'auditable_id' => $summary->id,
+            'action' => 'shift_sales_unlocked',
+            'new_values' => [
+                'summary_id' => $summary->id,
+                'employee_id' => $summary->employee_id,
+                'shift_id' => $summary->shift_id,
+                'unlocked_by' => $adminName,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Admin ERP MGK',
+            'created_at' => now(),
+        ]));
+
+        $shiftLabel = $summary->shift?->name ?? 'Shift';
+        $empLabel = $summary->employee?->name ?? 'Kasir';
+        $message = "Kunci penjualan untuk {$shiftLabel} ({$empLabel}) berhasil dibuka kembali oleh {$adminName}!";
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'summary' => $summary->fresh(),
+            ]);
+        }
+
+        return redirect()->back()->with('success', $message);
     }
 }
