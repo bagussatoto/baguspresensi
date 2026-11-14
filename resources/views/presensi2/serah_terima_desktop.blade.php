@@ -535,9 +535,7 @@
             <button type="button" onclick="openDailySettlementModal()" class="btn-nav-pill" style="color: #0f766e; border-color: #99f6e4; background: #f0fdfa;" title="Lihat Closing Statement & Settlement Setoran Harian">
                 <span>📊</span> Settlement Harian ({{ $dailySettlement['settled_count'] ?? 0 }}/{{ $dailySettlement['total_shift_count'] ?? 4 }})
             </button>
-            <a href="{{ Route::has('presensi2.serah-terima.v2.desktop') ? route('presensi2.serah-terima.v2.desktop') : (Route::has('serah-terima.v2.desktop') ? route('serah-terima.v2.desktop') : url('/bagus/presensi2/serah-terima-v2')) }}" class="btn-nav-pill" style="color: #b45309; border-color: #fcd34d; background: #fffbeb;" title="Buka Tampilan Serah Terima v2 (Tabel 3 Tingkat)">
-                <span>📋</span> Mode v2 (Tabel)
-            </a>
+
             <a href="{{ Route::has('presensi2.rekap.desktop') ? route('presensi2.rekap.desktop', ['summary_id' => $salesSummary?->id]) : route('presensi2.rekap', ['summary_id' => $salesSummary?->id]) }}" class="btn-nav-pill" style="color: #0369a1; border-color: #bae6fd; background: #e0f2fe;" title="Buka Detail Rekapitulasi Lengkap">
                 <span>📊</span> Rekap Pendapatan
             </a>
@@ -986,7 +984,13 @@
             <div style="padding: 12px 16px 0 16px;">
                 <div class="tabs-nav">
                     <button type="button" class="tab-btn active" onclick="switchTab('tab-handovers', this)">
-                        <span>🤝</span> Riwayat Estafet Kasir ({{ $handoverHistorySummaries->count() }})
+                        <span>🤝</span> Serah Terima Shift ({{ $handoverHistorySummaries->count() }})
+                    </button>
+                    <button type="button" class="tab-btn" onclick="switchTab('tab-ready', this)">
+                        <span>📥</span> Siap Setor ({{ $readyToDepositSummaries->count() }})
+                    </button>
+                    <button type="button" class="tab-btn" onclick="switchTab('tab-history', this)">
+                        <span>🏦</span> History setor ({{ $historyDepositSummaries->count() }})
                     </button>
                     <button type="button" class="tab-btn" onclick="switchTab('tab-stock', this)">
                         <span>📦</span> Audit Sisa Stok Fisik
@@ -1066,7 +1070,7 @@
                                 <th>Shift</th>
                                 <th>Kasir Penyerah</th>
                                 <th>Kasir Penerima</th>
-                                <th style="text-align: right;">Nilai Kas Siap Setor</th>
+                                <th style="text-align: right;">Total Nilai Rekap / Siap Setor</th>
                                 <th style="text-align: center;">Aksi</th>
                             </tr>
                         </thead>

@@ -609,10 +609,7 @@
                 <span>🛒</span> POS Kasir Desktop
             </a>
             <a href="{{ route('presensi2.serah-terima.desktop', array_filter(['date' => request('date'), 'shift' => request('shift'), 'summary_id' => $salesSummary?->id])) }}" class="btn-nav-pill primary">
-                <span>🤝</span> Serah Terima v1
-            </a>
-            <a href="{{ Route::has('presensi2.serah-terima.v2.desktop') ? route('presensi2.serah-terima.v2.desktop') : (Route::has('serah-terima.v2.desktop') ? route('serah-terima.v2.desktop') : url('/bagus/presensi2/serah-terima-v2')) }}" class="btn-nav-pill" style="color: #b45309; border-color: #fcd34d; background: #fffbeb;">
-                <span>📋</span> Serah Terima v2
+                <span>🤝</span> Serah Terima Kas & Shift
             </a>
             <a href="{{ route('presensi2.rekap', request()->query()) }}" class="btn-nav-pill">
                 <span>📱</span> Versi Mobile

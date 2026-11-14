@@ -6778,18 +6778,9 @@ BAT;
         $isMobile = preg_match('/(android|iphone|ipad|mobile|phone|ipod)/i', (string) $request->userAgent());
         $requestedView = $request->input('view');
 
-        if ($request->is('*serah-terima-v2*') || $requestedView === 'desktop_v2') {
-            $viewName = 'presensi2.serah_terima_v2_desktop';
-            $useDesktop = true;
-        } elseif ($requestedView === 'desktop') {
-            $viewName = 'presensi2.serah_terima_desktop';
-            $useDesktop = true;
-        } elseif ($requestedView === 'mobile') {
+        if ($requestedView === 'mobile') {
             $viewName = 'presensi2.serah_terima';
             $useDesktop = false;
-        } elseif ($request->is('*serah-terima-desktop*') || $request->is('*pos*')) {
-            $viewName = 'presensi2.serah_terima_desktop';
-            $useDesktop = true;
         } else {
             $useDesktop = ! $isMobile;
             $viewName = $useDesktop ? 'presensi2.serah_terima_desktop' : 'presensi2.serah_terima';
@@ -6862,13 +6853,11 @@ BAT;
     }
 
     /**
-     * Tampilan Khusus Serah Terima Shift v2 untuk Desktop PC (Layout Tabel 3 Tingkat: Serah Terima, Siap Setor, History).
+     * Tampilan Khusus Serah Terima Shift v2 (Redirect Resmi ke Layar Serah Terima Desktop Utama).
      */
-    public function serahTerimaV2DesktopIndex(Request $request): View|RedirectResponse
+    public function serahTerimaV2DesktopIndex(Request $request): RedirectResponse
     {
-        $request->merge(['view' => 'desktop_v2']);
-
-        return $this->serahTerimaIndex($request);
+        return redirect()->route('presensi2.serah-terima.desktop', $request->query());
     }
 
     /**
