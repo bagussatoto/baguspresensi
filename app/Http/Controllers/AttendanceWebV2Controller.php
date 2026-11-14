@@ -3096,6 +3096,15 @@ class AttendanceWebV2Controller extends Controller
         $totalFnbIncome = (float) $validFnbSales->sum(fn ($s) => (float) ($s->net_amount > 0 || $s->discount_amount > 0 ? $s->net_amount : $s->total_fnb));
         $totalDiscountAmount = (float) $validFnbSales->sum('discount_amount');
 
+        // Pisahkan penjualan Shift Saya (Aktif) vs Shift Sebelumnya (Opsi Dual-Tab POS)
+        $myShiftFnbSales = $fnbSales->filter(function ($sale) use ($employee) {
+            return (int) $sale->employee_id === (int) $employee->id && ! $sale->is_locked;
+        });
+
+        $prevShiftFnbSales = $fnbSales->filter(function ($sale) use ($employee) {
+            return $sale->is_locked || (int) $sale->employee_id !== (int) $employee->id;
+        });
+
         // Produk untuk quick POS penjualan (F&B, Internet, Kertas, Hardware, dll)
         $fnbProducts = ProductVariant::with('product.category')
             ->where('is_active', true)
@@ -3455,6 +3464,8 @@ class AttendanceWebV2Controller extends Controller
             'workDate' => $workDate,
             'attendanceToday' => $attendanceToday,
             'fnbSales' => $fnbSales,
+            'myShiftFnbSales' => $myShiftFnbSales,
+            'prevShiftFnbSales' => $prevShiftFnbSales,
             'totalFnbIncome' => $totalFnbIncome,
             'totalDiscountAmount' => $totalDiscountAmount,
             'totalNonCashAmount' => $totalNonCashAmount,
@@ -5928,6 +5939,15 @@ BAT;
         $validFnbSales = $fnbSales->where('payment_status', '!=', 'cancelled');
         $totalFnbIncome = (float) $validFnbSales->sum(fn ($s) => (float) ($s->net_amount > 0 || $s->discount_amount > 0 ? $s->net_amount : $s->total_fnb));
         $totalDiscountAmount = (float) $validFnbSales->sum('discount_amount');
+
+        // Pisahkan penjualan Shift Saya (Aktif) vs Shift Sebelumnya (Opsi Dual-Tab POS)
+        $myShiftFnbSales = $fnbSales->filter(function ($sale) use ($employee) {
+            return (int) $sale->employee_id === (int) $employee->id && ! $sale->is_locked;
+        });
+
+        $prevShiftFnbSales = $fnbSales->filter(function ($sale) use ($employee) {
+            return $sale->is_locked || (int) $sale->employee_id !== (int) $employee->id;
+        });
         $totalFnbTransactions = $validFnbSales->count();
 
         // Ringkasan item F&B yang terjual shift ini di cabang ini

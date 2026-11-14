@@ -953,83 +953,170 @@
 
     </main>
 
-    {{-- BOTTOM ACCORDION BAR: HISTORY PENJUALAN POS --}}
+    {{-- BOTTOM ACCORDION BAR: HISTORY PENJUALAN POS DENGAN DUAL-TAB (SHIFT SAYA & SHIFT LALU) --}}
     <section class="pos-bottom-container">
-        <div class="history-bar-header" onclick="toggleHistoryAccordion()">
-            <span>History penjualan pos (<span id="history-sales-count">{{ count($fnbSales) }}</span>)</span>
-            <span id="history-toggle-icon" style="font-size: 16px; font-weight: bold;">+</span>
+        <div class="history-bar-header" onclick="toggleHistoryAccordion()" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 10px 20px; background: #ffffff; border-top: 1px solid #e2e8f0;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <span style="font-weight: 700; color: #1e293b;">History penjualan pos (<span id="history-sales-count">{{ count($fnbSales) }}</span>)</span>
+                <span style="font-size: 11px; background: #dcfce7; color: #15803d; padding: 2px 8px; border-radius: 10px; font-weight: 700;">
+                    Shift Saya: <span id="my-shift-sales-count-badge">{{ count($myShiftFnbSales ?? $fnbSales) }}</span>
+                </span>
+                <span style="font-size: 11px; background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 10px; font-weight: 600;">
+                    Shift Lalu: <span id="prev-shift-sales-count-badge">{{ count($prevShiftFnbSales ?? collect()) }}</span>
+                </span>
+            </div>
+            <span id="history-toggle-icon" style="font-size: 16px; font-weight: bold; color: #64748b;">+</span>
         </div>
         
-        <div id="history-accordion-content" class="history-accordion-body">
-            <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
-                <thead>
-                    <tr style="border-bottom: 2px solid #e2e8f0; color: #475569; background: #f8fafc;">
-                        <th style="padding: 7px 10px;">Jam</th>
-                        <th style="padding: 7px 10px;">No. Invoice</th>
-                        <th style="padding: 7px 10px;">Item Pesanan</th>
-                        <th style="padding: 7px 10px;">Pelanggan</th>
-                        <th style="padding: 7px 10px; text-align: right;">Total</th>
-                        <th style="padding: 7px 10px; text-align: center;">Metode</th>
-                        <th style="padding: 7px 10px; text-align: center;">Status</th>
-                        <th style="padding: 7px 10px; text-align: center;">Aksi</th>
-                    </tr>
-                </thead>
-                <tbody id="pos-history-tbody">
-                    @forelse($fnbSales as $sale)
-                        @php
-                            $isCancelled = $sale->payment_status === 'cancelled';
-                            $saleTotal = (float) ($sale->net_amount > 0 ? $sale->net_amount : $sale->total_fnb);
-                        @endphp
-                        <tr style="border-bottom: 1px solid #f1f5f9; {{ $isCancelled ? 'background: #fff1f2; opacity: 0.7;' : '' }}">
-                            <td style="padding: 8px 10px; color: #64748b;">
-                                {{ $sale->created_at ? $sale->created_at->format('H:i') : '-' }}
-                            </td>
-                            <td style="padding: 8px 10px; font-family: monospace; font-weight: bold; color: {{ $isCancelled ? '#ef4444' : '#0284c7' }};">
-                                <span style="{{ $isCancelled ? 'text-decoration: line-through;' : '' }}">{{ $sale->invoice_number }}</span>
-                            </td>
-                            <td style="padding: 8px 10px;">
-                                @foreach($sale->items as $it)
-                                    <div>{{ $it->qty }}x {{ $it->item_name }}</div>
-                                @endforeach
-                            </td>
-                            <td style="padding: 8px 10px;">
-                                {{ $sale->customer_name ?: ($sale->customer?->name ?? 'Umum') }}
-                            </td>
-                            <td style="padding: 8px 10px; text-align: right; font-weight: 700; color: {{ $isCancelled ? '#94a3b8' : '#059669' }};">
-                                Rp {{ number_format($saleTotal, 0, ',', '.') }}
-                            </td>
-                            <td style="padding: 8px 10px; text-align: center;">
-                                <span style="background: #e2e8f0; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px;">
-                                    {{ strtoupper($sale->payment_method ?? 'CASH') }}
-                                </span>
-                            </td>
-                            <td style="padding: 8px 10px; text-align: center;">
-                                @if($isCancelled)
-                                    <span style="background: #fee2e2; color: #dc2626; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px;">VOID</span>
-                                @else
-                                    <span style="background: #dcfce7; color: #15803d; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px;">LUNAS</span>
-                                @endif
-                            </td>
-                            <td style="padding: 8px 10px; text-align: center;">
-                                <button type="button" onclick='reprintFromHistory(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #e0f2fe; border: 1px solid #bae6fd; color: #0369a1; border-radius: 3px; cursor: pointer;">
-                                    🖨️ Cetak
-                                </button>
-                                @if(!$isCancelled)
-                                    <button type="button" onclick='openVoidModal(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #fee2e2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 3px; cursor: pointer; margin-left: 4px;">
-                                        ✕ Batal
+        <div id="history-accordion-content" class="history-accordion-body" style="display: none; padding: 14px 20px 20px 20px; background: #ffffff; border-top: 1px solid #f1f5f9;">
+            {{-- TAB SWITCHER DUAL-TAB: SHIFT SAYA (AKTIF) VS SHIFT SEBELUMNYA --}}
+            <div style="display: flex; gap: 8px; margin-bottom: 12px; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 10px;">
+                <button type="button" id="tab-btn-my-shift" onclick="switchPosHistoryTab('my-shift')" class="btn-pos-hist-tab active" style="padding: 6px 14px; font-size: 12px; font-weight: 700; border-radius: 6px; border: 1px solid #0284c7; background: #0284c7; color: #ffffff; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease;">
+                    <span>👤</span> Shift Saya (Aktif) (<span id="my-shift-sales-count">{{ count($myShiftFnbSales ?? $fnbSales) }}</span>)
+                </button>
+                <button type="button" id="tab-btn-prev-shift" onclick="switchPosHistoryTab('prev-shift')" class="btn-pos-hist-tab" style="padding: 6px 14px; font-size: 12px; font-weight: 700; border-radius: 6px; border: 1px solid #cbd5e1; background: #f8fafc; color: #475569; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease;">
+                    <span>🕒</span> Shift Sebelumnya / Hari Ini (<span id="prev-shift-sales-count">{{ count($prevShiftFnbSales ?? collect()) }}</span>)
+                </button>
+            </div>
+
+            {{-- TAB PANE 1: SHIFT SAYA (AKTIF KASIR SAAT INI) --}}
+            <div id="pane-my-shift" class="pos-hist-pane" style="display: block;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #e2e8f0; color: #475569; background: #f8fafc;">
+                            <th style="padding: 7px 10px;">Jam</th>
+                            <th style="padding: 7px 10px;">No. Invoice</th>
+                            <th style="padding: 7px 10px;">Item Pesanan</th>
+                            <th style="padding: 7px 10px;">Pelanggan</th>
+                            <th style="padding: 7px 10px; text-align: right;">Total</th>
+                            <th style="padding: 7px 10px; text-align: center;">Metode</th>
+                            <th style="padding: 7px 10px; text-align: center;">Status</th>
+                            <th style="padding: 7px 10px; text-align: center;">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pos-history-tbody">
+                        @forelse($myShiftFnbSales ?? $fnbSales as $sale)
+                            @php
+                                $isCancelled = $sale->payment_status === 'cancelled';
+                                $saleTotal = (float) ($sale->net_amount > 0 ? $sale->net_amount : $sale->total_fnb);
+                            @endphp
+                            <tr style="border-bottom: 1px solid #f1f5f9; {{ $isCancelled ? 'background: #fff1f2; opacity: 0.7;' : '' }}">
+                                <td style="padding: 8px 10px; color: #64748b;">
+                                    {{ $sale->created_at ? $sale->created_at->format('H:i') : '-' }}
+                                </td>
+                                <td style="padding: 8px 10px; font-family: monospace; font-weight: bold; color: {{ $isCancelled ? '#ef4444' : '#0284c7' }};">
+                                    <span style="{{ $isCancelled ? 'text-decoration: line-through;' : '' }}">{{ $sale->invoice_number }}</span>
+                                </td>
+                                <td style="padding: 8px 10px;">
+                                    @foreach($sale->items as $it)
+                                        <div>{{ $it->qty }}x {{ $it->item_name }}</div>
+                                    @endforeach
+                                </td>
+                                <td style="padding: 8px 10px;">
+                                    {{ $sale->customer_name ?: ($sale->customer?->name ?? 'Umum') }}
+                                </td>
+                                <td style="padding: 8px 10px; text-align: right; font-weight: 700; color: {{ $isCancelled ? '#94a3b8' : '#059669' }};">
+                                    Rp {{ number_format($saleTotal, 0, ',', '.') }}
+                                </td>
+                                <td style="padding: 8px 10px; text-align: center;">
+                                    <span style="background: #e2e8f0; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px;">
+                                        {{ strtoupper($sale->payment_method ?? 'CASH') }}
+                                    </span>
+                                </td>
+                                <td style="padding: 8px 10px; text-align: center;">
+                                    @if($isCancelled)
+                                        <span style="background: #fee2e2; color: #dc2626; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px;">VOID</span>
+                                    @else
+                                        <span style="background: #dcfce7; color: #15803d; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px;">LUNAS</span>
+                                    @endif
+                                </td>
+                                <td style="padding: 8px 10px; text-align: center;">
+                                    <button type="button" onclick='reprintFromHistory(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #e0f2fe; border: 1px solid #bae6fd; color: #0369a1; border-radius: 3px; cursor: pointer;">
+                                        🖨️ Cetak
                                     </button>
-                                @endif
-                            </td>
+                                    @if(!$isCancelled)
+                                        <button type="button" onclick='openVoidModal(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #fee2e2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 3px; cursor: pointer; margin-left: 4px;">
+                                            ✕ Batal
+                                        </button>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr id="history-empty-row">
+                                <td colspan="8" style="padding: 20px; text-align: center; color: #94a3b8;">
+                                    Belum ada transaksi penjualan pada shift aktif Anda saat ini.
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            {{-- TAB PANE 2: SHIFT SEBELUMNYA / HARI INI (REKAP SELESAI) --}}
+            <div id="pane-prev-shift" class="pos-hist-pane" style="display: none;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #e2e8f0; color: #475569; background: #f8fafc;">
+                            <th style="padding: 7px 10px;">Jam</th>
+                            <th style="padding: 7px 10px;">No. Invoice</th>
+                            <th style="padding: 7px 10px;">Item Pesanan</th>
+                            <th style="padding: 7px 10px;">Kasir</th>
+                            <th style="padding: 7px 10px; text-align: right;">Total</th>
+                            <th style="padding: 7px 10px; text-align: center;">Metode</th>
+                            <th style="padding: 7px 10px; text-align: center;">Status Shift</th>
+                            <th style="padding: 7px 10px; text-align: center;">Aksi</th>
                         </tr>
-                    @empty
-                        <tr id="history-empty-row">
-                            <td colspan="8" style="padding: 20px; text-align: center; color: #94a3b8;">
-                                Belum ada transaksi penjualan pada shift ini.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @forelse($prevShiftFnbSales ?? collect() as $sale)
+                            @php
+                                $isCancelled = $sale->payment_status === 'cancelled';
+                                $saleTotal = (float) ($sale->net_amount > 0 ? $sale->net_amount : $sale->total_fnb);
+                            @endphp
+                            <tr style="border-bottom: 1px solid #f1f5f9; {{ $isCancelled ? 'background: #fff1f2; opacity: 0.7;' : '' }}">
+                                <td style="padding: 8px 10px; color: #64748b;">
+                                    {{ $sale->created_at ? $sale->created_at->format('H:i') : '-' }}
+                                </td>
+                                <td style="padding: 8px 10px; font-family: monospace; font-weight: bold; color: {{ $isCancelled ? '#ef4444' : '#0284c7' }};">
+                                    <span style="{{ $isCancelled ? 'text-decoration: line-through;' : '' }}">{{ $sale->invoice_number }}</span>
+                                </td>
+                                <td style="padding: 8px 10px;">
+                                    @foreach($sale->items as $it)
+                                        <div>{{ $it->qty }}x {{ $it->item_name }}</div>
+                                    @endforeach
+                                </td>
+                                <td style="padding: 8px 10px; color: #475569;">
+                                    <strong>{{ $sale->employee->name ?? 'Kasir Shift Lalu' }}</strong>
+                                </td>
+                                <td style="padding: 8px 10px; text-align: right; font-weight: 700; color: {{ $isCancelled ? '#94a3b8' : '#059669' }};">
+                                    Rp {{ number_format($saleTotal, 0, ',', '.') }}
+                                </td>
+                                <td style="padding: 8px 10px; text-align: center;">
+                                    <span style="background: #e2e8f0; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px;">
+                                        {{ strtoupper($sale->payment_method ?? 'CASH') }}
+                                    </span>
+                                </td>
+                                <td style="padding: 8px 10px; text-align: center;">
+                                    <span style="background: #f1f5f9; color: #475569; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; border: 1px solid #cbd5e1;">
+                                        🔒 Rekap Selesai
+                                    </span>
+                                </td>
+                                <td style="padding: 8px 10px; text-align: center;">
+                                    <button type="button" onclick='reprintFromHistory(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #e0f2fe; border: 1px solid #bae6fd; color: #0369a1; border-radius: 3px; cursor: pointer;" title="Cetak ulang struk pelanggan">
+                                        🖨️ Cetak
+                                    </button>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="8" style="padding: 20px; text-align: center; color: #94a3b8;">
+                                    Tidak ada riwayat transaksi dari shift sebelumnya pada hari ini.
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </div>
     </section>
 
@@ -1760,6 +1847,42 @@
             }
         }
 
+        // 5b. SWITCH TAB HISTORY PENJUALAN POS (DUAL-TAB: SHIFT SAYA & SHIFT LALU)
+        function switchPosHistoryTab(tabKey) {
+            const paneMy = document.getElementById('pane-my-shift');
+            const panePrev = document.getElementById('pane-prev-shift');
+            const btnMy = document.getElementById('tab-btn-my-shift');
+            const btnPrev = document.getElementById('tab-btn-prev-shift');
+
+            if (tabKey === 'my-shift') {
+                if (paneMy) paneMy.style.display = 'block';
+                if (panePrev) panePrev.style.display = 'none';
+                if (btnMy) {
+                    btnMy.style.background = '#0284c7';
+                    btnMy.style.borderColor = '#0284c7';
+                    btnMy.style.color = '#ffffff';
+                }
+                if (btnPrev) {
+                    btnPrev.style.background = '#f8fafc';
+                    btnPrev.style.borderColor = '#cbd5e1';
+                    btnPrev.style.color = '#475569';
+                }
+            } else {
+                if (paneMy) paneMy.style.display = 'none';
+                if (panePrev) panePrev.style.display = 'block';
+                if (btnPrev) {
+                    btnPrev.style.background = '#0284c7';
+                    btnPrev.style.borderColor = '#0284c7';
+                    btnPrev.style.color = '#ffffff';
+                }
+                if (btnMy) {
+                    btnMy.style.background = '#f8fafc';
+                    btnMy.style.borderColor = '#cbd5e1';
+                    btnMy.style.color = '#475569';
+                }
+            }
+        }
+
         function toggleCartBody() {
             const body = document.getElementById('cart-body-wrap');
             if (body) {
@@ -1962,6 +2085,17 @@
                 let currentCount = parseInt(countElem.innerText) || 0;
                 countElem.innerText = currentCount + 1;
             }
+            const myCountElem = document.getElementById('my-shift-sales-count');
+            if (myCountElem) {
+                let myCount = parseInt(myCountElem.innerText) || 0;
+                myCountElem.innerText = myCount + 1;
+            }
+            const myBadge = document.getElementById('my-shift-sales-count-badge');
+            if (myBadge) {
+                let bCount = parseInt(myBadge.innerText) || 0;
+                myBadge.innerText = bCount + 1;
+            }
+            switchPosHistoryTab('my-shift');
         }
 
         // 7. STRUK THERMAL MODAL (58MM & 80MM STANDAR MULTI-CABANG)

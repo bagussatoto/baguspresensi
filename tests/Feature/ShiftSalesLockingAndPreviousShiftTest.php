@@ -261,4 +261,45 @@ class ShiftSalesLockingAndPreviousShiftTest extends TestCase
         $response->assertSee('modal-prev-sales');
         $response->assertSee('modal-daily-settlement');
     }
+
+    public function test_pos_desktop_displays_dual_tab_for_active_shift_and_previous_shift_sales(): void
+    {
+        $today = Carbon::today();
+
+        // 1. Catat transaksi Shift 1 (yang terkunci) oleh kasir lain
+        $otherCashier = Employee::create([
+            'branch_id' => $this->branch->id,
+            'code' => 'EMP-BUDI-01',
+            'name' => 'Budi Kasir Shift 1',
+            'email' => 'budi_shift1@example.com',
+            'is_active' => true,
+        ]);
+
+        CafeSale::create([
+            'invoice_number' => 'INV-SHIFT1-999',
+            'branch_id' => $this->branch->id,
+            'employee_id' => $otherCashier->id,
+            'total_fnb' => 18000,
+            'net_amount' => 18000,
+            'payment_method' => 'cash',
+            'payment_status' => 'paid',
+            'is_locked' => true,
+            'locked_at' => now(),
+            'created_at' => $today->copy()->setTime(8, 0),
+        ]);
+
+        // 2. Kasir 2 (aktif) buka POS Desktop
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('pos'));
+
+        $response->assertOk();
+        $response->assertSee('Shift Saya (Aktif)');
+        $response->assertSee('Shift Sebelumnya / Hari Ini');
+        $response->assertSee('tab-btn-my-shift');
+        $response->assertSee('tab-btn-prev-shift');
+        $response->assertSee('pane-my-shift');
+        $response->assertSee('pane-prev-shift');
+        $response->assertSee('INV-SHIFT1-999');
+        $response->assertSee('Budi Kasir Shift 1');
+    }
 }
