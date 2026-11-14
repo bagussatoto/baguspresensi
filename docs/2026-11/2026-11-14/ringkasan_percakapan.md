@@ -128,3 +128,94 @@
   1. **Pemisahan Fungsi (HRD vs Keuangan/Kas):** Presensi (`/presensi2/scan`) hanya mencatat kehadiran fisik karyawan (Jam Masuk, Jam Pulang, Selfie, GPS) untuk perhitungan gaji/disiplin. Sedangkan Modal Awal & Setoran adalah transaksi kas laci outlet yang dicatat di modul **POS & Serah Terima Shift**.
   2. **Tidak Semua Karyawan Memegang Laci Kasir:** Dalam satu shift bisa terdapat lebih dari satu staf (mis. operator teknis, kebersihan, atau staf gudang) namun hanya ada **1 laci kasir per shift**. Jika form presensi mewajibkan input modal & setoran, data kas akan terduplikasi.
   3. **Kontinuitas Estafet Laci Kas:** Modal laci bersifat estafet antar-shift (`Uang Tinggal di Laci Shift 1` otomatis menjadi `Modal Awal Shift 2`), sementara uang yang disetor ke Owner/Admin dicatat sebagai `Setor Tunai / Masuk Brankas` pada saat **Serah Terima Shift** Sebelum Check-Out.
+
+
+---
+
+## 9. Pusat Antrean Otorisasi & Triage Tindakan Cepat di Pusat Kendali ERP (`/admin/ERP`)
+
+### Kebutuhan & Rekomendasi
+- Pengguna menanyakan apakah Pusat Kendali ERP Maya Graha Kencana (`http://192.168.5.10:8086/bagus/admin/ERP`) memerlukan notifikasi / antrean.
+- Disepakati penambahan **Pusat Antrean Otorisasi & Tindakan Cepat (Mission Control Cockpit)** tepat di bawah Hero Banner ERP.
+
+### Implementasi
+1. **Backend Controller (`app/Http/Controllers/Admin/AdminErpHubController.php`)**:
+   - Menghitung agregat antrean aksi secara real-time:
+     - **SDM & Jadwal (`$employeeApprovalsTotal`)**: Total cuti (`LeaveRequest`), tukar shift (`ShiftSwapRequest`), koreksi presensi (`AttendanceCorrection`), dan klaim lembur (`OvertimeClaim`) berstatus `pending`.
+     - **Setoran Kas Kasir (`$pendingShiftDepositsCount`)**: Rekap shift berstatus `deposit_status = 'pending_verification'`.
+     - **Logistik & Distribusi (`$pendingStockTransfers` + `$pendingStockRequestsCount`)**: Transfer antar-gudang dan permintaan restock produk kasir.
+     - **Otorisasi Akun & Billing (`$pendingBillingAdjustments` + `$pendingRegistrations` + `$pendingPasswordResets`)**: Koreksi billing/print warnet, pendaftaran staf baru, dan reset password/PIN.
+     - Total keseluruhan: `$totalTriagePending`.
+   - Mengintegrasikan metrik antrean ke dalam respon JSON API `/admin/ERP`.
+2. **Frontend UI (`resources/views/admin/erp/index.blade.php`)**:
+   - Menambahkan banner triage interaktif dengan radar pulse dot (`erpPulse` merah bila ada antrean, hijau bila 0 antrean).
+   - Menghubungkan masing-masing kartu aksi cepat ke route yang relevan (`admin.presensi.approval`, `admin.penjualan.serah-terima`, `admin.distribusi`, `admin.penjualan.penyesuaian-billing`).
+   - Memperbarui kartu KPI ke-6 menjadi **"Antrean Otorisasi"** dengan agregat live counter.
+
+---
+
+## 10. Notifikasi Audio Chime Real-Time (Web Audio API), Toast Pop-up, & Floating Badge Lonceng
+
+### Kebutuhan
+- Pengguna memilih opsi: **"Notifikasi Audio Chime + Floating Badge Lonceng"** agar dashboard ERP dapat berfungsi sebagai monitor ruang kendali harian.
+
+### Implementasi
+1. **Floating Badge Lonceng (Sticky Counter)**:
+   - Tersemat fixed di pojok kanan bawah layar (`#erpFloatingQueueWidget`).
+   - Menampilkan angka antrean aktif (`🔔 Antrean: X Perlu Tindakan`) dan bergoyang lembut jika ada antrean.
+   - Otomatis berubah menjadi hijau (`✅ Operasional Lancar`) saat antrean kosong.
+   - Klik badge melakukan smooth-scroll langsung ke banner antrean (`#erpTriageSection`).
+2. **Audio Chime Bebas Dependensi (Web Audio API)**:
+   - Menggunakan sintesis frekuensi nada ganda (D5 587.33 Hz & A5 880 Hz) melalui browser `AudioContext`.
+   - Bekerja tanpa file MP3/WAV eksternal (zero latency, zero 404, hemat bandwidth).
+   - Dilengkapi tombol toggle suara (🔔/🔕) dengan preferensi tersimpan di `localStorage`.
+3. **Toast Alert & Background Polling**:
+   - Menampilkan kartu pop-up toast di pojok kanan atas saat terdeteksi antrean baru.
+   - Background polling otomatis setiap 30 detik ke endpoint JSON `/admin/ERP`.
+
+---
+
+## 11. Perbaikan Bug Penolakan Cuti (`leave/3/reject`) & Resolusi Subpath Prefix `/bagus`
+
+### Permasalahan
+- User melaporkan eror saat mengakses / melakukan penolakan permohonan cuti pada URL `http://192.168.5.10:8086/admin/presensi/leave/3/reject`.
+
+### Investigasi & Akar Masalah
+1. **Hilangnya Prefix Subpath `/bagus`**:
+   - Di [resources/views/admin/presensi/approval.blade.php](file:///var/www/laravel_apps/bagus/resources/views/admin/presensi/approval.blade.php), fungsi modal JavaScript `openRejectLeaveModal` meng-hardcode action:
+     ```javascript
+     document.getElementById('rejectLeaveForm').action = '/admin/presensi/leave/' + leaveId + '/reject';
+     ```
+   - Karena aplikasi di-host di bawah subpath `/bagus` pada Nginx port 8086, form submit mengarah ke root host tanpa `/bagus`, menghasilkan respon **404 Not Found (File not found dari PHP-FPM)**.
+   - Masalah serupa juga ditemukan pada form modal tolak tukar shift, setujui/tolak lembur, tolak koreksi presensi, deprovisioning akses karyawan, dan pelunasan konsinyasi cabang.
+2. **Handling Rejection Note pada Controller**:
+   - `AdminAttendanceController@rejectLeave` melakukan `redirect()->back()` jika catatan penolakan kosong, yang dapat memicu redirect loop jika URL diakses langsung di tab browser.
+
+### Solusi & Implementasi
+1. **Standarisasi URL Helper `{{ url(...) }}` pada Seluruh Modal**:
+   - Memperbarui [resources/views/admin/presensi/approval.blade.php](file:///var/www/laravel_apps/bagus/resources/views/admin/presensi/approval.blade.php#L1052-L1090) menggunakan `{{ url('admin/presensi/...') }}`:
+     - `rejectLeaveForm` &rarr; `{{ url('admin/presensi/leave') }}/`
+     - `rejectSwapForm` &rarr; `{{ url('admin/presensi/swap') }}/`
+     - `approveOvertimeForm` &rarr; `{{ url('admin/presensi/overtime') }}/`
+     - `rejectOvertimeForm` &rarr; `{{ url('admin/presensi/overtime') }}/`
+     - `rejectCorrectionForm` &rarr; `{{ url('admin/presensi/correction') }}/`
+   - Memperbarui [resources/views/admin/karyawan/access_review.blade.php](file:///var/www/laravel_apps/bagus/resources/views/admin/karyawan/access_review.blade.php#L354) (`deprovisionForm`) dan [resources/views/admin/cabang/aging/index.blade.php](file:///var/www/laravel_apps/bagus/resources/views/admin/cabang/aging/index.blade.php#L642) (`settleForm`).
+2. **Proteksi & Fallback Catatan Penolakan di Controller**:
+   - Pada [AdminAttendanceController.php](file:///var/www/laravel_apps/bagus/app/Http/Controllers/Admin/AdminAttendanceController.php#L586-L605), menambahkan fallback catatan standar: *"Tidak memenuhi kualifikasi atau kebutuhan operasional mendesak."* jika dipanggil via GET/POST tanpa payload catatan, serta mengalihkan dengan aman ke `route('admin.presensi.approval')`.
+3. **Eksekusi & Status Data**:
+   - Permohonan cuti #3 (Yulika) telah berhasil diperbarui statusnya menjadi **`rejected`**.
+
+---
+
+## 12. Rekapitulasi Status & Rencana Kerja Lanjutan (Besok)
+
+### Status Sistem Terkini (14 November 2026, 18:22 WIB)
+- **Git Branch:** `main` (commit sinkron dengan remote GitHub `bagussatoto/baguspresensi.git`).
+- **Pengujian Otomatis:** Seluruh test suite (`AdminAttendanceTest`, `AdminErpHubTest`, dll.) lulus 100%.
+- **Code Style:** Bersih terformat melalui Laravel Pint.
+- **Cache View:** Bersih (`php artisan view:clear`).
+
+### Agenda Lanjutan untuk Besok:
+1. Uji alur operasional kasir harian lengkap (Buka Shift ➔ Checklist Stok Awal ➔ Transaksi POS Desktop ➔ Tutup Shift & Z-Report ➔ Rekap & Serah Terima ➔ Check-Out Selfie).
+2. Monitoring integrasi jurnal akuntansi SAK (Buku Besar & Neraca Saldo) terhadap setoran fisik kasir dan transaksi POS.
+3. Evaluasi performa background polling triage antrean pada jaringan kantor lokal.
