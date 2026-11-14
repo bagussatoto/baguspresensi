@@ -89,6 +89,11 @@ class ShiftSalesSummary extends Model
         'deposit_verified_at',
         'deposit_verified_by',
         'closed_at',
+        'discrepancy_resolution_status',
+        'discrepancy_resolution_action',
+        'discrepancy_resolution_notes',
+        'discrepancy_resolved_by',
+        'discrepancy_resolved_at',
     ];
 
     protected $casts = [
@@ -132,6 +137,7 @@ class ShiftSalesSummary extends Model
         'deposited_at' => 'datetime',
         'deposit_verified_at' => 'datetime',
         'closed_at' => 'datetime',
+        'discrepancy_resolved_at' => 'datetime',
     ];
 
     public function depositMethodLabel(): string
@@ -420,6 +426,22 @@ class ShiftSalesSummary extends Model
     public function attendanceRecord(): BelongsTo
     {
         return $this->belongsTo(AttendanceRecord::class);
+    }
+
+    public function isDiscrepancyResolved(): bool
+    {
+        return $this->discrepancy_resolution_status === 'resolved';
+    }
+
+    public function discrepancyActionLabel(): string
+    {
+        return match ($this->discrepancy_resolution_action) {
+            'reimbursed_by_cashier' => 'Diganti Tunai oleh Kasir',
+            'payroll_deduction' => 'Potong Gaji / Kasbon Karyawan',
+            'expense_write_off' => 'Toleransi / Beban Kerugian Selisih Kas',
+            'stock_reconciliation' => 'Penyesuaian Saldo Stok Fisik SAK',
+            default => $this->discrepancy_resolution_action ?: '-',
+        };
     }
 
     public function depositProofUrl(): ?string

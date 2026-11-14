@@ -1323,6 +1323,47 @@ class PosDualControlAndBlindCashCountTest extends TestCase
         $this->assertEquals(10000.0, (float) $summary->locked_print_amount);
     }
 
+    public function test_admin_can_resolve_shift_cash_discrepancy(): void
+    {
+        $summary = ShiftSalesSummary::create([
+            'employee_id' => $this->cashier->id,
+            'branch_id' => $this->branch->id,
+            'work_date' => Carbon::today()->toDateString(),
+            'total_fnb_sales' => 100000,
+            'total_internet_sales' => 200000,
+            'total_revenue' => 300000,
+            'system_expected_cash' => 300000,
+            'blind_cash_count' => 280000,
+            'cash_in_drawer' => 280000,
+            'cash_difference' => -20000,
+            'is_sales_locked' => true,
+            'status' => 'closed',
+            'discrepancy_resolution_status' => 'unresolved',
+        ]);
+
+        $this->assertFalse($summary->isDiscrepancyResolved());
+
+        $response = $this->post(route('admin.penjualan.resolve-discrepancy', $summary->id), [
+            'action' => 'reimbursed_by_cashier',
+            'notes' => 'Kasir mengganti Rp 20.000 tunai langsung ke laci toko.',
+        ]);
+
+        $response->assertRedirect();
+
+        $summary->refresh();
+        $this->assertTrue($summary->isDiscrepancyResolved());
+        $this->assertEquals('resolved', $summary->discrepancy_resolution_status);
+        $this->assertEquals('reimbursed_by_cashier', $summary->discrepancy_resolution_action);
+        $this->assertEquals('Diganti Tunai oleh Kasir', $summary->discrepancyActionLabel());
+        $this->assertEquals('Kasir mengganti Rp 20.000 tunai langsung ke laci toko.', $summary->discrepancy_resolution_notes);
+        $this->assertNotNull($summary->discrepancy_resolved_at);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'auditable_id' => $summary->id,
+            'action' => 'shift_discrepancy_resolved',
+        ]);
+    }
+
     private function makePendingBillingAdjustment(): ShiftSalesSummary
     {
         return ShiftSalesSummary::create([

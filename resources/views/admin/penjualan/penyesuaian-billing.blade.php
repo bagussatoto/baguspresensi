@@ -367,6 +367,7 @@
                         <th style="padding: 12px 16px; color: var(--text-sub);">Kasir / Cabang</th>
                         <th style="padding: 12px 16px; color: var(--text-sub); text-align: right;">Total Omset</th>
                         <th style="padding: 12px 16px; color: var(--text-sub); text-align: right;">Selisih Kas Laci</th>
+                        <th style="padding: 12px 16px; color: var(--text-sub);">Status Selisih</th>
                         <th style="padding: 12px 16px; color: var(--text-sub);">Status Kunci</th>
                         <th style="padding: 12px 16px; color: var(--text-sub); text-align: center;">Aksi Admin</th>
                     </tr>
@@ -397,20 +398,42 @@
                                 @endif
                             </td>
                             <td style="padding: 10px 16px;">
+                                @if($lockedSummary->isDiscrepancyResolved())
+                                    <span class="badge-status badge-emerald" title="{{ $lockedSummary->discrepancy_resolution_notes }}">
+                                        ✅ {{ $lockedSummary->discrepancyActionLabel() }}
+                                    </span>
+                                    <div style="font-size: 10px; color: var(--text-sub); margin-top: 2px;">
+                                        Oleh: {{ $lockedSummary->discrepancy_resolved_by }}
+                                    </div>
+                                @elseif(abs($cashDiff) > 1)
+                                    <span class="badge-status badge-amber">⏳ Perlu Tindak Lanjut</span>
+                                @else
+                                    <span style="color: var(--text-sub); font-size: 11px;">-</span>
+                                @endif
+                            </td>
+                            <td style="padding: 10px 16px;">
                                 <span class="badge-status badge-rose">🔒 Terkunci ({{ strtoupper((string) $lockedSummary->status) }})</span>
                             </td>
                             <td style="padding: 10px 16px; text-align: center;">
-                                <form method="POST" action="{{ route('admin.penjualan.unlock-sales', $lockedSummary->id) }}" onsubmit="return confirm('Buka kembali kunci penjualan untuk shift ini agar kasir dapat menginput transaksi lagi?');" style="display: inline;">
-                                    @csrf
-                                    <button type="submit" class="btn-action-sm" style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.5); color: #34d399; font-weight: 700; cursor: pointer;">
-                                        🔓 Buka Kunci Shift
-                                    </button>
-                                </form>
+                                <div style="display: inline-flex; gap: 6px; align-items: center;">
+                                    @if(abs($cashDiff) > 1 && ! $lockedSummary->isDiscrepancyResolved())
+                                        <button type="button" onclick="openDiscrepancyModal({{ $lockedSummary->id }}, '{{ $lockedSummary->employee?->name ?? 'Kasir' }}', {{ (int) $cashDiff }})" class="btn-action-sm" style="background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.5); color: #fbbf24; font-weight: 700; cursor: pointer;">
+                                            ⚖️ Selesaikan Selisih
+                                        </button>
+                                    @endif
+
+                                    <form method="POST" action="{{ route('admin.penjualan.unlock-sales', $lockedSummary->id) }}" onsubmit="return confirm('Buka kembali kunci penjualan untuk shift ini agar kasir dapat menginput transaksi lagi?');" style="display: inline;">
+                                        @csrf
+                                        <button type="submit" class="btn-action-sm" style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.5); color: #34d399; font-weight: 700; cursor: pointer;">
+                                            🔓 Buka Kunci Shift
+                                        </button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" style="padding: 20px 16px; text-align: center; color: var(--text-sub);">Tidak ada shift penjualan yang sedang terkunci.</td>
+                            <td colspan="7" style="padding: 20px 16px; text-align: center; color: var(--text-sub);">Tidak ada shift penjualan yang sedang terkunci.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -418,4 +441,79 @@
         </div>
     </div>
 </div>
+
+{{-- MODAL RESOLUSI SELISIH KAS & STOK SHIFT --}}
+<div id="modal-discrepancy-resolution" style="display: none; position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(4px); align-items: center; justify-content: center;">
+    <div style="background: #1e293b; border: 1px solid var(--border-color); border-radius: 16px; width: 100%; max-width: 520px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); overflow: hidden;">
+        <div style="padding: 16px 20px; background: rgba(245, 158, 11, 0.15); border-bottom: 1px solid rgba(245, 158, 11, 0.3); display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 18px;">⚖️</span>
+                <span style="font-weight: 700; color: #fbbf24; font-size: 14px;">Tindak Lanjut & Otorisasi Selisih Kas Laci</span>
+            </div>
+            <button type="button" onclick="closeDiscrepancyModal()" style="background: transparent; border: none; color: #94a3b8; font-size: 18px; cursor: pointer;">✕</button>
+        </div>
+        <form id="form-discrepancy-resolution" method="POST" style="padding: 20px;">
+            @csrf
+            <div style="margin-bottom: 16px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px 14px;">
+                <div style="font-size: 12px; color: var(--text-sub);">Kasir Shift: <strong id="modal-disc-kasir" style="color: #fff;">-</strong></div>
+                <div style="font-size: 12px; color: var(--text-sub); margin-top: 4px;">Nominal Selisih Kas: <strong id="modal-disc-nominal" style="font-family: monospace; font-size: 13px;">-</strong></div>
+            </div>
+
+            <div style="margin-bottom: 14px;">
+                <label style="display: block; font-size: 12px; font-weight: 600; color: #e2e8f0; margin-bottom: 6px;">
+                    Keputusan Tindak Lanjut Admin *
+                </label>
+                <select name="action" required style="width: 100%; background: #0f172a; border: 1px solid var(--border-color); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 13px;">
+                    <option value="reimbursed_by_cashier">💵 Diganti Tunai Langsung oleh Kasir</option>
+                    <option value="payroll_deduction">💼 Potong Gaji / Masuk Kasbon Karyawan</option>
+                    <option value="expense_write_off">📉 Toleransi / Beban Kerugian Selisih Kas Outlet</option>
+                    <option value="stock_reconciliation">📦 Penyesuaian Saldo Stok Fisik SAK</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom: 18px;">
+                <label style="display: block; font-size: 12px; font-weight: 600; color: #e2e8f0; margin-bottom: 6px;">
+                    Catatan / Alasan Keputusan (Opsional)
+                </label>
+                <textarea name="notes" rows="3" placeholder="Contoh: Kasir telah mengganti uang tunai Rp 10.000 ke laci kasir saat pergantian shift..." style="width: 100%; background: #0f172a; border: 1px solid var(--border-color); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 12px; resize: vertical;"></textarea>
+            </div>
+
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button type="button" onclick="closeDiscrepancyModal()" class="btn-action-sm" style="background: rgba(255, 255, 255, 0.05); color: #94a3b8; cursor: pointer;">Batal</button>
+                <button type="submit" class="btn-action-sm" style="background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.5); color: #fbbf24; font-weight: 700; cursor: pointer;">
+                    ✓ Simpan Keputusan Selisih
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openDiscrepancyModal(summaryId, kasirName, diffAmount) {
+    const modal = document.getElementById('modal-discrepancy-resolution');
+    const form = document.getElementById('form-discrepancy-resolution');
+    const kasirEl = document.getElementById('modal-disc-kasir');
+    const nominalEl = document.getElementById('modal-disc-nominal');
+
+    if (form) {
+        form.action = '{{ url("admin/penjualan/rekap-shift") }}/' + summaryId + '/resolve-discrepancy';
+    }
+    if (kasirEl) kasirEl.innerText = kasirName;
+    if (nominalEl) {
+        const formatted = new Intl.NumberFormat('id-ID').format(Math.abs(diffAmount));
+        if (diffAmount < 0) {
+            nominalEl.innerHTML = `<span style="color: #f87171;">⚠️ Kurang -Rp ${formatted}</span>`;
+        } else {
+            nominalEl.innerHTML = `<span style="color: #38bdf8;">+Rp ${formatted} (Lebih)</span>`;
+        }
+    }
+
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeDiscrepancyModal() {
+    const modal = document.getElementById('modal-discrepancy-resolution');
+    if (modal) modal.style.display = 'none';
+}
+</script>
 @endsection

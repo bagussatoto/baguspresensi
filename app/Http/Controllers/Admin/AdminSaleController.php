@@ -751,4 +751,62 @@ class AdminSaleController extends Controller
 
         return redirect()->back()->with('success', $message);
     }
+
+    /**
+     * Keputusan / Tindak Lanjut (Resolution) Selisih Kas & Stok Shift.
+     */
+    public function resolveDiscrepancy(Request $request, ShiftSalesSummary $summary): JsonResponse|RedirectResponse
+    {
+        $assignedBranchId = $this->assignedBranchId();
+        if ($assignedBranchId && (int) $summary->branch_id !== (int) $assignedBranchId) {
+            return redirect()->back()->with('error', 'Anda tidak memiliki otorisasi cabang untuk menyelesaikan selisih shift ini.');
+        }
+
+        $validated = $request->validate([
+            'action' => 'required|in:reimbursed_by_cashier,payroll_deduction,expense_write_off,stock_reconciliation',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        $adminName = auth()->user()?->name ?? 'Admin ERP';
+        $now = now();
+
+        $summary->update([
+            'discrepancy_resolution_status' => 'resolved',
+            'discrepancy_resolution_action' => $validated['action'],
+            'discrepancy_resolution_notes' => $validated['notes'],
+            'discrepancy_resolved_by' => $adminName,
+            'discrepancy_resolved_at' => $now,
+        ]);
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => ShiftSalesSummary::class,
+            'auditable_id' => $summary->id,
+            'action' => 'shift_discrepancy_resolved',
+            'new_values' => [
+                'summary_id' => $summary->id,
+                'cash_difference' => $summary->cash_difference,
+                'resolution_action' => $validated['action'],
+                'resolution_notes' => $validated['notes'],
+                'resolved_by' => $adminName,
+                'resolved_at' => $now->toDateTimeString(),
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Admin ERP MGK',
+            'created_at' => $now,
+        ]));
+
+        $actionLabel = $summary->discrepancyActionLabel();
+        $message = "Tindak lanjut selisih shift ({$summary->employee?->name}) berhasil diselesaikan dengan keputusan: '{$actionLabel}'!";
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'summary' => $summary->fresh(),
+            ]);
+        }
+
+        return redirect()->back()->with('success', $message);
+    }
 }
