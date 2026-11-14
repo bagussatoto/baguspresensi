@@ -469,6 +469,81 @@
         color: #94a3b8;
         line-height: 1.4;
     }
+
+    /* ERP TRIAGE QUEUE BANNER */
+    .erp-triage-banner {
+        background: radial-gradient(100% 100% at 0% 0%, rgba(244, 63, 94, 0.12) 0%, rgba(15, 23, 42, 0.95) 100%), #0f172a;
+        border: 1px solid rgba(244, 63, 94, 0.35);
+        border-radius: 16px;
+        padding: 20px 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
+    .erp-triage-banner.all-clean {
+        background: radial-gradient(100% 100% at 0% 0%, rgba(16, 185, 129, 0.12) 0%, rgba(15, 23, 42, 0.95) 100%), #0f172a;
+        border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+    .triage-header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+    .triage-title-wrap {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .triage-pulse-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #f43f5e;
+        box-shadow: 0 0 10px #f43f5e;
+        animation: erpPulse 1.8s infinite;
+    }
+    .triage-pulse-dot.clean {
+        background: #10b981;
+        box-shadow: 0 0 10px #10b981;
+        animation: none;
+    }
+    @keyframes erpPulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.4; transform: scale(1.3); }
+    }
+    .triage-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px;
+    }
+    .triage-item-card {
+        background: rgba(30, 41, 59, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 14px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        text-decoration: none;
+        color: #f1f5f9;
+        transition: all 0.2s ease;
+    }
+    .triage-item-card:hover {
+        transform: translateY(-2px);
+        background: rgba(51, 65, 85, 0.9);
+        border-color: rgba(56, 189, 248, 0.4);
+    }
+    .triage-item-card.has-pending {
+        border-color: rgba(244, 63, 94, 0.4);
+        background: rgba(244, 63, 94, 0.08);
+    }
+    .triage-item-card.has-pending:hover {
+        border-color: #f43f5e;
+        background: rgba(244, 63, 94, 0.16);
+    }
 </style>
 
 <!-- 1. HERO BANNER PUSAT ERP -->
@@ -498,6 +573,101 @@
     </div>
 </div>
 
+<!-- 1.5 PUSAT ANTREAN OTORISASI & TRIAGE TINDAKAN CEPAT -->
+<div class="erp-triage-banner {{ $totalTriagePending == 0 ? 'all-clean' : '' }}">
+    <div class="triage-header-row">
+        <div class="triage-title-wrap">
+            <span class="triage-pulse-dot {{ $totalTriagePending == 0 ? 'clean' : '' }}"></span>
+            <div>
+                <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
+                    Pusat Antrean Otorisasi &amp; Tindakan Cepat
+                    @if($totalTriagePending > 0)
+                        <span style="background: rgba(244, 63, 94, 0.2); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4); font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px;">
+                            {{ $totalTriagePending }} Perlu Tindakan
+                        </span>
+                    @else
+                        <span style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px;">
+                            ✅ Seluruh Operasional Lancar
+                        </span>
+                    @endif
+                </h3>
+                <p style="margin: 4px 0 0; font-size: 0.8rem; color: #94a3b8;">
+                    Deteksi otomatis permohonan staf, selisih setoran kasir, transfer logistik &amp; permohonan restock cabang yang menunggu verifikasi pimpinan.
+                </p>
+            </div>
+        </div>
+        <div>
+            <span style="font-size: 0.75rem; color: #64748b; font-family: monospace;">Real-time Operational Triage</span>
+        </div>
+    </div>
+
+    <div class="triage-grid">
+        <!-- 1. SDM & Permohonan Staf -->
+        <a href="{{ route('admin.presensi.approval') }}" class="triage-item-card {{ $employeeApprovalsTotal > 0 ? 'has-pending' : '' }}">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.4rem;">👥</span>
+                <div>
+                    <div style="font-size: 0.85rem; font-weight: 600; color: #f1f5f9;">Persetujuan SDM &amp; Jadwal</div>
+                    <div style="font-size: 0.75rem; color: #94a3b8;">{{ $pendingLeavesCount }} Cuti &bull; {{ $pendingShiftSwapsCount }} Tukar &bull; {{ $pendingCorrectionsCount }} Koreksi &bull; {{ $pendingOvertimesCount }} Lembur</div>
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <span style="display: inline-block; min-width: 28px; padding: 3px 8px; font-weight: 700; font-size: 0.82rem; border-radius: 8px; text-align: center; background: {{ $employeeApprovalsTotal > 0 ? '#f43f5e' : 'rgba(255,255,255,0.06)' }}; color: #ffffff;">
+                    {{ $employeeApprovalsTotal }}
+                </span>
+            </div>
+        </a>
+
+        <!-- 2. Setoran Kas Kasir POS -->
+        <a href="{{ route('admin.penjualan.serah-terima') }}" class="triage-item-card {{ $pendingShiftDepositsCount > 0 ? 'has-pending' : '' }}">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.4rem;">💵</span>
+                <div>
+                    <div style="font-size: 0.85rem; font-weight: 600; color: #f1f5f9;">Verifikasi Setoran Kas Kasir</div>
+                    <div style="font-size: 0.75rem; color: #94a3b8;">Validasi Fisik Kas Laci vs Rekap POS</div>
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <span style="display: inline-block; min-width: 28px; padding: 3px 8px; font-weight: 700; font-size: 0.82rem; border-radius: 8px; text-align: center; background: {{ $pendingShiftDepositsCount > 0 ? '#f43f5e' : 'rgba(255,255,255,0.06)' }}; color: #ffffff;">
+                    {{ $pendingShiftDepositsCount }}
+                </span>
+            </div>
+        </a>
+
+        <!-- 3. Logistik & Distribusi Gudang -->
+        <a href="{{ route('admin.distribusi') }}" class="triage-item-card {{ ($pendingStockTransfers + $pendingStockRequestsCount) > 0 ? 'has-pending' : '' }}">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.4rem;">🚚</span>
+                <div>
+                    <div style="font-size: 0.85rem; font-weight: 600; color: #f1f5f9;">Logistik &amp; Distribusi Gudang</div>
+                    <div style="font-size: 0.75rem; color: #94a3b8;">{{ $pendingStockTransfers }} Transfer &bull; {{ $pendingStockRequestsCount }} Permintaan Kasir</div>
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <span style="display: inline-block; min-width: 28px; padding: 3px 8px; font-weight: 700; font-size: 0.82rem; border-radius: 8px; text-align: center; background: {{ ($pendingStockTransfers + $pendingStockRequestsCount) > 0 ? '#f59e0b' : 'rgba(255,255,255,0.06)' }}; color: #ffffff;">
+                    {{ $pendingStockTransfers + $pendingStockRequestsCount }}
+                </span>
+            </div>
+        </a>
+
+        <!-- 4. Koreksi Billing & Akun Staf -->
+        <a href="{{ route('admin.penjualan.penyesuaian-billing') }}" class="triage-item-card {{ ($pendingBillingAdjustments + $pendingRegistrations + $pendingPasswordResets) > 0 ? 'has-pending' : '' }}">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.4rem;">🔐</span>
+                <div>
+                    <div style="font-size: 0.85rem; font-weight: 600; color: #f1f5f9;">Otorisasi Akun &amp; Billing</div>
+                    <div style="font-size: 0.75rem; color: #94a3b8;">{{ $pendingBillingAdjustments }} Billing &bull; {{ $pendingRegistrations }} Daftar &bull; {{ $pendingPasswordResets }} Reset</div>
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <span style="display: inline-block; min-width: 28px; padding: 3px 8px; font-weight: 700; font-size: 0.82rem; border-radius: 8px; text-align: center; background: {{ ($pendingBillingAdjustments + $pendingRegistrations + $pendingPasswordResets) > 0 ? '#8b5cf6' : 'rgba(255,255,255,0.06)' }}; color: #ffffff;">
+                    {{ $pendingBillingAdjustments + $pendingRegistrations + $pendingPasswordResets }}
+                </span>
+            </div>
+        </a>
+    </div>
+</div>
+
 <!-- 2. LIVE VITALS KPI PULSE -->
 <div class="erp-vitals-grid">
     <div class="erp-vital-card">
@@ -511,7 +681,7 @@
 
     <div class="erp-vital-card">
         <div class="erp-vital-top">
-            <span class="erp-vital-label">Karyawan & Presensi</span>
+            <span class="erp-vital-label">Karyawan &amp; Presensi</span>
             <span class="erp-vital-icon">👥</span>
         </div>
         <div class="erp-vital-value">{{ $activeEmployees }} Staf</div>
@@ -547,13 +717,19 @@
 
     <div class="erp-vital-card">
         <div class="erp-vital-top">
-            <span class="erp-vital-label">Pending Approval</span>
+            <span class="erp-vital-label">Antrean Otorisasi</span>
             <span class="erp-vital-icon">⚡</span>
         </div>
-        <div class="erp-vital-value" style="{{ ($pendingRegistrations + $pendingPasswordResets + $pendingBillingAdjustments) > 0 ? 'color: #fb7185;' : '' }}">
-            {{ $pendingRegistrations + $pendingPasswordResets + $pendingBillingAdjustments }}
+        <div class="erp-vital-value" style="{{ $totalTriagePending > 0 ? 'color: #fb7185;' : 'color: #34d399;' }}">
+            {{ $totalTriagePending }}
         </div>
-        <div class="erp-vital-sub">Verifikasi & Koreksi</div>
+        <div class="erp-vital-sub">
+            @if($totalTriagePending > 0)
+                {{ $employeeApprovalsTotal }} SDM &bull; {{ $pendingShiftDepositsCount + $pendingStockTransfers + $pendingStockRequestsCount }} Logistik/Kas
+            @else
+                Semua Antrean Selesai
+            @endif
+        </div>
     </div>
 </div>
 

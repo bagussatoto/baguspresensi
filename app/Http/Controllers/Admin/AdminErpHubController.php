@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
+use App\Domains\Attendance\Models\AttendanceCorrection;
 use App\Domains\Attendance\Models\AttendanceRecord;
+use App\Domains\Attendance\Models\OvertimeClaim;
+use App\Domains\Attendance\Models\ShiftSwapRequest;
+use App\Domains\Leave\Models\LeaveRequest;
 use App\Http\Controllers\Controller;
 use App\Models\EmployeeRegistration;
 use App\Models\PasswordResetRequest;
 use App\Models\ShiftSalesSummary;
+use App\Models\ShiftStockRequest;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -59,6 +64,29 @@ class AdminErpHubController extends Controller
             ? PasswordResetRequest::where('status', 'pending')->count()
             : 0;
 
+        // 2.1 ANTREAN OTORISASI SDM, KASIR & LOGISTIK (TRIAGE)
+        $pendingLeavesCount = Schema::hasTable('leave_requests')
+            ? LeaveRequest::where('status', 'pending')->count()
+            : 0;
+        $pendingShiftSwapsCount = Schema::hasTable('shift_swap_requests')
+            ? ShiftSwapRequest::where('status', 'pending_supervisor')->count()
+            : 0;
+        $pendingCorrectionsCount = Schema::hasTable('attendance_corrections')
+            ? AttendanceCorrection::where('status', 'pending')->count()
+            : 0;
+        $pendingOvertimesCount = Schema::hasTable('overtime_claims')
+            ? OvertimeClaim::where('status', 'pending')->count()
+            : 0;
+        $employeeApprovalsTotal = $pendingLeavesCount + $pendingShiftSwapsCount + $pendingCorrectionsCount + $pendingOvertimesCount;
+
+        $pendingShiftDepositsCount = Schema::hasTable('shift_sales_summaries')
+            ? ShiftSalesSummary::where('deposit_status', 'pending_verification')->count()
+            : 0;
+
+        $pendingStockRequestsCount = Schema::hasTable('shift_stock_requests')
+            ? ShiftStockRequest::where('status', 'pending')->count()
+            : 0;
+
         // 3. STATISTIK PENJUALAN & TRANSAKSI HARI INI
         $todaySalesCount = CafeSale::whereDate('created_at', $today)->count();
         $todaySalesAmount = (float) CafeSale::whereDate('created_at', $today)->sum('net_amount');
@@ -72,6 +100,8 @@ class AdminErpHubController extends Controller
         $pendingStockTransfers = Schema::hasTable('stock_transfer_dispatches')
             ? DB::table('stock_transfer_dispatches')->where('status', '!=', 'received')->count()
             : 0;
+
+        $totalTriagePending = $employeeApprovalsTotal + $pendingShiftDepositsCount + $pendingBillingAdjustments + $pendingRegistrations + $pendingPasswordResets + $pendingStockTransfers + $pendingStockRequestsCount;
 
         // 5. STATISTIK KEUANGAN & COA
         $coaAccountsCount = Schema::hasTable('chart_of_accounts')
@@ -114,6 +144,10 @@ class AdminErpHubController extends Controller
                     'today_sales_amount' => $todaySalesAmount,
                     'total_stock' => $totalPhysicalStock,
                     'coa_accounts' => $coaAccountsCount,
+                    'total_pending_approvals' => $totalTriagePending,
+                    'pending_employee_approvals' => $employeeApprovalsTotal,
+                    'pending_shift_deposits' => $pendingShiftDepositsCount,
+                    'pending_stock_transfers' => $pendingStockTransfers,
                 ],
                 'pillars' => $erpModules,
             ]);
@@ -131,6 +165,14 @@ class AdminErpHubController extends Controller
             'todayAttendance',
             'pendingRegistrations',
             'pendingPasswordResets',
+            'pendingLeavesCount',
+            'pendingShiftSwapsCount',
+            'pendingCorrectionsCount',
+            'pendingOvertimesCount',
+            'employeeApprovalsTotal',
+            'pendingShiftDepositsCount',
+            'pendingStockRequestsCount',
+            'totalTriagePending',
             'todaySalesCount',
             'todaySalesAmount',
             'pendingBillingAdjustments',

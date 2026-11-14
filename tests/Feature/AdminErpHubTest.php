@@ -17,6 +17,8 @@ class AdminErpHubTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertSee('Pusat Kendali ERP Maya Graha Kencana');
+        $response->assertSee('Pusat Antrean Otorisasi &amp; Tindakan Cepat', false);
+        $response->assertSee('Antrean Otorisasi');
         $response->assertSee('Master Data &amp; Katalog Terpadu', false);
         $response->assertSee('POS Desktop Kasir &amp; Billing', false);
         $response->assertSee('Bagan Akun (Chart of Accounts / COA)');
@@ -32,6 +34,9 @@ class AdminErpHubTest extends TestCase
 
         $responseLower = $this->get('/admin/erp');
         $responseLower->assertStatus(200);
+
+        $responseBagus = $this->get('/bagus/admin/ERP');
+        $responseBagus->assertStatus(200);
     }
 
     public function test_admin_erp_hub_can_fetch_json_metrics(): void
@@ -51,6 +56,10 @@ class AdminErpHubTest extends TestCase
                 'today_sales_amount',
                 'total_stock',
                 'coa_accounts',
+                'total_pending_approvals',
+                'pending_employee_approvals',
+                'pending_shift_deposits',
+                'pending_stock_transfers',
             ],
             'pillars' => [
                 'master_data',
