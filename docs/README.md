@@ -141,6 +141,7 @@ Dokumentasi proyek **Bagus (Sistem Presensi, POS Kasir, & ERP MGK)** diorganisas
 ### 📁 `docs/2026-11-14/` — Kunci Penjualan Shift, Penyesuaian Billing PLN, Mode Demo (`?demo=1`), & Audit Stok
 * [`ringkasan_percakapan.md`](2026-11-14/ringkasan_percakapan.md) — Ringkasan perbaikan kunci shift per `shift_id`, fitur buka kunci shift Admin, persetujuan billing PLN Rp 0, penyembunyian panel simulasi (`?demo=1`), monitoring selisih kas & stok oleh Admin, serta pemisahan fungsi Presensi vs Modal/Setoran Kasir.
 * [`review_projek_dan_rencana_kerja.md`](2026-11-14/review_projek_dan_rencana_kerja.md) — Review status projek 14 November 2026, daftar pekerjaan yang masih akan dikerjakan (To-Do List), serta saran strategis operasional, kontrol internal (SoD), dan teknis.
+* [`matriks_rbac_erp_dan_presensi_mgk.md`](2026-11-14/matriks_rbac_erp_dan_presensi_mgk.md) — Dokumen resmi matriks hak akses Role-Based Access Control (RBAC) operasional PT Maya Graha Kencana (Kasir Shift, Supervisor Cabang, Super Admin / Owner, Auditor Kepatuhan).
 
 ---
 
