@@ -574,4 +574,54 @@ class AdminDashboardRevampTest extends TestCase
             'qty_on_hand' => 12,
         ]);
     }
+
+    public function test_admin_can_fulfill_stock_request_via_bagus_prefix_and_gracefully_handles_get(): void
+    {
+        $warehouse = Warehouse::create([
+            'branch_id' => $this->branch->id,
+            'code' => 'GDG-KSR-2',
+            'name' => 'Loker Kasir Cadangan',
+            'type' => 'storage',
+            'is_active' => true,
+        ]);
+
+        $uom = UnitOfMeasurement::create(['name' => 'Bungkus', 'code' => 'BKS', 'symbol' => 'bks', 'is_active' => true]);
+        $cat = Category::create(['name' => 'Snack', 'code' => 'CAT-SNK2', 'slug' => 'snack2', 'is_active' => true]);
+        $prod = Product::create(['category_id' => $cat->id, 'uom_id' => $uom->id, 'name' => 'Generic KACANG', 'code' => 'PRD-KACANG', 'is_active' => true]);
+        $variant = ProductVariant::create(['product_id' => $prod->id, 'name' => 'Generic KACANG', 'sku' => 'SKU-GENERICKACANG-2', 'base_price' => 2000, 'is_active' => true]);
+
+        $stockReq = ShiftStockRequest::create([
+            'request_number' => 'REQ-TEST-KACANG-36',
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift->id,
+            'item_category' => 'snack',
+            'item_name' => 'Generic KACANG',
+            'qty_requested' => 5,
+            'unit' => 'pcs',
+            'urgency' => 'urgent',
+            'status' => 'pending',
+        ]);
+
+        // GET request gracefully redirects with info
+        $getResponse = $this->actingAs($this->adminUser)
+            ->withSession(['admin_role' => 'Manager', 'admin_logged_in' => true])
+            ->get('/bagus/admin/distribusi/permintaan/'.$stockReq->id.'/penuhi');
+
+        $getResponse->assertRedirect(route('admin.distribusi'));
+        $getResponse->assertSessionHas('info');
+
+        // POST request to /bagus/admin/distribusi/permintaan/{id}/penuhi fulfills it
+        $postResponse = $this->actingAs($this->adminUser)
+            ->withSession(['admin_role' => 'Manager', 'admin_logged_in' => true])
+            ->post('/bagus/admin/distribusi/permintaan/'.$stockReq->id.'/penuhi');
+
+        $postResponse->assertRedirect(route('admin.distribusi'));
+        $postResponse->assertSessionHas('success');
+
+        $this->assertDatabaseHas('shift_stock_requests', [
+            'id' => $stockReq->id,
+            'status' => 'fulfilled',
+        ]);
+    }
 }

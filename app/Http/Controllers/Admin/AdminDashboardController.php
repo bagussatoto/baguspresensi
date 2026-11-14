@@ -369,7 +369,7 @@ class AdminDashboardController extends Controller
         // Cari warehouse cabang tujuan dan Distribution Center (DC) pengirim
         $branchWarehouse = $stockReq->branch?->warehouses()->first();
         $toWarehouse = $branchWarehouse
-            ?? Warehouse::where('code', 'GDG-KSR')
+            ?? Warehouse::where('code', 'GDG-KSR')->first()
             ?? Warehouse::where('name', $likeOp, '%kasir%')->first()
             ?? Warehouse::first();
 
@@ -378,7 +378,7 @@ class AdminDashboardController extends Controller
         $dcWarehouse = $dcBranch?->warehouses()->first();
 
         $fromWarehouse = $dcWarehouse
-            ?? Warehouse::where('code', 'GDG-PST')
+            ?? Warehouse::where('code', 'GDG-PST')->first()
             ?? Warehouse::where('name', $likeOp, '%pusat%')->first()
             ?? Warehouse::where('id', '!=', $toWarehouse?->id)->first()
             ?? $toWarehouse;

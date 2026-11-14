@@ -24,6 +24,7 @@ use App\Http\Controllers\AttendanceWebController;
 use App\Http\Controllers\AttendanceWebV2Controller;
 use App\Http\Controllers\Auth\AdminAuthController;
 use App\Http\Controllers\Staff\StaffDashboardController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Modules\MasterData\Application\Http\Controllers\InternetCafeController;
 use Modules\MasterData\Application\Http\Controllers\MasterDataWebController;
@@ -231,6 +232,18 @@ Route::middleware(['web', 'auditor.readonly'])->group(function () {
     Route::post('/bagus/admin/penjualan/penyesuaian-billing/{summary}/reject', [AdminSaleController::class, 'rejectBillingAdjustment']);
     Route::post('/bagus/admin/penjualan/penyesuaian-print/{summary}/approve', [AdminSaleController::class, 'approvePrintAdjustment']);
     Route::post('/bagus/admin/penjualan/penyesuaian-print/{summary}/reject', [AdminSaleController::class, 'rejectPrintAdjustment']);
+
+    // Alias URL admin distribusi dengan prefix /bagus/admin/...
+    Route::post('/bagus/admin/distribusi/kirim', [AdminDashboardController::class, 'storeTransfer']);
+    Route::post('/bagus/admin/distribusi/{id}/terima', [AdminDashboardController::class, 'receiveTransfer']);
+    Route::match(['get', 'post'], '/bagus/admin/distribusi/permintaan/{id}/penuhi', function (Request $request, $id) {
+        if ($request->isMethod('post')) {
+            return app(AdminDashboardController::class)->fulfillStockRequest($request, $id);
+        }
+
+        return redirect()->route('admin.distribusi')
+            ->with('info', 'Permintaan stok #'.$id.' dapat dipenuhi dengan menekan tombol "Penuhi Stok" di tabel permintaan.');
+    });
 });
 
 // Alias URL alternatif presensi/login2 dan register sesuai kebutuhan user
@@ -264,6 +277,10 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::get('/stok', [AdminDashboardController::class, 'stokIndex'])->name('admin.stok');
     Route::get('/laporan', [AdminDashboardController::class, 'laporanIndex'])->name('admin.laporan');
     Route::post('/distribusi/{id}/terima', [AdminDashboardController::class, 'receiveTransfer'])->name('admin.distribusi.terima');
+    Route::get('/distribusi/permintaan/{id}/penuhi', function ($id) {
+        return redirect()->route('admin.distribusi')
+            ->with('info', 'Permintaan stok #'.$id.' dapat dipenuhi dengan menekan tombol "Penuhi Stok" di tabel permintaan.');
+    });
     Route::post('/distribusi/permintaan/{id}/penuhi', [AdminDashboardController::class, 'fulfillStockRequest'])->name('admin.distribusi.penuhi');
     // Master Cabang & Jaringan Distribusi (MDM Multi-Cabang Hub-and-Spoke)
     Route::get('/cabang/aging', [AdminAgingReceivableController::class, 'index'])->name('admin.cabang.aging');
