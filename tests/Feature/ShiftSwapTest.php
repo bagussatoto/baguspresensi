@@ -322,4 +322,23 @@ class ShiftSwapTest extends TestCase
         $this->assertEquals(ShiftSwapStatus::Rejected, $swap->status);
         $this->assertEquals('Kebutuhan personil shift pagi membutuhkan operator senior.', $swap->rejection_note);
     }
+
+    public function test_bagus_presensi_and_tukar_shift_alias_routes_can_be_accessed(): void
+    {
+        // 1. Akses /bagus/presensi
+        $homeResponse = $this->withSession(['presensi_employee_id' => $this->requester->id])
+            ->get('/bagus/presensi');
+
+        $homeResponse->assertOk()
+            ->assertSee('Portal Layanan')
+            ->assertSee('Tukar Shift')
+            ->assertSee('Izin');
+
+        // 2. Akses /bagus/presensi/tukar-shift
+        $swapResponse = $this->withSession(['presensi_employee_id' => $this->requester->id])
+            ->get('/bagus/presensi/tukar-shift');
+
+        $swapResponse->assertOk()
+            ->assertSee('Ajukan Tukar Shift');
+    }
 }

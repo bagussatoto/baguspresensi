@@ -238,6 +238,16 @@ class AttendanceWebController extends Controller
                 ->sum('total_days'),
         ];
 
+        $pendingShiftSwapsCount = ShiftSwapRequest::where('target_employee_id', $employee->id)
+            ->where('status', ShiftSwapStatus::PendingPeer)
+            ->count();
+
+        $activeLeaveRequests = LeaveRequest::where('employee_id', $employee->id)
+            ->where('status', ApprovalStatus::Pending)
+            ->latest('id')
+            ->take(3)
+            ->get();
+
         $roster = $this->rosterResolverService->resolve($employee, $now);
 
         return view('presensi.index', [
@@ -246,6 +256,8 @@ class AttendanceWebController extends Controller
             'workDate' => $workDate,
             'attendanceToday' => $attendanceToday,
             'monthlyStats' => $monthlyStats,
+            'pendingShiftSwapsCount' => $pendingShiftSwapsCount,
+            'activeLeaveRequests' => $activeLeaveRequests,
             'roster' => $roster,
         ]);
     }

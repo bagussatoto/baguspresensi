@@ -250,6 +250,22 @@ Route::middleware(['web', 'auditor.readonly'])->group(function () {
     });
 });
 
+// Alias URL portal layanan mandiri & permohonan karyawan dengan prefix /bagus/presensi/...
+Route::get('/bagus/presensi', [AttendanceWebController::class, 'index']);
+Route::get('/bagus/presensi/login', [AttendanceWebController::class, 'showLogin']);
+Route::post('/bagus/presensi/login', [AttendanceWebController::class, 'login'])->middleware('throttle:5,1');
+Route::match(['get', 'post'], '/bagus/presensi/logout', [AttendanceWebController::class, 'logout']);
+Route::get('/bagus/presensi/izin', [AttendanceWebController::class, 'izin']);
+Route::post('/bagus/presensi/izin', [AttendanceWebController::class, 'submitLeave']);
+Route::get('/bagus/presensi/tukar-shift', [AttendanceWebController::class, 'shiftSwap']);
+Route::post('/bagus/presensi/tukar-shift', [AttendanceWebController::class, 'submitShiftSwap']);
+Route::post('/bagus/presensi/tukar-shift/{swap}/peer-respond', [AttendanceWebController::class, 'peerRespondShiftSwap']);
+Route::post('/bagus/presensi/tukar-shift/{swap}/cancel', [AttendanceWebController::class, 'cancelShiftSwap']);
+Route::get('/bagus/presensi/koreksi', [AttendanceWebController::class, 'koreksi']);
+Route::post('/bagus/presensi/koreksi', [AttendanceWebController::class, 'submitCorrection']);
+Route::get('/bagus/presensi/riwayat', [AttendanceWebController::class, 'riwayat']);
+Route::get('/bagus/presensi/profil', [AttendanceWebController::class, 'profile']);
+
 // Alias URL alternatif presensi/login2 dan register sesuai kebutuhan user
 Route::get('/presensi/login2', [AttendanceWebV2Controller::class, 'showLogin']);
 Route::post('/presensi/login2', [AttendanceWebV2Controller::class, 'login'])->middleware('throttle:5,1');
