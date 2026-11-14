@@ -427,6 +427,18 @@
             </div>
         @endif
 
+        @if(request()->boolean('demo') || request()->boolean('simulasi'))
+            <div style="background: linear-gradient(135deg, rgba(234, 88, 12, 0.2), rgba(245, 158, 11, 0.25)); border: 1px solid #f97316; padding: 10px 16px; margin-bottom: 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #ffedd5; box-shadow: 0 4px 12px rgba(249, 115, 22, 0.25);">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 16px;">🧪</span>
+                    <span><strong>MODE DEMO / SIMULASI AKTIF:</strong> Anda sedang dalam mode pengujian & pelatihan karyawan. Data simulasi tidak memengaruhi pembukuan resmi.</span>
+                </div>
+                <a href="{{ url()->current() }}" style="color: #ffffff; background: #ea580c; border: 1px solid #c2410c; padding: 4px 10px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 11px; white-space: nowrap;">
+                    Tutup Demo
+                </a>
+            </div>
+        @endif
+
         @if(session('presensi2_mock_time'))
             <div style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.15)); border: 1px solid rgba(245, 158, 11, 0.4); padding: 8px 14px; margin-bottom: 16px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #fde68a;">
                 <div style="display: flex; align-items: center; gap: 8px;">
