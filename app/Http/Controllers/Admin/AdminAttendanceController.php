@@ -23,6 +23,7 @@ use App\Domains\Employee\Models\Shift;
 use App\Domains\Leave\Models\LeaveRequest;
 use App\Http\Controllers\Controller;
 use App\Models\ShiftSalesSummary;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
@@ -514,19 +515,50 @@ class AdminAttendanceController extends Controller
     }
 
     /**
+     * Resolusi ID Karyawan Approver yang valid untuk relasi foreign key 'approved_by' pada employees.
+     */
+    protected function resolveApproverEmployeeId(?Request $request = null): int
+    {
+        $userId = $request?->user()?->id ?? Auth::id();
+        if ($userId) {
+            $user = Auth::user() ?? User::find($userId);
+            if ($user && isset($user->employee_id) && $user->employee_id && Employee::where('id', $user->employee_id)->exists()) {
+                return (int) $user->employee_id;
+            }
+        }
+
+        // Cari Manager atau Admin di tabel employees
+        $managerId = Employee::where('is_active', true)
+            ->where(function ($q) {
+                $q->whereRaw("LOWER(name) LIKE '%bagus%'")
+                    ->orWhereRaw("LOWER(position) LIKE '%manager%'")
+                    ->orWhereRaw("LOWER(position) LIKE '%admin%'");
+            })
+            ->value('id');
+
+        if ($managerId) {
+            return (int) $managerId;
+        }
+
+        return (int) (Employee::orderBy('id')->value('id') ?? 1);
+    }
+
+    /**
      * Setujui permohonan cuti.
      */
     public function approveLeave(Request $request, LeaveRequest $leave): RedirectResponse
     {
         $this->ensureBranchAuthorized($leave->employee?->branch_id, 'menyetujui cuti karyawan');
 
+        $approverId = $this->resolveApproverEmployeeId($request);
+
         $leave->update([
             'status' => ApprovalStatus::Approved,
             'approved_at' => Carbon::now(),
-            'approved_by' => $request->user()?->id ?? 1,
+            'approved_by' => $approverId,
         ]);
 
-        return redirect()->back()->with('success', 'Permohonan cuti berhasil disetujui.');
+        return redirect()->route('admin.presensi.approval')->with('success', 'Permohonan cuti #'.$leave->id.' ('.($leave->employee->name ?? 'Karyawan').') berhasil disetujui.');
     }
 
     /**
@@ -544,15 +576,16 @@ class AdminAttendanceController extends Controller
         }
 
         $note = $request->input('rejection_note', 'Tidak memenuhi kualifikasi atau kebutuhan operasional mendesak.');
+        $approverId = $this->resolveApproverEmployeeId($request);
 
         $leave->update([
             'status' => ApprovalStatus::Rejected,
             'rejection_note' => $note,
             'approved_at' => Carbon::now(),
-            'approved_by' => $request->user()?->id ?? 1,
+            'approved_by' => $approverId,
         ]);
 
-        return redirect()->back()->with('success', 'Permohonan cuti berhasil ditolak.');
+        return redirect()->route('admin.presensi.approval')->with('success', 'Permohonan cuti #'.$leave->id.' telah ditolak.');
     }
 
     /**
@@ -566,14 +599,16 @@ class AdminAttendanceController extends Controller
             ? (int) $request->input('approved_minutes')
             : (int) $overtime->requested_minutes;
 
+        $approverId = $this->resolveApproverEmployeeId($request);
+
         $overtime->update([
             'status' => ApprovalStatus::Approved,
             'approved_minutes' => $approvedMinutes,
             'approved_at' => Carbon::now(),
-            'approved_by' => $request->user()?->id ?? 1,
+            'approved_by' => $approverId,
         ]);
 
-        return redirect()->back()->with('success', "Klaim lembur ({$approvedMinutes} menit) berhasil disetujui.");
+        return redirect()->route('admin.presensi.approval')->with('success', "Klaim lembur ({$approvedMinutes} menit) berhasil disetujui.");
     }
 
     /**
@@ -584,15 +619,16 @@ class AdminAttendanceController extends Controller
         $this->ensureBranchAuthorized($overtime->employee?->branch_id, 'menolak klaim lembur');
 
         $note = $request->input('rejection_note', 'Aktivitas di luar lingkup lembur yang disetujui.');
+        $approverId = $this->resolveApproverEmployeeId($request);
 
         $overtime->update([
             'status' => ApprovalStatus::Rejected,
             'rejection_note' => $note,
             'approved_at' => Carbon::now(),
-            'approved_by' => $request->user()?->id ?? 1,
+            'approved_by' => $approverId,
         ]);
 
-        return redirect()->back()->with('success', 'Klaim lembur ditolak.');
+        return redirect()->route('admin.presensi.approval')->with('success', 'Klaim lembur ditolak.');
     }
 
     /**
@@ -606,14 +642,14 @@ class AdminAttendanceController extends Controller
         $branchId = $correction->record?->branch_id ?? $correction->employee?->branch_id;
         $this->ensureBranchAuthorized($branchId, 'menyetujui koreksi presensi');
 
-        $approverId = (int) ($request->user()?->id ?? 1);
+        $approverId = $this->resolveApproverEmployeeId($request);
         try {
             $action->execute($correction, $approverId);
         } catch (AuthorizationException $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        return redirect()->back()->with('success', 'Permohonan koreksi presensi berhasil disetujui dan rekaman presensi telah dimutakhirkan.');
+        return redirect()->route('admin.presensi.approval')->with('success', 'Permohonan koreksi presensi berhasil disetujui dan rekaman presensi telah dimutakhirkan.');
     }
 
     /**
@@ -628,14 +664,14 @@ class AdminAttendanceController extends Controller
         $this->ensureBranchAuthorized($branchId, 'menolak koreksi presensi');
 
         $note = $request->input('rejection_note', 'Alasan atau bukti permohonan koreksi tidak memenuhi kualifikasi.');
-        $approverId = (int) ($request->user()?->id ?? 1);
+        $approverId = $this->resolveApproverEmployeeId($request);
         try {
             $action->execute($correction, $approverId, $note);
         } catch (AuthorizationException $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        return redirect()->back()->with('success', 'Permohonan koreksi presensi telah ditolak.');
+        return redirect()->route('admin.presensi.approval')->with('success', 'Permohonan koreksi presensi telah ditolak.');
     }
 
     /**
@@ -649,10 +685,10 @@ class AdminAttendanceController extends Controller
         $branchId = $swap->requester?->branch_id ?? $swap->target?->branch_id;
         $this->ensureBranchAuthorized($branchId, 'menyetujui permohonan tukar shift');
 
-        $approverId = (int) ($request->user()?->id ?? 1);
+        $approverId = $this->resolveApproverEmployeeId($request);
         $action->execute($swap, $approverId);
 
-        return redirect()->back()->with('success', 'Permohonan tukar shift antar karyawan berhasil disetujui.');
+        return redirect()->route('admin.presensi.approval')->with('success', 'Permohonan tukar shift antar karyawan berhasil disetujui.');
     }
 
     /**
@@ -667,10 +703,10 @@ class AdminAttendanceController extends Controller
         $this->ensureBranchAuthorized($branchId, 'menolak permohonan tukar shift');
 
         $note = $request->input('rejection_note', 'Kebutuhan operasional atau penjadwalan tidak memungkinkan tukar shift.');
-        $approverId = (int) ($request->user()?->id ?? 1);
+        $approverId = $this->resolveApproverEmployeeId($request);
         $action->execute($swap, $approverId, $note);
 
-        return redirect()->back()->with('success', 'Permohonan tukar shift telah ditolak.');
+        return redirect()->route('admin.presensi.approval')->with('success', 'Permohonan tukar shift telah ditolak.');
     }
 
     /**
@@ -688,7 +724,7 @@ class AdminAttendanceController extends Controller
             'overtime_status' => 'approved',
             'overtime_approved_minutes' => $approvedMinutes,
             'overtime_approved_at' => Carbon::now(),
-            'overtime_approved_by' => $request->user()?->id ?? 1,
+            'overtime_approved_by' => $this->resolveApproverEmployeeId($request),
             'overtime_admin_note' => $request->input('admin_note', 'Disetujui oleh Supervisor/Admin'),
         ]);
 
@@ -734,7 +770,7 @@ class AdminAttendanceController extends Controller
             'overtime_status' => 'rejected',
             'overtime_approved_minutes' => 0,
             'overtime_approved_at' => Carbon::now(),
-            'overtime_approved_by' => $request->user()?->id ?? 1,
+            'overtime_approved_by' => $this->resolveApproverEmployeeId($request),
             'overtime_admin_note' => $note,
             'overtime_minutes' => 0,
         ]);

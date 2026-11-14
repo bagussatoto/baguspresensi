@@ -116,4 +116,44 @@ class AdminApprovalAndAliasesTest extends TestCase
             $this->assertEquals(200, $response->getStatusCode(), "Route {$url} should return 200");
         }
     }
+
+    public function test_leave_can_be_approved_via_both_get_and_post(): void
+    {
+        $employee = Employee::create([
+            'branch_id' => $this->branch->id,
+            'name' => 'Bagus Satoto',
+            'code' => 'EMP-MGR-01',
+            'position' => 'Manager',
+            'is_active' => true,
+        ]);
+
+        $leave = LeaveRequest::create([
+            'employee_id' => $employee->id,
+            'leave_type' => 'sick',
+            'start_date' => Carbon::today(),
+            'end_date' => Carbon::today(),
+            'days_count' => 1,
+            'reason' => 'Istirahat dokter',
+            'status' => 'pending',
+        ]);
+
+        // Test GET approve
+        $responseGet = $this->actingAs($this->adminUser)
+            ->withSession(['admin_role' => 'Manager', 'admin_logged_in' => true])
+            ->get("/bagus/admin/presensi/leave/{$leave->id}/approve");
+
+        $responseGet->assertRedirect(route('admin.presensi.approval'));
+        $this->assertEquals('approved', $leave->fresh()->status->value);
+        $this->assertEquals($employee->id, $leave->fresh()->approved_by);
+
+        // Reset and test POST approve
+        $leave->update(['status' => 'pending', 'approved_by' => null]);
+
+        $responsePost = $this->actingAs($this->adminUser)
+            ->withSession(['admin_role' => 'Manager', 'admin_logged_in' => true])
+            ->post("/bagus/admin/presensi/leave/{$leave->id}/approve");
+
+        $responsePost->assertRedirect(route('admin.presensi.approval'));
+        $this->assertEquals('approved', $leave->fresh()->status->value);
+    }
 }

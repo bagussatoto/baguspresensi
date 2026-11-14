@@ -238,14 +238,14 @@ Route::middleware(['web', 'auditor.readonly'])->group(function () {
     // Alias URL admin presensi, persetujuan permohonan, & karyawan dengan prefix /bagus/admin/...
     Route::get('/bagus/admin/presensi', [AdminAttendanceController::class, 'index']);
     Route::get('/bagus/admin/presensi/approval', [AdminAttendanceController::class, 'approval']);
-    Route::post('/bagus/admin/presensi/leave/{leave}/approve', [AdminAttendanceController::class, 'approveLeave']);
-    Route::post('/bagus/admin/presensi/leave/{leave}/reject', [AdminAttendanceController::class, 'rejectLeave']);
-    Route::post('/bagus/admin/presensi/swap/{swap}/approve', [AdminAttendanceController::class, 'approveShiftSwap']);
-    Route::post('/bagus/admin/presensi/swap/{swap}/reject', [AdminAttendanceController::class, 'rejectShiftSwap']);
-    Route::post('/bagus/admin/presensi/correction/{correction}/approve', [AdminAttendanceController::class, 'approveCorrection']);
-    Route::post('/bagus/admin/presensi/correction/{correction}/reject', [AdminAttendanceController::class, 'rejectCorrection']);
-    Route::post('/bagus/admin/presensi/overtime/{overtime}/approve', [AdminAttendanceController::class, 'approveOvertime']);
-    Route::post('/bagus/admin/presensi/overtime/{overtime}/reject', [AdminAttendanceController::class, 'rejectOvertime']);
+    Route::match(['get', 'post'], '/bagus/admin/presensi/leave/{leave}/approve', [AdminAttendanceController::class, 'approveLeave']);
+    Route::match(['get', 'post'], '/bagus/admin/presensi/leave/{leave}/reject', [AdminAttendanceController::class, 'rejectLeave']);
+    Route::match(['get', 'post'], '/bagus/admin/presensi/swap/{swap}/approve', [AdminAttendanceController::class, 'approveShiftSwap']);
+    Route::match(['get', 'post'], '/bagus/admin/presensi/swap/{swap}/reject', [AdminAttendanceController::class, 'rejectShiftSwap']);
+    Route::match(['get', 'post'], '/bagus/admin/presensi/correction/{correction}/approve', [AdminAttendanceController::class, 'approveCorrection']);
+    Route::match(['get', 'post'], '/bagus/admin/presensi/correction/{correction}/reject', [AdminAttendanceController::class, 'rejectCorrection']);
+    Route::match(['get', 'post'], '/bagus/admin/presensi/overtime/{overtime}/approve', [AdminAttendanceController::class, 'approveOvertime']);
+    Route::match(['get', 'post'], '/bagus/admin/presensi/overtime/{overtime}/reject', [AdminAttendanceController::class, 'rejectOvertime']);
     Route::get('/bagus/admin/presensi/rekap', [AdminAttendanceController::class, 'rekap']);
     Route::get('/bagus/admin/presensi/pengaturan', [AdminAttendanceSettingController::class, 'index']);
 
@@ -474,14 +474,14 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::get('/presensi/rekap', [AdminAttendanceController::class, 'rekap'])->name('admin.presensi.rekap');
     Route::get('/presensi/approval', [AdminAttendanceController::class, 'approval'])->name('admin.presensi.approval');
     Route::get('/presensi/audit-logs', [AuditLogAdminController::class, 'index'])->name('admin.presensi.audit-logs');
-    Route::post('/presensi/leave/{leave}/approve', [AdminAttendanceController::class, 'approveLeave'])->name('admin.presensi.leave.approve');
-    Route::post('/presensi/leave/{leave}/reject', [AdminAttendanceController::class, 'rejectLeave'])->name('admin.presensi.leave.reject');
-    Route::post('/presensi/overtime/{overtime}/approve', [AdminAttendanceController::class, 'approveOvertime'])->name('admin.presensi.overtime.approve');
-    Route::post('/presensi/overtime/{overtime}/reject', [AdminAttendanceController::class, 'rejectOvertime'])->name('admin.presensi.overtime.reject');
-    Route::post('/presensi/correction/{correction}/approve', [AdminAttendanceController::class, 'approveCorrection'])->name('admin.presensi.correction.approve');
-    Route::post('/presensi/correction/{correction}/reject', [AdminAttendanceController::class, 'rejectCorrection'])->name('admin.presensi.correction.reject');
-    Route::post('/presensi/swap/{swap}/approve', [AdminAttendanceController::class, 'approveShiftSwap'])->name('admin.presensi.swap.approve');
-    Route::post('/presensi/swap/{swap}/reject', [AdminAttendanceController::class, 'rejectShiftSwap'])->name('admin.presensi.swap.reject');
+    Route::match(['get', 'post'], '/presensi/leave/{leave}/approve', [AdminAttendanceController::class, 'approveLeave'])->name('admin.presensi.leave.approve');
+    Route::match(['get', 'post'], '/presensi/leave/{leave}/reject', [AdminAttendanceController::class, 'rejectLeave'])->name('admin.presensi.leave.reject');
+    Route::match(['get', 'post'], '/presensi/overtime/{overtime}/approve', [AdminAttendanceController::class, 'approveOvertime'])->name('admin.presensi.overtime.approve');
+    Route::match(['get', 'post'], '/presensi/overtime/{overtime}/reject', [AdminAttendanceController::class, 'rejectOvertime'])->name('admin.presensi.overtime.reject');
+    Route::match(['get', 'post'], '/presensi/correction/{correction}/approve', [AdminAttendanceController::class, 'approveCorrection'])->name('admin.presensi.correction.approve');
+    Route::match(['get', 'post'], '/presensi/correction/{correction}/reject', [AdminAttendanceController::class, 'rejectCorrection'])->name('admin.presensi.correction.reject');
+    Route::match(['get', 'post'], '/presensi/swap/{swap}/approve', [AdminAttendanceController::class, 'approveShiftSwap'])->name('admin.presensi.swap.approve');
+    Route::match(['get', 'post'], '/presensi/swap/{swap}/reject', [AdminAttendanceController::class, 'rejectShiftSwap'])->name('admin.presensi.swap.reject');
     Route::post('/presensi/record-overtime/{record}/approve', [AdminAttendanceController::class, 'approveRecordOvertime'])->name('admin.presensi.record-overtime.approve');
     Route::post('/presensi/record-overtime/{record}/reject', [AdminAttendanceController::class, 'rejectRecordOvertime'])->name('admin.presensi.record-overtime.reject');
     Route::post('/presensi/record-early-leave/{record}/approve', [AdminAttendanceController::class, 'approveRecordEarlyLeave'])->name('admin.presensi.record-early-leave.approve');
