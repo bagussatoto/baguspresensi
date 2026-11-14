@@ -544,6 +544,71 @@
         border-color: #f43f5e;
         background: rgba(244, 63, 94, 0.16);
     }
+
+    /* FLOATING QUEUE WIDGET & SOUND TOGGLE */
+    #erpFloatingQueueWidget {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    #erpSoundToggleBtn {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: #1e293b;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        color: #f8fafc;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+        transition: all 0.2s ease;
+        font-size: 1.15rem;
+    }
+    #erpSoundToggleBtn:hover {
+        transform: scale(1.08);
+        border-color: rgba(56, 189, 248, 0.5);
+        background: #334155;
+    }
+    #erpSoundToggleBtn.muted {
+        opacity: 0.6;
+        filter: grayscale(1);
+    }
+    #erpFloatingBadge {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: linear-gradient(135deg, #f43f5e, #e11d48);
+        color: #ffffff;
+        padding: 10px 18px;
+        border-radius: 9999px;
+        font-weight: 700;
+        font-size: 0.85rem;
+        text-decoration: none;
+        box-shadow: 0 6px 20px rgba(244, 63, 94, 0.45);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        transition: all 0.25s ease;
+    }
+    #erpFloatingBadge:hover {
+        transform: translateY(-3px) scale(1.03);
+        box-shadow: 0 8px 24px rgba(244, 63, 94, 0.6);
+        color: #ffffff;
+    }
+    @keyframes bellRing {
+        0%, 100% { transform: rotate(0); }
+        10%, 30% { transform: rotate(14deg); }
+        20%, 40% { transform: rotate(-14deg); }
+        50% { transform: rotate(0); }
+    }
+    .bell-animated {
+        display: inline-block;
+        animation: bellRing 2.2s infinite ease-in-out;
+    }
 </style>
 
 <!-- 1. HERO BANNER PUSAT ERP -->
@@ -574,22 +639,24 @@
 </div>
 
 <!-- 1.5 PUSAT ANTREAN OTORISASI & TRIAGE TINDAKAN CEPAT -->
-<div class="erp-triage-banner {{ $totalTriagePending == 0 ? 'all-clean' : '' }}">
+<div id="erpTriageSection" class="erp-triage-banner {{ $totalTriagePending == 0 ? 'all-clean' : '' }}">
     <div class="triage-header-row">
         <div class="triage-title-wrap">
-            <span class="triage-pulse-dot {{ $totalTriagePending == 0 ? 'clean' : '' }}"></span>
+            <span id="triagePulseDot" class="triage-pulse-dot {{ $totalTriagePending == 0 ? 'clean' : '' }}"></span>
             <div>
                 <h3 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
                     Pusat Antrean Otorisasi &amp; Tindakan Cepat
-                    @if($totalTriagePending > 0)
-                        <span style="background: rgba(244, 63, 94, 0.2); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4); font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px;">
-                            {{ $totalTriagePending }} Perlu Tindakan
-                        </span>
-                    @else
-                        <span style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px;">
-                            ✅ Seluruh Operasional Lancar
-                        </span>
-                    @endif
+                    <span id="triagePendingBadge">
+                        @if($totalTriagePending > 0)
+                            <span style="background: rgba(244, 63, 94, 0.2); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4); font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px;">
+                                {{ $totalTriagePending }} Perlu Tindakan
+                            </span>
+                        @else
+                            <span style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px;">
+                                ✅ Seluruh Operasional Lancar
+                            </span>
+                        @endif
+                    </span>
                 </h3>
                 <p style="margin: 4px 0 0; font-size: 0.8rem; color: #94a3b8;">
                     Deteksi otomatis permohonan staf, selisih setoran kasir, transfer logistik &amp; permohonan restock cabang yang menunggu verifikasi pimpinan.
@@ -612,7 +679,7 @@
                 </div>
             </div>
             <div style="text-align: right;">
-                <span style="display: inline-block; min-width: 28px; padding: 3px 8px; font-weight: 700; font-size: 0.82rem; border-radius: 8px; text-align: center; background: {{ $employeeApprovalsTotal > 0 ? '#f43f5e' : 'rgba(255,255,255,0.06)' }}; color: #ffffff;">
+                <span id="triageEmpCount" style="display: inline-block; min-width: 28px; padding: 3px 8px; font-weight: 700; font-size: 0.82rem; border-radius: 8px; text-align: center; background: {{ $employeeApprovalsTotal > 0 ? '#f43f5e' : 'rgba(255,255,255,0.06)' }}; color: #ffffff;">
                     {{ $employeeApprovalsTotal }}
                 </span>
             </div>
@@ -628,7 +695,7 @@
                 </div>
             </div>
             <div style="text-align: right;">
-                <span style="display: inline-block; min-width: 28px; padding: 3px 8px; font-weight: 700; font-size: 0.82rem; border-radius: 8px; text-align: center; background: {{ $pendingShiftDepositsCount > 0 ? '#f43f5e' : 'rgba(255,255,255,0.06)' }}; color: #ffffff;">
+                <span id="triageDepositCount" style="display: inline-block; min-width: 28px; padding: 3px 8px; font-weight: 700; font-size: 0.82rem; border-radius: 8px; text-align: center; background: {{ $pendingShiftDepositsCount > 0 ? '#f43f5e' : 'rgba(255,255,255,0.06)' }}; color: #ffffff;">
                     {{ $pendingShiftDepositsCount }}
                 </span>
             </div>
@@ -644,7 +711,7 @@
                 </div>
             </div>
             <div style="text-align: right;">
-                <span style="display: inline-block; min-width: 28px; padding: 3px 8px; font-weight: 700; font-size: 0.82rem; border-radius: 8px; text-align: center; background: {{ ($pendingStockTransfers + $pendingStockRequestsCount) > 0 ? '#f59e0b' : 'rgba(255,255,255,0.06)' }}; color: #ffffff;">
+                <span id="triageStockCount" style="display: inline-block; min-width: 28px; padding: 3px 8px; font-weight: 700; font-size: 0.82rem; border-radius: 8px; text-align: center; background: {{ ($pendingStockTransfers + $pendingStockRequestsCount) > 0 ? '#f59e0b' : 'rgba(255,255,255,0.06)' }}; color: #ffffff;">
                     {{ $pendingStockTransfers + $pendingStockRequestsCount }}
                 </span>
             </div>
@@ -660,7 +727,7 @@
                 </div>
             </div>
             <div style="text-align: right;">
-                <span style="display: inline-block; min-width: 28px; padding: 3px 8px; font-weight: 700; font-size: 0.82rem; border-radius: 8px; text-align: center; background: {{ ($pendingBillingAdjustments + $pendingRegistrations + $pendingPasswordResets) > 0 ? '#8b5cf6' : 'rgba(255,255,255,0.06)' }}; color: #ffffff;">
+                <span id="triageBillingCount" style="display: inline-block; min-width: 28px; padding: 3px 8px; font-weight: 700; font-size: 0.82rem; border-radius: 8px; text-align: center; background: {{ ($pendingBillingAdjustments + $pendingRegistrations + $pendingPasswordResets) > 0 ? '#8b5cf6' : 'rgba(255,255,255,0.06)' }}; color: #ffffff;">
                     {{ $pendingBillingAdjustments + $pendingRegistrations + $pendingPasswordResets }}
                 </span>
             </div>
@@ -720,10 +787,10 @@
             <span class="erp-vital-label">Antrean Otorisasi</span>
             <span class="erp-vital-icon">⚡</span>
         </div>
-        <div class="erp-vital-value" style="{{ $totalTriagePending > 0 ? 'color: #fb7185;' : 'color: #34d399;' }}">
+        <div class="erp-vital-value" id="vitalTriagePendingValue" style="{{ $totalTriagePending > 0 ? 'color: #fb7185;' : 'color: #34d399;' }}">
             {{ $totalTriagePending }}
         </div>
-        <div class="erp-vital-sub">
+        <div class="erp-vital-sub" id="vitalTriagePendingSub">
             @if($totalTriagePending > 0)
                 {{ $employeeApprovalsTotal }} SDM &bull; {{ $pendingShiftDepositsCount + $pendingStockTransfers + $pendingStockRequestsCount }} Logistik/Kas
             @else
@@ -876,6 +943,30 @@
     </div>
 </div>
 
+<!-- 6. FLOATING ACTION BADGE & TOAST CONTAINER -->
+<div id="erpToastContainer" style="position: fixed; top: 24px; right: 24px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; pointer-events: none;"></div>
+
+<div id="erpFloatingQueueWidget">
+    <!-- Sound Toggle Button -->
+    <button type="button" id="erpSoundToggleBtn" title="Suara Notifikasi: AKTIF (Klik untuk membisukan)">
+        <span id="soundIcon">🔔</span>
+    </button>
+
+    <!-- Floating Badge Button -->
+    <a href="#erpTriageSection" id="erpFloatingBadge" style="{{ $totalTriagePending == 0 ? 'background: rgba(30, 41, 59, 0.9); border-color: rgba(16, 185, 129, 0.4); box-shadow: 0 4px 14px rgba(0,0,0,0.3);' : '' }}">
+        <span id="floatingBadgeBell" class="{{ $totalTriagePending > 0 ? 'bell-animated' : '' }}">
+            {{ $totalTriagePending > 0 ? '🔔' : '✅' }}
+        </span>
+        <span id="floatingBadgeText">
+            @if($totalTriagePending > 0)
+                Antrean: <span id="floatingBadgeCount">{{ $totalTriagePending }}</span> Perlu Tindakan
+            @else
+                <span id="floatingBadgeCount" style="color: #34d399;">Operasional Lancar</span>
+            @endif
+        </span>
+    </a>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const searchInput = document.getElementById('erpFeatureSearch');
@@ -926,6 +1017,246 @@ document.addEventListener('DOMContentLoaded', function () {
             filterModules();
         });
     });
+
+    // --- REALTIME AUDIO CHIME & TRIAGE QUEUE WATCHER ---
+    let lastPendingCount = {{ (int) $totalTriagePending }};
+    let soundEnabled = localStorage.getItem('erp_queue_sound') !== 'false';
+    let audioCtx = null;
+
+    const soundToggleBtn = document.getElementById('erpSoundToggleBtn');
+    const soundIcon = document.getElementById('soundIcon');
+    const toastContainer = document.getElementById('erpToastContainer');
+
+    function updateSoundUI() {
+        if (!soundToggleBtn || !soundIcon) return;
+        if (soundEnabled) {
+            soundToggleBtn.classList.remove('muted');
+            soundToggleBtn.title = 'Suara Notifikasi: AKTIF (Klik untuk membisukan)';
+            soundIcon.textContent = '🔔';
+        } else {
+            soundToggleBtn.classList.add('muted');
+            soundToggleBtn.title = 'Suara Notifikasi: BISU (Klik untuk mengaktifkan)';
+            soundIcon.textContent = '🔕';
+        }
+    }
+    updateSoundUI();
+
+    function getAudioContext() {
+        if (!audioCtx) {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (AudioContextClass) {
+                audioCtx = new AudioContextClass();
+            }
+        }
+        if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+        return audioCtx;
+    }
+
+    function playQueueChime() {
+        try {
+            const ctx = getAudioContext();
+            if (!ctx) return;
+            const now = ctx.currentTime;
+
+            // Tone 1: 587.33 Hz (D5) - gentle bell chime
+            const osc1 = ctx.createOscillator();
+            const gain1 = ctx.createGain();
+            osc1.type = 'sine';
+            osc1.frequency.setValueAtTime(587.33, now);
+            gain1.gain.setValueAtTime(0.12, now);
+            gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+            osc1.connect(gain1);
+            gain1.connect(ctx.destination);
+            osc1.start(now);
+            osc1.stop(now + 0.35);
+
+            // Tone 2: 880 Hz (A5) - sweet resonance
+            const osc2 = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(880, now + 0.12);
+            gain2.gain.setValueAtTime(0.15, now + 0.12);
+            gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+            osc2.start(now + 0.12);
+            osc2.stop(now + 0.6);
+        } catch (e) {
+            console.warn('Audio chime notice error:', e);
+        }
+    }
+
+    if (soundToggleBtn) {
+        soundToggleBtn.addEventListener('click', function () {
+            getAudioContext();
+            soundEnabled = !soundEnabled;
+            localStorage.setItem('erp_queue_sound', soundEnabled ? 'true' : 'false');
+            updateSoundUI();
+            if (soundEnabled) {
+                playQueueChime();
+                showQueueToast('Suara notifikasi antrean telah AKTIF 🔔');
+            } else {
+                showQueueToast('Suara notifikasi antrean telah DIBISUKAN 🔕');
+            }
+        });
+    }
+
+    function showQueueToast(message, count = null) {
+        if (!toastContainer) return;
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            background: #0f172a;
+            color: #f8fafc;
+            border: 1px solid rgba(244, 63, 94, 0.45);
+            border-left: 4px solid #f43f5e;
+            border-radius: 12px;
+            padding: 12px 18px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.85rem;
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+            opacity: 0;
+            max-width: 380px;
+        `;
+        toast.innerHTML = `
+            <span style="font-size: 1.3rem;">🔔</span>
+            <div style="flex: 1;">
+                <div style="font-weight: 700; color: #fb7185;">Antrean Otorisasi ERP</div>
+                <div style="font-size: 0.78rem; color: #cbd5e1; margin-top: 2px;">${message}</div>
+            </div>
+            <a href="#erpTriageSection" style="background: rgba(244, 63, 94, 0.2); color: #fb7185; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; text-decoration: none;">Lihat</a>
+        `;
+
+        toastContainer.appendChild(toast);
+        requestAnimationFrame(() => {
+            toast.style.transform = 'translateX(0)';
+            toast.style.opacity = '1';
+        });
+
+        setTimeout(() => {
+            toast.style.transform = 'translateX(100%)';
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 300);
+        }, 6000);
+    }
+
+    function updateQueueUI(metrics) {
+        const total = metrics.total_pending_approvals ?? 0;
+        const sdm = metrics.pending_employee_approvals ?? 0;
+        const deposits = metrics.pending_shift_deposits ?? 0;
+        const transfers = metrics.pending_stock_transfers ?? 0;
+
+        // 1. Triage Banner Header
+        const banner = document.getElementById('erpTriageSection');
+        const dot = document.getElementById('triagePulseDot');
+        const badgeWrap = document.getElementById('triagePendingBadge');
+
+        if (banner && dot && badgeWrap) {
+            if (total > 0) {
+                banner.classList.remove('all-clean');
+                dot.classList.remove('clean');
+                badgeWrap.innerHTML = `<span style="background: rgba(244, 63, 94, 0.2); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4); font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px;">${total} Perlu Tindakan</span>`;
+            } else {
+                banner.classList.add('all-clean');
+                dot.classList.add('clean');
+                badgeWrap.innerHTML = `<span style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); font-size: 0.72rem; padding: 2px 8px; border-radius: 9999px;">✅ Seluruh Operasional Lancar</span>`;
+            }
+        }
+
+        // 2. Triage Cards Count Badges
+        const empEl = document.getElementById('triageEmpCount');
+        if (empEl) {
+            empEl.textContent = sdm;
+            empEl.style.background = sdm > 0 ? '#f43f5e' : 'rgba(255,255,255,0.06)';
+        }
+
+        const depEl = document.getElementById('triageDepositCount');
+        if (depEl) {
+            depEl.textContent = deposits;
+            depEl.style.background = deposits > 0 ? '#f43f5e' : 'rgba(255,255,255,0.06)';
+        }
+
+        const stkWarpEl = document.getElementById('triageStockCount');
+        if (stkWarpEl) {
+            stkWarpEl.textContent = transfers;
+            stkWarpEl.style.background = transfers > 0 ? '#f59e0b' : 'rgba(255,255,255,0.06)';
+        }
+
+        // 3. Vital KPI Card
+        const vitalVal = document.getElementById('vitalTriagePendingValue');
+        const vitalSub = document.getElementById('vitalTriagePendingSub');
+        if (vitalVal) {
+            vitalVal.textContent = total;
+            vitalVal.style.color = total > 0 ? '#fb7185' : '#34d399';
+        }
+        if (vitalSub) {
+            vitalSub.innerHTML = total > 0 
+                ? `${sdm} SDM &bull; ${deposits + transfers} Logistik/Kas` 
+                : 'Semua Antrean Selesai';
+        }
+
+        // 4. Floating Badge
+        const floatBadge = document.getElementById('erpFloatingBadge');
+        const floatBell = document.getElementById('floatingBadgeBell');
+        const floatText = document.getElementById('floatingBadgeText');
+
+        if (floatBadge && floatBell && floatText) {
+            if (total > 0) {
+                floatBadge.style.background = 'linear-gradient(135deg, #f43f5e, #e11d48)';
+                floatBadge.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                floatBadge.style.boxShadow = '0 6px 20px rgba(244, 63, 94, 0.45)';
+                floatBell.textContent = '🔔';
+                floatBell.className = 'bell-animated';
+                floatText.innerHTML = `Antrean: <span id="floatingBadgeCount">${total}</span> Perlu Tindakan`;
+            } else {
+                floatBadge.style.background = 'rgba(30, 41, 59, 0.9)';
+                floatBadge.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+                floatBadge.style.boxShadow = '0 4px 14px rgba(0,0,0,0.3)';
+                floatBell.textContent = '✅';
+                floatBell.className = '';
+                floatText.innerHTML = `<span id="floatingBadgeCount" style="color: #34d399;">Operasional Lancar</span>`;
+            }
+        }
+    }
+
+    function pollQueueMetrics() {
+        fetch("{{ route('admin.erp') }}", {
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (!data || !data.success || !data.metrics) return;
+            const metrics = data.metrics;
+            const currentCount = metrics.total_pending_approvals ?? 0;
+
+            updateQueueUI(metrics);
+
+            if (currentCount > lastPendingCount) {
+                const diff = currentCount - lastPendingCount;
+                if (soundEnabled) {
+                    playQueueChime();
+                }
+                showQueueToast(`Terdapat ${diff} permohonan baru yang membutuhkan verifikasi pimpinan.`, currentCount);
+            }
+
+            lastPendingCount = currentCount;
+        })
+        .catch(err => {
+            // Ignore temporary network or polling error
+        });
+    }
+
+    // Polling setiap 30 detik untuk deteksi otomatis di background
+    setInterval(pollQueueMetrics, 30000);
 });
 </script>
 @endsection

@@ -19,6 +19,9 @@ class AdminErpHubTest extends TestCase
         $response->assertSee('Pusat Kendali ERP Maya Graha Kencana');
         $response->assertSee('Pusat Antrean Otorisasi &amp; Tindakan Cepat', false);
         $response->assertSee('Antrean Otorisasi');
+        $response->assertSee('id="erpFloatingBadge"', false);
+        $response->assertSee('id="erpSoundToggleBtn"', false);
+        $response->assertSee('id="erpToastContainer"', false);
         $response->assertSee('Master Data &amp; Katalog Terpadu', false);
         $response->assertSee('POS Desktop Kasir &amp; Billing', false);
         $response->assertSee('Bagan Akun (Chart of Accounts / COA)');
