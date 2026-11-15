@@ -546,4 +546,53 @@ class AdminAccountingTest extends TestCase
         $response->assertStatus(200);
         $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
     }
+
+    public function test_admin_can_access_calk_and_full_financial_package(): void
+    {
+        $this->post(route('admin.akuntansi.jurnal.manual'), [
+            'entry_date' => date('Y-m-d'),
+            'description' => 'Transaksi Paket CaLK',
+            'lines' => [
+                ['chart_of_account_id' => $this->cashAccount->id, 'debit' => 500000, 'credit' => 0],
+                ['chart_of_account_id' => $this->revenueAccount->id, 'debit' => 0, 'credit' => 500000],
+            ],
+        ]);
+
+        $htmlResponse = $this->get(route('admin.akuntansi.calk'));
+        $htmlResponse->assertStatus(200);
+        $htmlResponse->assertSee('Catatan atas Laporan Keuangan (CaLK)');
+        $htmlResponse->assertSee('Catatan 1: Gambaran Umum Entitas');
+        $htmlResponse->assertSee('Catatan 7: Status Pengendalian Internal');
+        $htmlResponse->assertSee('Cetak Paket Lengkap (PDF)');
+        $htmlResponse->assertSee('Manajer Keuangan');
+
+        $jsonResponse = $this->getJson(route('admin.akuntansi.calk'));
+        $jsonResponse->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'journal_count' => 1,
+                'laba_rugi' => [
+                    'total_revenue' => 500000.0,
+                    'net_profit' => 500000.0,
+                ],
+                'neraca' => [
+                    'total_assets' => 500000.0,
+                    'is_balanced' => true,
+                ],
+                'arus_kas' => [
+                    'ending_cash' => 500000.0,
+                    'is_reconciled' => true,
+                ],
+            ]);
+    }
+
+    public function test_admin_can_export_calk_csv(): void
+    {
+        $response = $this->get(route('admin.akuntansi.calk', [
+            'export' => 'csv',
+        ]));
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+    }
 }

@@ -234,6 +234,10 @@
   - [x] Proteksi otomatis **Segregation of Duties (SoD)** & penguncian **Auditor Read-Only** yang tidak dapat ditimpa dari antarmuka maupun payload request.
   - [x] Antarmuka interaktif `/admin/ERP/rbac-matrix` terhubung dari modul `G-RBAC` di Pusat Kendali ERP, lengkap dengan filter tab jabatan, tombol preset per role, reset ke default SoD, ekspor CSV, dan pencatatan WORM Audit Log.
   - [x] Feature test `AdminRbacMatrixTest` & `AdminErpHubTest` lulus 100% (9 tests, 88 assertions).
+- [x] **Catatan atas Laporan Keuangan (CaLK) & Paket Cetak Laporan Lengkap (`/admin/akuntansi/calk`)**:
+  - [x] Agregasi 3 laporan utama (**Laba Rugi**, **Neraca Keuangan**, **Arus Kas Metode Langsung**) bersama **7 Catatan atas Laporan Keuangan (CaLK)** sesuai SAK Entitas Privat (SAK EP): Gambaran Umum Entitas, Kebijakan Akuntansi, Rincian Kas & Bank, Piutang & Persediaan, Liabilitas & Ekuitas, Kinerja & Margin Operasional, serta Pengendalian Internal & Status Tutup Buku.
+  - [x] Filter Multi-Cabang (`branch_id`), rentang tanggal (`start_date`, `end_date`), ekspor CSV (`?export=csv`), respons JSON, dan tata letak Paket Cetak Resmi (`window.print()` dengan `@media print` & blok tanda tangan 3 kolom).
+  - [x] Feature test `AdminAccountingTest` lulus 100% (23 tests, 97 assertions).
 - [x] **Standardisasi & Repositori**:
   - [x] Laravel Pint code formatter dijalankan pada seluruh file PHP yang dimodifikasi (`vendor/bin/pint --dirty --format agent`).
   - [x] Cache view Blade dibersihkan (`php artisan view:clear`).
@@ -256,7 +260,8 @@
 | `be6c6bd` | `feat(accounting): add accounting period closing, lock enforcement and automated closing journal entries` |
 | `6e313e4` | `docs: add project overview essay in Markdown format` |
 | `6eeb5e1` | `feat(accounting): add Direct-Method Cash Flow Statement (Laporan Arus Kas) with branch filter, reconciliation and CSV export` |
-| *(pending)* | `feat(rbac): add granular RBAC permissions matrix (CRUD + Approve) per role with SoD protection and audit log` |
+| `fd7a297` | `feat(rbac): add granular RBAC permissions matrix (CRUD + Approve) per role with SoD protection and audit log` |
+| *(pending)* | `feat(accounting): add Catatan atas Laporan Keuangan (CaLK) and printable full financial package` |
 
 ---
 
