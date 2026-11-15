@@ -238,6 +238,11 @@
   - [x] Agregasi 3 laporan utama (**Laba Rugi**, **Neraca Keuangan**, **Arus Kas Metode Langsung**) bersama **7 Catatan atas Laporan Keuangan (CaLK)** sesuai SAK Entitas Privat (SAK EP): Gambaran Umum Entitas, Kebijakan Akuntansi, Rincian Kas & Bank, Piutang & Persediaan, Liabilitas & Ekuitas, Kinerja & Margin Operasional, serta Pengendalian Internal & Status Tutup Buku.
   - [x] Filter Multi-Cabang (`branch_id`), rentang tanggal (`start_date`, `end_date`), ekspor CSV (`?export=csv`), respons JSON, dan tata letak Paket Cetak Resmi (`window.print()` dengan `@media print` & blok tanda tangan 3 kolom).
   - [x] Feature test `AdminAccountingTest` lulus 100% (23 tests, 97 assertions).
+- [x] **Monitoring Jadwal Cron, Queue Worker & Backup Database Otomatis (`/admin/ERP/system-monitor`)**:
+  - [x] Tabel & Model `DatabaseBackup` (`database_backups`) & `CronHeartbeat` (`cron_heartbeats`), `DatabaseBackupService` (`pg_dump` + `gzip` + SHA-256 + retensi 14 hari), dan `SystemMonitoringService`.
+  - [x] Command `php artisan db:backup`, Queue Job `RunDatabaseBackupJob`, dan jadwal otomatis `06:00` & `23:30` WIB di `routes/console.php`.
+  - [x] Dashboard monitoring di Pusat Kendali ERP (`G-SYSMON`) dengan tombol Backup Sekarang, Unduh Backup, Retry/Flush Failed Jobs, proteksi RBAC/Auditor Read-Only, dan WORM Audit Log.
+  - [x] Feature test `AdminSystemMonitorTest` & `AdminErpHubTest` lulus 100% (9 tests, 100 assertions).
 - [x] **Standardisasi & Repositori**:
   - [x] Laravel Pint code formatter dijalankan pada seluruh file PHP yang dimodifikasi (`vendor/bin/pint --dirty --format agent`).
   - [x] Cache view Blade dibersihkan (`php artisan view:clear`).
@@ -261,7 +266,8 @@
 | `6e313e4` | `docs: add project overview essay in Markdown format` |
 | `6eeb5e1` | `feat(accounting): add Direct-Method Cash Flow Statement (Laporan Arus Kas) with branch filter, reconciliation and CSV export` |
 | `fd7a297` | `feat(rbac): add granular RBAC permissions matrix (CRUD + Approve) per role with SoD protection and audit log` |
-| *(pending)* | `feat(accounting): add Catatan atas Laporan Keuangan (CaLK) and printable full financial package` |
+| `595bfc1` | `feat(accounting): add Catatan atas Laporan Keuangan (CaLK) and printable full financial package` |
+| *(pending)* | `feat(erp): add Cron Scheduler, Queue Worker and PostgreSQL Database Backup monitoring module` |
 
 ---
 

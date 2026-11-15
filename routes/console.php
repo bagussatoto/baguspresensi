@@ -8,5 +8,7 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+Schedule::command('db:backup --trigger=scheduled')->dailyAt('06:00');
+Schedule::command('db:backup --trigger=scheduled')->dailyAt('23:30');
 Schedule::command('attendance:close-daily')->dailyAt('23:59');
 Schedule::command('registrations:prune-expired')->dailyAt('01:00');

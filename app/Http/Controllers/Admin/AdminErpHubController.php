@@ -662,6 +662,17 @@ class AdminErpHubController extends Controller
                         'roles' => ['Super Admin', 'Auditor'],
                     ],
                     [
+                        'id' => 'mod-system-monitor',
+                        'title' => 'Monitoring Cron, Queue & Backup Database',
+                        'code' => 'G-SYSMON',
+                        'desc' => 'Pemantauan jadwal Laravel Scheduler, antrean Queue Worker (jobs/failed_jobs), dan backup PostgreSQL terkompresi.',
+                        'url' => route('admin.erp.system-monitor'),
+                        'route_name' => 'admin.erp.system-monitor',
+                        'icon' => '🛡️',
+                        'stat_badge' => 'Infra & Backup',
+                        'roles' => ['Super Admin', 'Auditor'],
+                    ],
+                    [
                         'id' => 'mod-data-purge',
                         'title' => 'Pembersihan Data Simulasi & Testing (Go-Live)',
                         'code' => 'G-PURGE',
