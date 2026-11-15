@@ -56,8 +56,16 @@ class DatabaseBackupService
         ]);
 
         try {
-            Storage::disk(self::BACKUP_DISK)->makeDirectory(self::BACKUP_DIR);
-            $absolutePath = Storage::disk(self::BACKUP_DISK)->path($relativePath);
+            $disk = Storage::disk(self::BACKUP_DISK);
+            if (! $disk->exists(self::BACKUP_DIR)) {
+                $disk->makeDirectory(self::BACKUP_DIR);
+            }
+            $absolutePath = $disk->path($relativePath);
+            $backupDir = dirname($absolutePath);
+            if (is_dir($backupDir)) {
+                @chmod(dirname($backupDir), 0775);
+                @chmod($backupDir, 0775);
+            }
 
             if ($driver === 'pgsql') {
                 $this->dumpPostgres($connConfig, $absolutePath);
@@ -138,11 +146,28 @@ class DatabaseBackupService
         $database = (string) ($connConfig['database'] ?? 'laravel');
 
         $rawSqlPath = preg_replace('/\.gz$/', '', $absoluteOutputPath) ?: $absoluteOutputPath.'.sql';
+        $pgDumpBinary = $this->resolveBinary('pg_dump', [
+            '/usr/bin/pg_dump',
+            '/usr/local/bin/pg_dump',
+            '/usr/lib/postgresql/17/bin/pg_dump',
+            '/usr/lib/postgresql/16/bin/pg_dump',
+            '/usr/lib/postgresql/15/bin/pg_dump',
+            '/usr/lib/postgresql/14/bin/pg_dump',
+        ]);
+        $gzipBinary = $this->resolveBinary('gzip', [
+            '/usr/bin/gzip',
+            '/bin/gzip',
+            '/usr/local/bin/gzip',
+        ]);
+        $pathEnv = (string) (getenv('PATH') ?: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin');
 
         $dumpProcess = new Process(
-            ['pg_dump', '-h', $host, '-p', $port, '-U', $username, '--no-owner', '--no-acl', '-f', $rawSqlPath, $database],
+            [$pgDumpBinary, '-h', $host, '-p', $port, '-U', $username, '--no-owner', '--no-acl', '-f', $rawSqlPath, $database],
             base_path(),
-            ['PGPASSWORD' => $password]
+            [
+                'PGPASSWORD' => $password,
+                'PATH' => $pathEnv,
+            ]
         );
         $dumpProcess->setTimeout(600);
         $dumpProcess->run();
@@ -152,7 +177,7 @@ class DatabaseBackupService
             throw new RuntimeException('pg_dump gagal: '.trim($dumpProcess->getErrorOutput() ?: $dumpProcess->getOutput()));
         }
 
-        $gzipProcess = new Process(['gzip', '-f', $rawSqlPath], base_path());
+        $gzipProcess = new Process([$gzipBinary, '-f', $rawSqlPath], base_path(), ['PATH' => $pathEnv]);
         $gzipProcess->setTimeout(300);
         $gzipProcess->run();
 
@@ -160,6 +185,22 @@ class DatabaseBackupService
             @unlink($rawSqlPath);
             throw new RuntimeException('Kompresi gzip gagal: '.trim($gzipProcess->getErrorOutput()));
         }
+    }
+
+    /**
+     * Cari path absolut binary sistem agar tetap ditemukan oleh PHP-FPM / web server.
+     *
+     * @param  array<int, string>  $candidates
+     */
+    protected function resolveBinary(string $fallbackName, array $candidates): string
+    {
+        foreach ($candidates as $path) {
+            if (is_executable($path)) {
+                return $path;
+            }
+        }
+
+        return $fallbackName;
     }
 
     /**
