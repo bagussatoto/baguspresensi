@@ -11,11 +11,13 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Modules\Kas\Domain\Enums\NormalBalance;
+use Modules\Kas\Domain\Models\AccountingPeriod;
 use Modules\Kas\Domain\Models\ChartOfAccount;
 use Modules\Kas\Domain\Models\JournalEntry;
 use Modules\Kas\Domain\Models\JournalEntryLine;
 use Modules\Kas\Domain\Services\AutoJournalService;
 use Modules\MasterData\Domain\Models\Branch;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -751,12 +753,23 @@ class AdminAccountingController extends Controller
             return back()->withInput()->with('error', 'Entri jurnal tidak seimbang! Total Debit (Rp '.number_format($totalDebit, 0).') harus sama dengan Total Kredit (Rp '.number_format($totalCredit, 0).').');
         }
 
-        $entry = $this->journalService->createManualJournal([
-            'entry_date' => $request->input('entry_date'),
-            'description' => $request->input('description'),
-            'branch_id' => $request->input('branch_id'),
-            'lines' => $lines,
-        ]);
+        try {
+            $entry = $this->journalService->createManualJournal([
+                'entry_date' => $request->input('entry_date'),
+                'description' => $request->input('description'),
+                'branch_id' => $request->input('branch_id'),
+                'lines' => $lines,
+            ]);
+        } catch (RuntimeException $e) {
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], 422);
+            }
+
+            return back()->withInput()->with('error', $e->getMessage());
+        }
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -1060,5 +1073,113 @@ class AdminAccountingController extends Controller
             'grandTotalNet',
             'grandTotalCount'
         ));
+    }
+
+    /**
+     * 7. Halaman Tutup Buku & Kunci Periode Akuntansi (Period Closing).
+     */
+    public function tutupBukuIndex(Request $request): View|JsonResponse
+    {
+        $periods = AccountingPeriod::with(['branch', 'closedBy', 'reopenedBy', 'closingJournalEntry'])
+            ->orderByDesc('year')
+            ->orderByDesc('month')
+            ->get();
+
+        $branches = Branch::where('is_active', true)->orderBy('name')->get();
+        $closedCount = $periods->where('status', 'closed')->count();
+        $openCount = $periods->where('status', 'open')->count();
+        $currentMonthLocked = AccountingPeriod::isDateLocked(Carbon::today()->toDateString());
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'closed_count' => $closedCount,
+                'open_count' => $openCount,
+                'current_month_locked' => $currentMonthLocked,
+                'periods' => $periods,
+            ]);
+        }
+
+        return view('admin.accounting.tutup_buku', compact(
+            'periods',
+            'branches',
+            'closedCount',
+            'openCount',
+            'currentMonthLocked'
+        ));
+    }
+
+    /**
+     * Proses tutup buku dan penguncian periode akuntansi.
+     */
+    public function closePeriod(Request $request): RedirectResponse|JsonResponse
+    {
+        $request->validate([
+            'year' => ['required', 'integer', 'min:2020', 'max:2100'],
+            'month' => ['required', 'integer', 'min:1', 'max:12'],
+            'branch_id' => ['nullable', 'exists:branches,id'],
+            'generate_closing_journal' => ['nullable', 'boolean'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $branchId = $request->filled('branch_id') ? (int) $request->input('branch_id') : null;
+        $generateClosingJournal = $request->boolean('generate_closing_journal', false);
+
+        try {
+            $period = $this->journalService->closePeriod(
+                (int) $request->input('year'),
+                (int) $request->input('month'),
+                $branchId,
+                auth()->id(),
+                $generateClosingJournal,
+                $request->input('notes')
+            );
+        } catch (RuntimeException $e) {
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+            }
+
+            return back()->withInput()->with('error', $e->getMessage());
+        }
+
+        $msg = "Periode {$period->period_name} berhasil ditutup & dikunci.".($period->closing_journal_entry_id ? ' Jurnal penutup otomatis telah dibuat.' : '');
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'message' => $msg, 'period' => $period]);
+        }
+
+        return redirect()->route('admin.akuntansi.tutup-buku')->with('success', $msg);
+    }
+
+    /**
+     * Proses buka kembali periode akuntansi yang telah ditutup (Audit Controlled Reopen).
+     */
+    public function reopenPeriod(Request $request, AccountingPeriod $period): RedirectResponse|JsonResponse
+    {
+        $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:255'],
+        ]);
+
+        try {
+            $period = $this->journalService->reopenPeriod(
+                $period,
+                auth()->id(),
+                (string) $request->input('reason')
+            );
+        } catch (RuntimeException $e) {
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+            }
+
+            return back()->with('error', $e->getMessage());
+        }
+
+        $msg = "Periode {$period->period_name} berhasil dibuka kembali (Reopened) dengan catatan audit.";
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'message' => $msg, 'period' => $period]);
+        }
+
+        return redirect()->route('admin.akuntansi.tutup-buku')->with('success', $msg);
     }
 }

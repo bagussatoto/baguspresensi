@@ -17,6 +17,9 @@
     <a href="{{ route('admin.akuntansi.pivot') }}" class="tab-pill-btn {{ request()->routeIs('admin.akuntansi.pivot*') || request()->is('*akuntansi/pivot*') ? 'active' : '' }}">
         <span>📊</span> Pivot Analisis Transaksi SAK
     </a>
+    <a href="{{ route('admin.akuntansi.tutup-buku') }}" class="tab-pill-btn {{ request()->routeIs('admin.akuntansi.tutup-buku*') || request()->is('*akuntansi/tutup-buku*') ? 'active' : '' }}">
+        <span>🔒</span> Tutup Buku (Period Closing)
+    </a>
     <a href="{{ route('admin.coa') }}" class="tab-pill-btn {{ request()->routeIs('admin.coa*') || request()->is('*admin/coa*') || request()->is('*coa*') ? 'active' : '' }}" style="margin-left: auto;">
         <span>⚙️</span> Kelola COA
     </a>

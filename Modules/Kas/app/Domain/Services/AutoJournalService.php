@@ -7,13 +7,16 @@ namespace Modules\Kas\Domain\Services;
 use App\Models\ShiftSalesSummary;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Modules\Kas\Domain\Enums\NormalBalance;
+use Modules\Kas\Domain\Models\AccountingPeriod;
 use Modules\Kas\Domain\Models\ChartOfAccount;
 use Modules\Kas\Domain\Models\JournalEntry;
 use Modules\Kas\Domain\Models\JournalEntryLine;
 use Modules\MasterData\Domain\Models\CafeSale;
 use Modules\MasterData\Domain\Models\Consignment;
 use Modules\MasterData\Domain\Models\StockOpname;
+use RuntimeException;
 
 /**
  * Service Penjurnalan Otomatis & Pembukuan Berpasangan (Double-Entry General Ledger).
@@ -169,6 +172,13 @@ class AutoJournalService
     {
         return DB::transaction(function () use ($data): JournalEntry {
             $entryDate = $data['entry_date'] ?? Carbon::today()->toDateString();
+            $branchId = isset($data['branch_id']) && $data['branch_id'] !== '' ? (int) $data['branch_id'] : null;
+
+            $lockedPeriod = AccountingPeriod::getLockedPeriodForDate($entryDate, $branchId);
+            if ($lockedPeriod) {
+                throw new RuntimeException("Periode akuntansi {$lockedPeriod->period_name} sudah ditutup dan terkunci. Tidak dapat mencatat jurnal pada tanggal {$entryDate}.");
+            }
+
             $entryNumber = $this->generateEntryNumber('JRN-MAN', Carbon::parse($entryDate));
 
             $entry = JournalEntry::create([
@@ -509,6 +519,235 @@ class AutoJournalService
 
             return $entry;
         });
+    }
+
+    /**
+     * Tutup dan kunci periode akuntansi (Period Closing).
+     * Opsional: membuat jurnal penutup (Closing Entries) akun nominal (4,5,6) ke Laba Ditahan (3-20001).
+     */
+    public function closePeriod(
+        int $year,
+        int $month,
+        ?int $branchId = null,
+        ?int $userId = null,
+        bool $generateClosingJournal = false,
+        ?string $notes = null
+    ): AccountingPeriod {
+        return DB::transaction(function () use ($year, $month, $branchId, $userId, $generateClosingJournal, $notes): AccountingPeriod {
+            $startDate = Carbon::createFromDate($year, $month, 1)->startOfMonth();
+            $endDate = $startDate->copy()->endOfMonth();
+
+            $monthNames = [
+                1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+                5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+                9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
+            ];
+            $periodName = ($monthNames[$month] ?? $startDate->format('F')).' '.$year;
+
+            $existing = AccountingPeriod::query()
+                ->where('year', $year)
+                ->where('month', $month)
+                ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->whereNull('branch_id'))
+                ->first();
+
+            if ($existing && $existing->status === 'closed') {
+                throw new RuntimeException("Periode {$periodName} sudah dalam status tertutup & terkunci.");
+            }
+
+            $closingJournalId = null;
+            if ($generateClosingJournal) {
+                $closingJournal = $this->createClosingJournalForPeriod($startDate, $endDate, $periodName, $branchId);
+                if ($closingJournal) {
+                    $closingJournalId = $closingJournal->id;
+                }
+            }
+
+            if ($existing) {
+                $existing->update([
+                    'status' => 'closed',
+                    'closed_by_user_id' => $userId,
+                    'closed_at' => now(),
+                    'closing_journal_entry_id' => $closingJournalId,
+                    'notes' => $notes,
+                ]);
+                $period = $existing->fresh();
+            } else {
+                $period = AccountingPeriod::create([
+                    'branch_id' => $branchId,
+                    'year' => $year,
+                    'month' => $month,
+                    'period_name' => $periodName,
+                    'start_date' => $startDate->toDateString(),
+                    'end_date' => $endDate->toDateString(),
+                    'status' => 'closed',
+                    'closed_by_user_id' => $userId,
+                    'closed_at' => now(),
+                    'closing_journal_entry_id' => $closingJournalId,
+                    'notes' => $notes,
+                ]);
+            }
+
+            if (Schema::hasTable('audit_logs')) {
+                DB::table('audit_logs')->insert([
+                    'user_id' => $userId,
+                    'auditable_type' => AccountingPeriod::class,
+                    'auditable_id' => $period->id,
+                    'action' => 'accounting_period_closed',
+                    'new_values' => json_encode([
+                        'period_name' => $periodName,
+                        'branch_id' => $branchId,
+                        'closing_journal_entry_id' => $closingJournalId,
+                        'notes' => $notes,
+                    ]),
+                    'ip_address' => request()->ip() ?? '127.0.0.1',
+                    'user_agent' => request()->userAgent() ?? 'Admin ERP System',
+                    'created_at' => now(),
+                ]);
+            }
+
+            return $period;
+        });
+    }
+
+    /**
+     * Buka kembali periode akuntansi yang terkunci (Reopen Period) dengan catatan audit.
+     */
+    public function reopenPeriod(AccountingPeriod $period, ?int $userId = null, string $reason = ''): AccountingPeriod
+    {
+        return DB::transaction(function () use ($period, $userId, $reason): AccountingPeriod {
+            if ($period->status !== 'closed') {
+                throw new RuntimeException("Periode {$period->period_name} sudah dalam status terbuka.");
+            }
+
+            if ($period->closing_journal_entry_id) {
+                JournalEntry::where('id', $period->closing_journal_entry_id)->update([
+                    'status' => 'reversed',
+                ]);
+            }
+
+            $period->update([
+                'status' => 'open',
+                'reopened_by_user_id' => $userId,
+                'reopened_at' => now(),
+                'closing_journal_entry_id' => null,
+                'notes' => trim(($period->notes ? $period->notes."\n" : '')."[Reopened] {$reason}"),
+            ]);
+
+            if (Schema::hasTable('audit_logs')) {
+                DB::table('audit_logs')->insert([
+                    'user_id' => $userId,
+                    'auditable_type' => AccountingPeriod::class,
+                    'auditable_id' => $period->id,
+                    'action' => 'accounting_period_reopened',
+                    'new_values' => json_encode([
+                        'period_name' => $period->period_name,
+                        'branch_id' => $period->branch_id,
+                        'reason' => $reason,
+                    ]),
+                    'ip_address' => request()->ip() ?? '127.0.0.1',
+                    'user_agent' => request()->userAgent() ?? 'Admin ERP System',
+                    'created_at' => now(),
+                ]);
+            }
+
+            return $period->fresh();
+        });
+    }
+
+    /**
+     * Buat jurnal penutup otomatis akun Pendapatan, HPP, dan Beban ke Laba Ditahan (3-20001).
+     */
+    private function createClosingJournalForPeriod(Carbon $startDate, Carbon $endDate, string $periodName, ?int $branchId = null): ?JournalEntry
+    {
+        $nominalAccounts = ChartOfAccount::whereIn('account_category', ['revenue', 'cogs', 'expense'])
+            ->where('is_header', false)
+            ->orderBy('account_code')
+            ->get();
+
+        $closingLines = [];
+        $netProfit = 0.0;
+
+        foreach ($nominalAccounts as $acc) {
+            $lines = JournalEntryLine::whereHas('journalEntry', function ($q) use ($startDate, $endDate, $branchId): void {
+                $q->where('status', 'posted')
+                    ->whereBetween('entry_date', [$startDate->toDateString(), $endDate->toDateString()]);
+                if ($branchId !== null) {
+                    $q->where('branch_id', $branchId);
+                }
+            })->where('chart_of_account_id', $acc->id)->get();
+
+            $sumDebit = (float) $lines->sum('debit');
+            $sumCredit = (float) $lines->sum('credit');
+
+            if (abs($sumDebit - $sumCredit) < 0.01) {
+                continue;
+            }
+
+            $cat = strtolower($acc->account_category->value ?? (string) $acc->account_category);
+            if ($cat === 'revenue') {
+                $amount = $sumCredit - $sumDebit;
+                if (abs($amount) >= 0.01) {
+                    $closingLines[] = [
+                        'account' => $acc,
+                        'debit' => $amount > 0 ? $amount : 0.0,
+                        'credit' => $amount < 0 ? abs($amount) : 0.0,
+                        'memo' => "Penutupan Pendapatan {$periodName}",
+                    ];
+                    $netProfit += $amount;
+                }
+            } else {
+                $amount = $sumDebit - $sumCredit;
+                if (abs($amount) >= 0.01) {
+                    $closingLines[] = [
+                        'account' => $acc,
+                        'debit' => $amount < 0 ? abs($amount) : 0.0,
+                        'credit' => $amount > 0 ? $amount : 0.0,
+                        'memo' => "Penutupan Beban/HPP {$periodName}",
+                    ];
+                    $netProfit -= $amount;
+                }
+            }
+        }
+
+        if (empty($closingLines)) {
+            return null;
+        }
+
+        $entryNumber = $this->generateEntryNumber('JRN-CLS', $endDate);
+        $entry = JournalEntry::create([
+            'entry_number' => $entryNumber,
+            'entry_date' => $endDate->toDateString(),
+            'reference_type' => 'period_closing',
+            'reference_id' => null,
+            'branch_id' => $branchId,
+            'creator_employee_id' => null,
+            'description' => "Jurnal Penutup Periode {$periodName}",
+            'status' => 'posted',
+            'total_debit' => 0,
+            'total_credit' => 0,
+        ]);
+
+        foreach ($closingLines as $item) {
+            $this->createLine($entry, $item['account'], $item['debit'], $item['credit'], $item['memo']);
+        }
+
+        if (abs($netProfit) >= 0.01) {
+            $retainedAccount = $this->getAccountByCode('3-20001', 'Laba Ditahan (Retained Earnings)', 'equity', 'credit');
+            $this->createLine(
+                $entry,
+                $retainedAccount,
+                $netProfit < 0 ? abs($netProfit) : 0.0,
+                $netProfit > 0 ? $netProfit : 0.0,
+                "Pemindahan Laba/Rugi Bersih {$periodName} ke Laba Ditahan"
+            );
+        }
+
+        $entry->update([
+            'total_debit' => (float) $entry->lines()->sum('debit'),
+            'total_credit' => (float) $entry->lines()->sum('credit'),
+        ]);
+
+        return $entry;
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Models\ShiftSalesSummary;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Modules\Kas\Domain\Enums\AccountCategory;
 use Modules\Kas\Domain\Enums\NormalBalance;
+use Modules\Kas\Domain\Models\AccountingPeriod;
 use Modules\Kas\Domain\Models\ChartOfAccount;
 use Modules\Kas\Domain\Services\AutoJournalService;
 use Modules\MasterData\Domain\Models\Branch;
@@ -337,6 +338,128 @@ class AdminAccountingTest extends TestCase
             'total_debit' => 200000,
             'total_credit' => 200000,
             'status' => 'posted',
+        ]);
+    }
+
+    public function test_admin_can_access_tutup_buku_page(): void
+    {
+        $response = $this->get(route('admin.akuntansi.tutup-buku'));
+
+        $response->assertStatus(200);
+        $response->assertSee('Tutup Buku');
+        $response->assertSee('Kunci &amp; Tutup Periode Akuntansi', false);
+    }
+
+    public function test_admin_can_close_accounting_period_and_generate_closing_journal(): void
+    {
+        // Catat transaksi pendapatan pada Oktober 2026
+        $this->post(route('admin.akuntansi.jurnal.manual'), [
+            'entry_date' => '2026-10-15',
+            'description' => 'Pendapatan Oktober 2026',
+            'lines' => [
+                ['chart_of_account_id' => $this->cashAccount->id, 'debit' => 750000, 'credit' => 0],
+                ['chart_of_account_id' => $this->revenueAccount->id, 'debit' => 0, 'credit' => 750000],
+            ],
+        ]);
+
+        $response = $this->post(route('admin.akuntansi.tutup-buku.close'), [
+            'year' => 2026,
+            'month' => 10,
+            'generate_closing_journal' => 1,
+            'notes' => 'Tutup buku Oktober selesai diaudit',
+        ]);
+
+        $response->assertRedirect(route('admin.akuntansi.tutup-buku'));
+        $response->assertSessionHas('success');
+
+        $this->assertDatabaseHas('accounting_periods', [
+            'year' => 2026,
+            'month' => 10,
+            'status' => 'closed',
+        ]);
+
+        $this->assertDatabaseHas('journal_entries', [
+            'reference_type' => 'period_closing',
+            'total_debit' => 750000,
+            'total_credit' => 750000,
+            'status' => 'posted',
+        ]);
+    }
+
+    public function test_cannot_post_manual_journal_into_locked_period(): void
+    {
+        $this->post(route('admin.akuntansi.tutup-buku.close'), [
+            'year' => 2026,
+            'month' => 10,
+            'notes' => 'Kunci Oktober',
+        ]);
+
+        $response = $this->post(route('admin.akuntansi.jurnal.manual'), [
+            'entry_date' => '2026-10-20',
+            'description' => 'Percobaan Jurnal Backdated Terlarang',
+            'lines' => [
+                ['chart_of_account_id' => $this->cashAccount->id, 'debit' => 100000, 'credit' => 0],
+                ['chart_of_account_id' => $this->revenueAccount->id, 'debit' => 0, 'credit' => 100000],
+            ],
+        ]);
+
+        $response->assertSessionHas('error');
+        $this->assertDatabaseMissing('journal_entries', [
+            'description' => 'Percobaan Jurnal Backdated Terlarang',
+        ]);
+    }
+
+    public function test_admin_can_reopen_closed_accounting_period_with_audit_reason(): void
+    {
+        // Catat transaksi & tutup dengan jurnal penutup
+        $this->post(route('admin.akuntansi.jurnal.manual'), [
+            'entry_date' => '2026-10-12',
+            'description' => 'Pendapatan Awal Oktober',
+            'lines' => [
+                ['chart_of_account_id' => $this->cashAccount->id, 'debit' => 300000, 'credit' => 0],
+                ['chart_of_account_id' => $this->revenueAccount->id, 'debit' => 0, 'credit' => 300000],
+            ],
+        ]);
+
+        $this->post(route('admin.akuntansi.tutup-buku.close'), [
+            'year' => 2026,
+            'month' => 10,
+            'generate_closing_journal' => 1,
+        ]);
+
+        $period = AccountingPeriod::where('year', 2026)->where('month', 10)->firstOrFail();
+        $closingJournalId = $period->closing_journal_entry_id;
+
+        $response = $this->post(route('admin.akuntansi.tutup-buku.reopen', $period->id), [
+            'reason' => 'Koreksi faktur pembelian supplier terlambat',
+        ]);
+
+        $response->assertRedirect(route('admin.akuntansi.tutup-buku'));
+        $response->assertSessionHas('success');
+
+        $this->assertDatabaseHas('accounting_periods', [
+            'id' => $period->id,
+            'status' => 'open',
+            'closing_journal_entry_id' => null,
+        ]);
+
+        $this->assertDatabaseHas('journal_entries', [
+            'id' => $closingJournalId,
+            'status' => 'reversed',
+        ]);
+
+        // Setelah dibuka kembali, jurnal manual tanggal Oktober 2026 bisa masuk lagi
+        $retry = $this->post(route('admin.akuntansi.jurnal.manual'), [
+            'entry_date' => '2026-10-20',
+            'description' => 'Jurnal Koreksi Setelah Reopen',
+            'lines' => [
+                ['chart_of_account_id' => $this->cashAccount->id, 'debit' => 50000, 'credit' => 0],
+                ['chart_of_account_id' => $this->revenueAccount->id, 'debit' => 0, 'credit' => 50000],
+            ],
+        ]);
+        $retry->assertRedirect(route('admin.akuntansi.jurnal'));
+        $this->assertDatabaseHas('journal_entries', [
+            'description' => 'Jurnal Koreksi Setelah Reopen',
         ]);
     }
 }

@@ -216,6 +216,13 @@
   - [x] Tombol & template ramah cetak / PDF (`window.print()`) dengan `@media print` styling profesional.
   - [x] Drill-down link pada Kode & Nama Akun mengarah ke Buku Besar dan Laba Berjalan mengarah ke Laba Rugi.
   - [x] Feature test `AdminAccountingTest` (filter branch & export CSV Neraca) lulus 100% (15 tests, 59 assertions).
+- [x] **Fitur Tutup Buku & Kunci Periode Akuntansi (Period Closing)**:
+  - [x] Tabel & Model `AccountingPeriod` (`accounting_periods`) untuk melacak status `open` / `closed` per bulan, tahun, dan cabang.
+  - [x] Proteksi otomatis pada `AutoJournalService::createManualJournal()` & `storeManualJournal()` terhadap input jurnal manual bertanggal pada periode yang terkunci.
+  - [x] Pembuatan **Jurnal Penutup Otomatis** (`JRN-CLS-...`) untuk menutup akun nominal (Pendapatan, HPP, Beban) ke Laba Ditahan (`3-20001`).
+  - [x] Fitur *Audit Controlled Reopen* (buka kembali periode dengan alasan wajib, pembalikan jurnal penutup, dan pencatatan WORM Audit Log).
+  - [x] Antarmuka `/admin/akuntansi/tutup-buku` + pill navigasi di menu Akuntansi.
+  - [x] Feature test `AdminAccountingTest` lulus 100% (19 tests, 77 assertions).
 - [x] **Standardisasi & Repositori**:
   - [x] Laravel Pint code formatter dijalankan pada seluruh file PHP yang dimodifikasi (`vendor/bin/pint --dirty --format agent`).
   - [x] Cache view Blade dibersihkan (`php artisan view:clear`).
@@ -234,7 +241,8 @@
 | `41de96d` | `feat(pos): add physical thermal VOID receipt slip (58mm/80mm) with auto-print, dual-tab reprint and audit trail` |
 | `f7d7de5` | `feat(erp): add simulation data purge tool for Go-Live with master data protection and audit trail` |
 | `de8fe51` | `feat(accounting): add multi-branch filtering, CSV export and drill-down to Laba Rugi (P&L)` |
-| *(pending)* | `feat(accounting): add multi-branch filtering, CSV export and drill-down to Neraca Keuangan (Balance Sheet)` |
+| `e0da9ea` | `feat(accounting): add multi-branch filtering, CSV export and drill-down to Neraca Keuangan (Balance Sheet)` |
+| *(pending)* | `feat(accounting): add accounting period closing, lock enforcement and automated closing journal entries` |
 
 ---
 
