@@ -86,6 +86,7 @@ class ShiftSalesSummary extends Model
         'deposit_method',
         'deposit_recipient',
         'deposit_notes',
+        'deposit_proof',
         'deposited_at',
         'deposit_verified_at',
         'deposit_verified_by',
@@ -447,6 +448,10 @@ class ShiftSalesSummary extends Model
 
     public function depositProofUrl(): ?string
     {
+        if (! empty($this->deposit_proof)) {
+            return asset($this->deposit_proof);
+        }
+
         $notes = (string) ($this->deposit_notes ?? $this->handover_notes ?? '');
         if (preg_match('/\[Bukti Setor: ([^\]]+)\]/', $notes, $matches)) {
             return asset(trim($matches[1]));

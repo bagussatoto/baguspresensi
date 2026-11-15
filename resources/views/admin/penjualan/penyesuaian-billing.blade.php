@@ -145,9 +145,12 @@
                             </td>
                             <td style="padding: 12px 16px; text-align: center;">
                                 @if($proofUrl)
-                                    <a href="{{ $proofUrl }}" target="_blank" class="btn-action-sm" style="background: rgba(56, 189, 248, 0.2); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 11px;" title="Lihat Foto Bukti Transfer / Struk">
-                                        🖼️ Bukti Struk
-                                    </a>
+                                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+                                        <img src="{{ $proofUrl }}" onclick="openProofPreviewModal('{{ $proofUrl }}', '{{ $dep->deposit_receipt_no ?: "DEP-{$dep->id}" }}', '{{ $dep->branch->name ?? 'Cabang' }} &bull; {{ $dep->employee->name ?? 'Kasir' }}', 'Rp {{ number_format($depAmt, 0, ',', '.') }}')" style="width: 28px; height: 28px; object-fit: cover; border-radius: 4px; border: 1px solid rgba(56, 189, 248, 0.5); cursor: pointer;" title="Klik untuk perbesar bukti transfer">
+                                        <button type="button" onclick="openProofPreviewModal('{{ $proofUrl }}', '{{ $dep->deposit_receipt_no ?: "DEP-{$dep->id}" }}', '{{ $dep->branch->name ?? 'Cabang' }} &bull; {{ $dep->employee->name ?? 'Kasir' }}', 'Rp {{ number_format($depAmt, 0, ',', '.') }}')" class="btn-action-sm" style="background: rgba(56, 189, 248, 0.2); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 11px; cursor: pointer;" title="Lihat Foto Bukti Transfer / Struk">
+                                            🖼️ Lihat
+                                        </button>
+                                    </div>
                                 @else
                                     <span style="color: var(--text-sub); font-size: 11px;">Tanpa Foto</span>
                                 @endif
@@ -703,5 +706,59 @@ function closeDiscrepancyModal() {
     const modal = document.getElementById('modal-discrepancy-resolution');
     if (modal) modal.style.display = 'none';
 }
+
+function openProofPreviewModal(url, receiptNo, meta, amount) {
+    const modal = document.getElementById('modal-proof-preview');
+    const img = document.getElementById('proof-modal-img');
+    const title = document.getElementById('proof-modal-title');
+    const subtitle = document.getElementById('proof-modal-subtitle');
+    const amt = document.getElementById('proof-modal-amount');
+    const dl = document.getElementById('proof-modal-download');
+
+    if (img) img.src = url;
+    if (title) title.innerText = 'Bukti Setoran: ' + receiptNo;
+    if (subtitle) subtitle.innerHTML = meta;
+    if (amt) amt.innerText = amount;
+    if (dl) dl.href = url;
+
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeProofPreviewModal() {
+    const modal = document.getElementById('modal-proof-preview');
+    const img = document.getElementById('proof-modal-img');
+    if (modal) modal.style.display = 'none';
+    if (img) img.src = '';
+}
 </script>
+
+{{-- MODAL PREVIEW FOTO BUKTI TRANSFER / SETORAN --}}
+<div id="modal-proof-preview" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(6px); align-items: center; justify-content: center; padding: 16px;">
+    <div style="background: #1e293b; border: 1px solid var(--border-color); border-radius: 16px; width: 100%; max-width: 620px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); overflow: hidden; display: flex; flex-direction: column; max-height: 90vh;">
+        <div style="padding: 14px 18px; background: rgba(16, 185, 129, 0.15); border-bottom: 1px solid rgba(16, 185, 129, 0.3); display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 18px;">📸</span>
+                <div>
+                    <h4 id="proof-modal-title" style="margin: 0; font-size: 14px; font-weight: 700; color: #34d399;">Bukti Transfer Setoran</h4>
+                    <span id="proof-modal-subtitle" style="font-size: 11px; color: #94a3b8;">-</span>
+                </div>
+            </div>
+            <button type="button" onclick="closeProofPreviewModal()" style="background: transparent; border: none; color: #94a3b8; font-size: 20px; cursor: pointer; padding: 4px;">✕</button>
+        </div>
+        <div style="padding: 16px; overflow-y: auto; text-align: center; background: #0f172a;">
+            <img id="proof-modal-img" src="" alt="Bukti Transfer" style="max-width: 100%; max-height: 60vh; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1); object-fit: contain; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+        </div>
+        <div style="padding: 12px 18px; background: #1e293b; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+            <span id="proof-modal-amount" style="font-family: monospace; font-weight: 700; color: #10b981; font-size: 14px;">-</span>
+            <div style="display: flex; gap: 8px;">
+                <a id="proof-modal-download" href="#" target="_blank" class="btn-action-sm" style="background: rgba(56, 189, 248, 0.2); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; text-decoration: none;">
+                    ↗ Buka Tab Baru
+                </a>
+                <button type="button" onclick="closeProofPreviewModal()" class="btn-action-sm" style="background: rgba(255, 255, 255, 0.08); color: #cbd5e1; cursor: pointer;">
+                    Tutup
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection

@@ -758,7 +758,7 @@
                 </div>
                 <button type="button" onclick="closeModalSetorKas()" style="background: transparent; border: none; color: #fff; font-size: 18px; cursor: pointer; font-weight: 700;">✕</button>
             </div>
-            <form action="{{ route('presensi2.serah-terima.store') }}" method="POST" style="padding: 18px 20px;">
+            <form action="{{ route('presensi2.serah-terima.store') }}" method="POST" enctype="multipart/form-data" style="padding: 18px 20px;">
                 @csrf
                 <input type="hidden" name="action_type" value="setor">
                 <input type="hidden" name="summary_id" id="modal-setor-summary-id" value="{{ $salesSummary?->id }}">
@@ -784,6 +784,15 @@
                     <input type="text" name="deposit_recipient" id="modal-setor-recipient" required placeholder="Contoh: BCA MayaNet 12345678 / Kolektor Pak Budi"
                            value="BCA MayaNet Pusat"
                            style="width: 100%; background: #1e293b; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; padding: 9px 12px; color: #fff; font-size: 12.5px; outline: none;">
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 11.5px; color: #cbd5e1; margin-bottom: 5px; font-weight: 600;">📸 Unggah Foto Bukti Transfer / Amplop (Opsional)</label>
+                    <input type="file" name="deposit_proof" accept="image/*"
+                           style="width: 100%; background: #1e293b; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; padding: 7px 10px; color: #fff; font-size: 12px; outline: none;">
+                    <small style="color: #94a3b8; font-size: 10.5px; display: block; margin-top: 3px;">
+                        Foto struk ATM, tangkapan layar m-Banking, atau amplop setoran.
+                    </small>
                 </div>
 
                 <div style="margin-bottom: 16px;">

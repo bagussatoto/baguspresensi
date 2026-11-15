@@ -6997,8 +6997,7 @@ BAT;
         $actionType = $request->input('action_type', 'handover');
         $isSetorAction = ($actionType === 'setor');
 
-        // Selalu perbarui informasi Serah Terima Shift dan kunci transaksi penjualan shift ini
-        $summary->update([
+        $handoverUpdate = [
             'handover_status' => 'completed',
             'handover_amount' => $depositedAmount,
             'retained_drawer_cash' => $retainedCash,
@@ -7011,7 +7010,11 @@ BAT;
             'is_sales_locked' => true,
             'locked_sales_amount' => $summary->total_fnb_sales ?: (float) CafeSale::whereDate('created_at', $workDate->toDateString())->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->where('payment_status', '!=', 'cancelled')->sum('net_amount'),
             'locked_sales_at' => $now,
-        ]);
+        ];
+        if ($proofPath) {
+            $handoverUpdate['deposit_proof'] = $proofPath;
+        }
+        $summary->update($handoverUpdate);
 
         // Kunci seluruh transaksi CafeSale pada shift ini
         CafeSale::whereDate('created_at', $workDate->toDateString())
@@ -7060,7 +7063,7 @@ BAT;
 
             foreach ($otherSummaries as $otherSum) {
                 $otherSumAmount = (float) $otherSum->handoverAmount();
-                $otherSum->update([
+                $otherSumUpdate = [
                     'deposit_status' => 'pending_verification',
                     'deposit_receipt_no' => $receiptNo,
                     'deposit_batch_id' => $batchId,
@@ -7069,10 +7072,14 @@ BAT;
                     'deposit_recipient' => $recipient,
                     'deposit_notes' => $depositNotes." (Batch Setor: {$receiptNo})",
                     'deposited_at' => $now,
-                ]);
+                ];
+                if ($proofPath) {
+                    $otherSumUpdate['deposit_proof'] = $proofPath;
+                }
+                $otherSum->update($otherSumUpdate);
             }
 
-            $summary->update([
+            $summaryDepositUpdate = [
                 'deposit_status' => 'pending_verification',
                 'deposit_receipt_no' => $receiptNo,
                 'deposit_batch_id' => $batchId,
@@ -7081,7 +7088,11 @@ BAT;
                 'deposit_recipient' => $recipient,
                 'deposit_notes' => $depositNotes,
                 'deposited_at' => $now,
-            ]);
+            ];
+            if ($proofPath) {
+                $summaryDepositUpdate['deposit_proof'] = $proofPath;
+            }
+            $summary->update($summaryDepositUpdate);
 
             rescue(fn () => AuditLog::create([
                 'user_id' => auth()->id(),

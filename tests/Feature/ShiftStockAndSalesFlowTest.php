@@ -1790,4 +1790,86 @@ class ShiftStockAndSalesFlowTest extends TestCase
             'status' => 'posted',
         ]);
     }
+
+    public function test_cashier_can_upload_deposit_proof_image_and_admin_can_preview_and_verify(): void
+    {
+        $this->clockInStaff();
+        $today = Carbon::today();
+
+        $summary = ShiftSalesSummary::create([
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift->id,
+            'work_date' => $today->toDateString(),
+            'total_fnb_sales' => 150000,
+            'total_internet_sales' => 50000,
+            'total_revenue' => 200000,
+            'cash_in_drawer' => 200000,
+            'system_expected_cash' => 200000,
+            'blind_cash_count' => 200000,
+            'cash_difference' => 0,
+            'status' => 'closed',
+            'closed_at' => Carbon::now(),
+        ]);
+
+        $fakeProof = UploadedFile::fake()->image('bukti_transfer_bca.jpg', 600, 400);
+
+        // 1. Kasir kirim setoran kas beserta file bukti foto
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->post(route('presensi2.serah-terima.store'), [
+                'action_type' => 'setor',
+                'summary_id' => $summary->id,
+                'deposit_method' => 'bank_transfer',
+                'deposited_amount' => 200000,
+                'deposit_recipient' => 'BCA MayaNet Pusat 12345678',
+                'deposit_notes' => 'Setoran kas via m-banking BCA',
+                'deposit_proof' => $fakeProof,
+            ]);
+
+        $response->assertRedirect();
+
+        $summary->refresh();
+        $this->assertEquals('pending_verification', $summary->deposit_status);
+        $this->assertNotNull($summary->deposit_proof);
+        $this->assertStringContainsString('uploads/deposits/deposit_', $summary->deposit_proof);
+
+        $proofUrl = $summary->depositProofUrl();
+        $this->assertNotNull($proofUrl);
+        $this->assertStringContainsString('uploads/deposits/', $proofUrl);
+
+        // File fisik tersimpan di public_path
+        $fullPath = public_path($summary->deposit_proof);
+        $this->assertFileExists($fullPath);
+
+        // 2. Admin membuka antrean verifikasi setoran
+        $adminUser = User::first() ?? User::factory()->create([
+            'role' => AdminRole::SuperAdmin,
+        ]);
+
+        $adminPageResponse = $this->actingAs($adminUser)
+            ->withSession(['admin_role' => 'Super Admin', 'admin_logged_in' => true])
+            ->get(route('admin.penjualan.serah-terima'));
+
+        $adminPageResponse->assertStatus(200);
+        $adminPageResponse->assertSee($summary->deposit_receipt_no);
+        $adminPageResponse->assertSee('openProofPreviewModal', false);
+        $adminPageResponse->assertSee($summary->deposit_proof, false);
+
+        // 3. Admin verifikasi penerimaan setoran
+        $verifyResponse = $this->actingAs($adminUser)
+            ->withSession(['admin_role' => 'Super Admin', 'admin_logged_in' => true])
+            ->post(route('admin.penjualan.verify-setor', $summary->id), [
+                'deposit_status' => 'verified',
+                'notes' => 'Dana telah cocok dengan mutasi rekening bank',
+            ]);
+
+        $verifyResponse->assertRedirect();
+        $summary->refresh();
+        $this->assertEquals('verified', $summary->deposit_status);
+
+        // Cleanup file uji coba
+        if (file_exists($fullPath)) {
+            @unlink($fullPath);
+        }
+    }
 }

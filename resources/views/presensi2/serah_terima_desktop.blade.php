@@ -1230,7 +1230,7 @@
                 <span>🏦 Setor Kas Shift (Bank / Brankas / Kolektor)</span>
                 <button type="button" onclick="closeModalSetorKas()" style="background: transparent; border: none; color: #fff; font-size: 18px; cursor: pointer; font-weight: 700;">✕</button>
             </div>
-            <form action="{{ route('presensi2.serah-terima.store') }}" method="POST" style="padding: 18px 20px;">
+            <form action="{{ route('presensi2.serah-terima.store') }}" method="POST" enctype="multipart/form-data" style="padding: 18px 20px;">
                 @csrf
                 <input type="hidden" name="action_type" value="setor">
                 <input type="hidden" name="summary_id" id="modal-setor-summary-id" value="{{ $salesSummary?->id }}">
@@ -1257,6 +1257,19 @@
                            class="form-control"
                            placeholder="Contoh: BCA MayaNet 12345678 / Kolektor Pak Budi"
                            value="BCA MayaNet Pusat">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">📸 Unggah Foto Bukti Transfer / Amplop Setoran (Opsional)</label>
+                    <input type="file" name="deposit_proof" id="modal-setor-proof" accept="image/*"
+                           class="form-control" style="padding: 6px 10px; font-size: 12px; background: #fff;"
+                           onchange="previewDepositProof(this)">
+                    <small style="color: #64748b; font-size: 11px; display: block; margin-top: 3px;">
+                        Unggah struk ATM, tangkapan layar m-Banking, atau foto fisik amplop setoran (Format: JPG, PNG, WebP maks 5MB).
+                    </small>
+                    <div id="modal-setor-preview-wrap" style="display: none; margin-top: 8px;">
+                        <img id="modal-setor-preview-img" src="" alt="Pratinjau Bukti" style="max-height: 120px; border-radius: 6px; border: 1px solid #cbd5e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -1681,6 +1694,24 @@
         function closeModalSetorKas() {
             var modal = document.getElementById('modal-setor-kas');
             if (modal) modal.style.display = 'none';
+        }
+
+        function previewDepositProof(input) {
+            var wrap = document.getElementById('modal-setor-preview-wrap');
+            var img = document.getElementById('modal-setor-preview-img');
+            if (!wrap || !img) return;
+
+            if (input.files && input.files[0]) {
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    img.src = e.target.result;
+                    wrap.style.display = 'block';
+                };
+                reader.readAsDataURL(input.files[0]);
+            } else {
+                img.src = '';
+                wrap.style.display = 'none';
+            }
         }
 
         // 7. Modal Thermal Receipt Preview
