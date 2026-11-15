@@ -22,7 +22,11 @@ class AdminErpHubTest extends TestCase
         $response->assertSee('id="erpFloatingBadge"', false);
         $response->assertSee('id="erpSoundToggleBtn"', false);
         $response->assertSee('id="erpToastContainer"', false);
+        $response->assertSee('Semua Fitur');
         $response->assertSee('id="filterBadgeAll"', false);
+        $response->assertSee('id="filterBadgeAllCount"', false);
+        $response->assertSee('id="filterBtnUrgent"', false);
+        $response->assertSee('id="urgentBtnLabel"', false);
         $response->assertSee('id="filterBadgePos"', false);
         $response->assertSee('id="filterBadgeSupply"', false);
         $response->assertSee('id="filterBadgeHr"', false);

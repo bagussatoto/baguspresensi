@@ -591,6 +591,43 @@
         font-weight: 800;
         margin-left: 6px;
     }
+    .badge-pending-text {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: #f43f5e;
+        color: #ffffff;
+        padding: 2px 8px;
+        border-radius: 9999px;
+        font-size: 11px;
+        font-weight: 700;
+        margin-left: 6px;
+        letter-spacing: 0.2px;
+        animation: pulseAlert 2.2s infinite ease-in-out;
+    }
+    .badge-pending-text .pulse-mini {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #ffffff;
+        animation: erpPulse 1.5s infinite;
+    }
+    .erp-pill-btn.btn-pill-urgent {
+        background: rgba(244, 63, 94, 0.15);
+        border-color: rgba(244, 63, 94, 0.4);
+        color: #fb7185;
+    }
+    .erp-pill-btn.btn-pill-urgent:hover {
+        background: rgba(244, 63, 94, 0.25);
+        border-color: #f43f5e;
+        color: #ffffff;
+    }
+    .erp-pill-btn.btn-pill-urgent.active {
+        background: #f43f5e;
+        border-color: #f43f5e;
+        color: #ffffff;
+        box-shadow: 0 0 14px rgba(244, 63, 94, 0.5);
+    }
 
     /* FLOATING QUEUE WIDGET & SOUND TOGGLE */
     #erpFloatingQueueWidget {
@@ -866,8 +903,13 @@
 
     <div class="erp-filter-pills">
         <button type="button" class="erp-pill-btn active" data-filter="all">
-            <span>🌐</span> Semua Modul ({{ $allModulesCount }})
-            <span class="pill-count-badge" id="filterBadgeAll" style="{{ $totalTriagePending > 0 ? '' : 'display: none;' }}">{{ $totalTriagePending }}</span>
+            <span>🌐</span> Semua Fitur ({{ $allModulesCount }})
+            <span class="badge-pending-text" id="filterBadgeAll" style="{{ $totalTriagePending > 0 ? '' : 'display: none;' }}">
+                <span class="pulse-mini"></span> <span id="filterBadgeAllCount">{{ $totalTriagePending }}</span> Menunggu
+            </span>
+        </button>
+        <button type="button" class="erp-pill-btn btn-pill-urgent" id="filterBtnUrgent" data-filter="urgent" style="{{ $totalTriagePending > 0 ? '' : 'display: none;' }}">
+            <span>🚨</span> <span id="urgentBtnLabel">Perlu Tindakan ({{ $totalTriagePending }})</span>
         </button>
         <button type="button" class="erp-pill-btn" data-filter="master_data">
             <span>🗄️</span> 1. Master Data
@@ -1059,7 +1101,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 const desc = card.dataset.desc;
                 const code = card.dataset.code;
                 const matchesSearch = !query || title.includes(query) || desc.includes(query) || code.includes(query);
-                const matchesPillar = currentFilter === 'all' || currentFilter === pillarKey;
+                const isPending = Number(card.dataset.pending || 0) > 0;
+                const matchesPillar = currentFilter === 'all'
+                    || (currentFilter === 'urgent' && isPending)
+                    || currentFilter === pillarKey;
 
                 if (matchesSearch && matchesPillar) {
                     card.style.display = 'flex';
@@ -1296,13 +1341,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // 5. Update Category Filter Pills
         const filterBadgeAll = document.getElementById('filterBadgeAll');
+        const filterBadgeAllCount = document.getElementById('filterBadgeAllCount');
+        const filterBtnUrgent = document.getElementById('filterBtnUrgent');
+        const urgentBtnLabel = document.getElementById('urgentBtnLabel');
         const filterBadgePos = document.getElementById('filterBadgePos');
         const filterBadgeSupply = document.getElementById('filterBadgeSupply');
         const filterBadgeHr = document.getElementById('filterBadgeHr');
 
-        if (filterBadgeAll) {
-            filterBadgeAll.textContent = total;
+        if (filterBadgeAll && filterBadgeAllCount) {
+            filterBadgeAllCount.textContent = total;
             filterBadgeAll.style.display = total > 0 ? 'inline-flex' : 'none';
+        }
+        if (filterBtnUrgent && urgentBtnLabel) {
+            urgentBtnLabel.textContent = `Perlu Tindakan (${total})`;
+            filterBtnUrgent.style.display = total > 0 ? 'inline-flex' : 'none';
         }
         if (filterBadgePos) {
             const posTotal = (metrics.pending_billing_adjustments ?? 0) + (metrics.pending_shift_deposits ?? 0);
@@ -1352,6 +1404,10 @@ document.addEventListener('DOMContentLoaded', function () {
         setModuleCardQueue('mod-persetujuan-sdm', metrics.pending_employee_approvals ?? 0, 'Approval SDM');
         setModuleCardQueue('mod-verifikasi-karyawan', metrics.pending_registrations ?? 0, 'Verifikasi Staf');
         setModuleCardQueue('mod-reset-pin', metrics.pending_password_resets ?? 0, 'Reset PIN');
+
+        if (currentFilter === 'urgent') {
+            filterModules();
+        }
     }
 
     function pollQueueMetrics() {
