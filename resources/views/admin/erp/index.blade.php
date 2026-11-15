@@ -545,6 +545,53 @@
         background: rgba(244, 63, 94, 0.16);
     }
 
+    /* PENDING QUEUE BADGES ON ERP FEATURE MODULES */
+    .erp-module-card.card-has-queue {
+        border-color: rgba(244, 63, 94, 0.6) !important;
+        background: linear-gradient(180deg, rgba(244, 63, 94, 0.12) 0%, rgba(30, 41, 59, 0.95) 100%) !important;
+        box-shadow: 0 0 20px rgba(244, 63, 94, 0.25) !important;
+        position: relative;
+    }
+    .badge-queue-pending {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #f43f5e;
+        color: #ffffff;
+        padding: 3px 9px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        box-shadow: 0 2px 8px rgba(244, 63, 94, 0.5);
+        letter-spacing: 0.2px;
+        animation: pulseAlert 2.2s infinite ease-in-out;
+    }
+    .badge-queue-pending .pulse-mini {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #ffffff;
+        animation: erpPulse 1.5s infinite;
+    }
+    @keyframes pulseAlert {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.04); box-shadow: 0 2px 12px rgba(244, 63, 94, 0.7); }
+    }
+    .pill-count-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border-radius: 9999px;
+        background: #f43f5e;
+        color: #ffffff;
+        font-size: 10px;
+        font-weight: 800;
+        margin-left: 6px;
+    }
+
     /* FLOATING QUEUE WIDGET & SOUND TOGGLE */
     #erpFloatingQueueWidget {
         position: fixed;
@@ -807,27 +854,41 @@
         <input type="text" id="erpFeatureSearch" class="erp-search-input" placeholder="Cari fitur ERP cepat... (contoh: kasir, coa, stok, jadwal, pelanggan, supplier, transfer, password, audit)" autocomplete="off">
     </div>
 
+    @php
+        $allModulesCount = 0;
+        foreach ($erpModules as $p) {
+            $allModulesCount += count($p['modules']);
+        }
+        $posPending = ($pendingBillingAdjustments ?? 0) + ($pendingShiftDepositsCount ?? 0);
+        $scPending = ($pendingStockTransfers ?? 0) + ($pendingStockRequestsCount ?? 0);
+        $hrPending = ($employeeApprovalsTotal ?? 0) + ($pendingRegistrations ?? 0) + ($pendingPasswordResets ?? 0);
+    @endphp
+
     <div class="erp-filter-pills">
         <button type="button" class="erp-pill-btn active" data-filter="all">
-            <span>🌐</span> Semua Modul (26)
+            <span>🌐</span> Semua Modul ({{ $allModulesCount }})
+            <span class="pill-count-badge" id="filterBadgeAll" style="{{ $totalTriagePending > 0 ? '' : 'display: none;' }}">{{ $totalTriagePending }}</span>
         </button>
         <button type="button" class="erp-pill-btn" data-filter="master_data">
             <span>🗄️</span> 1. Master Data
         </button>
         <button type="button" class="erp-pill-btn" data-filter="pos_sales">
-            <span>🛒</span> 2. POS Kasir & Billing
+            <span>🛒</span> 2. POS Kasir &amp; Billing
+            <span class="pill-count-badge" id="filterBadgePos" style="{{ $posPending > 0 ? '' : 'display: none;' }}">{{ $posPending }}</span>
         </button>
         <button type="button" class="erp-pill-btn" data-filter="supply_chain">
-            <span>📦</span> 3. Gudang & Logistik
+            <span>📦</span> 3. Gudang &amp; Logistik
+            <span class="pill-count-badge" id="filterBadgeSupply" style="{{ $scPending > 0 ? '' : 'display: none;' }}">{{ $scPending }}</span>
         </button>
         <button type="button" class="erp-pill-btn" data-filter="human_resource">
-            <span>👥</span> 4. SDM & Presensi
+            <span>👥</span> 4. SDM &amp; Presensi
+            <span class="pill-count-badge" id="filterBadgeHr" style="{{ $hrPending > 0 ? '' : 'display: none;' }}">{{ $hrPending }}</span>
         </button>
         <button type="button" class="erp-pill-btn" data-filter="finance_accounting">
-            <span>💰</span> 5. Keuangan & COA
+            <span>💰</span> 5. Keuangan &amp; COA
         </button>
         <button type="button" class="erp-pill-btn" data-filter="security_governance">
-            <span>🛡️</span> 6. Keamanan & RBAC
+            <span>🛡️</span> 6. Keamanan &amp; RBAC
         </button>
     </div>
 </div>
@@ -853,11 +914,16 @@
 
         <div class="erp-modules-grid">
             @foreach($pillar['modules'] as $mod)
-            <div class="erp-module-card {{ !empty($mod['is_featured']) ? 'featured-card' : '' }}" 
+            @php
+                $modPending = (int) ($mod['pending_count'] ?? 0);
+            @endphp
+            <div class="erp-module-card {{ !empty($mod['is_featured']) ? 'featured-card' : '' }} {{ $modPending > 0 ? 'card-has-queue' : '' }}" 
+                 id="{{ $mod['id'] }}"
                  data-title="{{ strtolower($mod['title']) }}" 
                  data-desc="{{ strtolower($mod['desc']) }}" 
                  data-code="{{ strtolower($mod['code']) }}"
-                 data-pillar="{{ $pillarKey }}">
+                 data-pillar="{{ $pillarKey }}"
+                 data-pending="{{ $modPending }}">
                 
                 <div>
                     <div class="erp-module-top">
@@ -866,7 +932,11 @@
                         </div>
                         <div class="erp-module-badges">
                             <span class="badge-code">{{ $mod['code'] }}</span>
-                            @if(!empty($mod['stat_badge']))
+                            @if($modPending > 0)
+                            <span class="badge-queue-pending">
+                                <span class="pulse-mini"></span> {{ $modPending }} {{ $mod['pending_label'] ?? 'Pending' }}
+                            </span>
+                            @elseif(!empty($mod['stat_badge']))
                             <span class="badge-stat {{ str_contains(strtolower($mod['stat_badge']), 'aktif') || str_contains(strtolower($mod['stat_badge']), 'hadir') ? 'stat-emerald' : (str_contains(strtolower($mod['stat_badge']), 'pending') || str_contains(strtolower($mod['stat_badge']), 'menunggu') ? 'stat-amber' : '') }}">
                                 {{ $mod['stat_badge'] }}
                             </span>
@@ -1223,6 +1293,65 @@ document.addEventListener('DOMContentLoaded', function () {
                 floatText.innerHTML = `<span id="floatingBadgeCount" style="color: #34d399;">Operasional Lancar</span>`;
             }
         }
+
+        // 5. Update Category Filter Pills
+        const filterBadgeAll = document.getElementById('filterBadgeAll');
+        const filterBadgePos = document.getElementById('filterBadgePos');
+        const filterBadgeSupply = document.getElementById('filterBadgeSupply');
+        const filterBadgeHr = document.getElementById('filterBadgeHr');
+
+        if (filterBadgeAll) {
+            filterBadgeAll.textContent = total;
+            filterBadgeAll.style.display = total > 0 ? 'inline-flex' : 'none';
+        }
+        if (filterBadgePos) {
+            const posTotal = (metrics.pending_billing_adjustments ?? 0) + (metrics.pending_shift_deposits ?? 0);
+            filterBadgePos.textContent = posTotal;
+            filterBadgePos.style.display = posTotal > 0 ? 'inline-flex' : 'none';
+        }
+        if (filterBadgeSupply) {
+            const scTotal = (metrics.pending_stock_transfers ?? 0) + (metrics.pending_stock_requests ?? 0);
+            filterBadgeSupply.textContent = scTotal;
+            filterBadgeSupply.style.display = scTotal > 0 ? 'inline-flex' : 'none';
+        }
+        if (filterBadgeHr) {
+            const hrTotal = (metrics.pending_employee_approvals ?? 0) + (metrics.pending_registrations ?? 0) + (metrics.pending_password_resets ?? 0);
+            filterBadgeHr.textContent = hrTotal;
+            filterBadgeHr.style.display = hrTotal > 0 ? 'inline-flex' : 'none';
+        }
+
+        // 6. Update Module Cards Realtime
+        function setModuleCardQueue(cardId, count, label) {
+            const card = document.getElementById(cardId);
+            if (!card) return;
+            card.dataset.pending = count;
+            if (count > 0) {
+                card.classList.add('card-has-queue');
+            } else {
+                card.classList.remove('card-has-queue');
+            }
+            const badgesWrap = card.querySelector('.erp-module-badges');
+            if (!badgesWrap) return;
+
+            let queueBadge = badgesWrap.querySelector('.badge-queue-pending');
+            if (count > 0) {
+                if (!queueBadge) {
+                    queueBadge = document.createElement('span');
+                    queueBadge.className = 'badge-queue-pending';
+                    badgesWrap.appendChild(queueBadge);
+                }
+                queueBadge.innerHTML = `<span class="pulse-mini"></span> ${count} ${label}`;
+            } else if (queueBadge) {
+                queueBadge.remove();
+            }
+        }
+
+        setModuleCardQueue('mod-penyesuaian-billing', metrics.pending_billing_adjustments ?? 0, 'Approval Billing');
+        setModuleCardQueue('mod-penjualan-admin', metrics.pending_shift_deposits ?? 0, 'Setoran Kas');
+        setModuleCardQueue('mod-distribusi-kirim', (metrics.pending_stock_transfers ?? 0) + (metrics.pending_stock_requests ?? 0), 'Kirim/Restock');
+        setModuleCardQueue('mod-persetujuan-sdm', metrics.pending_employee_approvals ?? 0, 'Approval SDM');
+        setModuleCardQueue('mod-verifikasi-karyawan', metrics.pending_registrations ?? 0, 'Verifikasi Staf');
+        setModuleCardQueue('mod-reset-pin', metrics.pending_password_resets ?? 0, 'Reset PIN');
     }
 
     function pollQueueMetrics() {

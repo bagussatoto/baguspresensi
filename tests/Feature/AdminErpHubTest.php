@@ -22,6 +22,10 @@ class AdminErpHubTest extends TestCase
         $response->assertSee('id="erpFloatingBadge"', false);
         $response->assertSee('id="erpSoundToggleBtn"', false);
         $response->assertSee('id="erpToastContainer"', false);
+        $response->assertSee('id="filterBadgeAll"', false);
+        $response->assertSee('id="filterBadgePos"', false);
+        $response->assertSee('id="filterBadgeSupply"', false);
+        $response->assertSee('id="filterBadgeHr"', false);
         $response->assertSee('Master Data &amp; Katalog Terpadu', false);
         $response->assertSee('POS Desktop Kasir &amp; Billing', false);
         $response->assertSee('Bagan Akun (Chart of Accounts / COA)');
@@ -63,6 +67,10 @@ class AdminErpHubTest extends TestCase
                 'pending_employee_approvals',
                 'pending_shift_deposits',
                 'pending_stock_transfers',
+                'pending_stock_requests',
+                'pending_billing_adjustments',
+                'pending_registrations',
+                'pending_password_resets',
             ],
             'pillars' => [
                 'master_data',
