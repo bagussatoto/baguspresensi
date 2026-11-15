@@ -709,6 +709,11 @@
             border: 1px solid rgba(244, 63, 94, 0.3);
         }
 
+        @keyframes erpPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.3; transform: scale(0.85); }
+        }
+
         /* SOP / ACCORDION CARDS */
         .sop-grid-container {
             display: grid;
@@ -940,6 +945,54 @@
         </div>
 
         <div class="sidebar-nav-container">
+            @php
+                $sidebarPendingRegistrations = \Illuminate\Support\Facades\Schema::hasTable('employee_registrations')
+                    ? \App\Models\EmployeeRegistration::where('status', 'pending')->count()
+                    : 0;
+                $sidebarPendingResets = \Illuminate\Support\Facades\Schema::hasTable('password_reset_requests')
+                    ? \App\Models\PasswordResetRequest::where('status', 'pending')->count()
+                    : 0;
+                $sidebarSdmPendingCount = $sidebarPendingRegistrations + $sidebarPendingResets;
+
+                $sidebarStockTransfersCount = $stockTransfersCount ?? (
+                    \Illuminate\Support\Facades\Schema::hasTable('stock_transfer_dispatches')
+                        ? \Illuminate\Support\Facades\DB::table('stock_transfer_dispatches')->where('status', '!=', 'received')->count()
+                        : 0
+                );
+
+                $sidebarStockRequestsCount = \Illuminate\Support\Facades\Schema::hasTable('shift_stock_requests')
+                    ? \App\Models\ShiftStockRequest::where('status', 'pending')->count()
+                    : 0;
+
+                $sidebarBillingPendingCount = \Illuminate\Support\Facades\Schema::hasTable('shift_sales_summaries')
+                    ? \App\Models\ShiftSalesSummary::where(function($q) {
+                        $q->where('billing_adjustment_status', 'pending_approval')
+                          ->orWhere('print_adjustment_status', 'pending_approval');
+                    })->count()
+                    : 0;
+
+                $sidebarPendingDepositsCount = \Illuminate\Support\Facades\Schema::hasTable('shift_sales_summaries')
+                    ? \App\Models\ShiftSalesSummary::where('deposit_status', 'pending_verification')->count()
+                    : 0;
+                $sidebarTotalSalesAlerts = $sidebarBillingPendingCount + $sidebarPendingDepositsCount;
+
+                $sidebarLeavesCount = \Illuminate\Support\Facades\Schema::hasTable('leave_requests')
+                    ? \App\Domains\Leave\Models\LeaveRequest::where('status', 'pending')->count()
+                    : 0;
+                $sidebarSwapsCount = \Illuminate\Support\Facades\Schema::hasTable('shift_swap_requests')
+                    ? \App\Domains\Attendance\Models\ShiftSwapRequest::where('status', 'pending_supervisor')->count()
+                    : 0;
+                $sidebarCorrectionsCount = \Illuminate\Support\Facades\Schema::hasTable('attendance_corrections')
+                    ? \App\Domains\Attendance\Models\AttendanceCorrection::where('status', 'pending')->count()
+                    : 0;
+                $sidebarOvertimesCount = \Illuminate\Support\Facades\Schema::hasTable('overtime_claims')
+                    ? \App\Domains\Attendance\Models\OvertimeClaim::where('status', 'pending')->count()
+                    : 0;
+                $sidebarTotalApprovals = $sidebarLeavesCount + $sidebarSwapsCount + $sidebarCorrectionsCount + $sidebarOvertimesCount;
+
+                $sidebarErpQueueCount = $sidebarSdmPendingCount + $sidebarStockTransfersCount + $sidebarStockRequestsCount + $sidebarTotalSalesAlerts + $sidebarTotalApprovals;
+            @endphp
+
             <div class="nav-category-header">PUSAT ERP TERPADU</div>
             <ul class="sidebar-menu sidebar-nav-list" style="margin-bottom: 12px;">
                 <li>
@@ -947,7 +1000,14 @@
                         <span class="nav-item-left">
                             <span>🏛️</span> <span style="font-weight: 700; color: #38bdf8;">Pusat Kendali ERP</span>
                         </span>
+                        @if($sidebarErpQueueCount > 0)
+                        <span class="badge-status badge-rose" style="font-size: 9px; padding: 2px 6px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">
+                            <span style="width: 5px; height: 5px; border-radius: 50%; background: #ffffff; animation: erpPulse 1.5s infinite;"></span>
+                            {{ $sidebarErpQueueCount }} Menunggu
+                        </span>
+                        @else
                         <span class="badge-status badge-emerald" style="font-size: 9px; padding: 2px 6px;">SEMUA FITUR</span>
+                        @endif
                     </a>
                 </li>
             </ul>
@@ -965,15 +1025,6 @@
                 </li>
 
                 {{-- 1. DATA (DENGAN SUB-ITEM & BADGE ANTREAN) --}}
-                @php
-                    $sidebarPendingRegistrations = \Illuminate\Support\Facades\Schema::hasTable('employee_registrations')
-                        ? \App\Models\EmployeeRegistration::where('status', 'pending')->count()
-                        : 0;
-                    $sidebarPendingResets = \Illuminate\Support\Facades\Schema::hasTable('password_reset_requests')
-                        ? \App\Models\PasswordResetRequest::where('status', 'pending')->count()
-                        : 0;
-                    $sidebarSdmPendingCount = $sidebarPendingRegistrations + $sidebarPendingResets;
-                @endphp
                 <li>
                     <a href="{{ route('admin.data') }}" class="nav-link-item {{ request()->routeIs('admin.data') ? 'active' : '' }}" onclick="toggleSubMenu('data-submenu', event)">
                         <span class="nav-item-left">
@@ -1017,13 +1068,6 @@
                 </li>
 
                 {{-- 2. PENERIMAAN STOK DISTRIBUSI --}}
-                @php
-                    $sidebarStockTransfersCount = $stockTransfersCount ?? (
-                        \Illuminate\Support\Facades\Schema::hasTable('stock_transfer_dispatches')
-                            ? \Illuminate\Support\Facades\DB::table('stock_transfer_dispatches')->where('status', '!=', 'received')->count()
-                            : 0
-                    );
-                @endphp
                 <li>
                     <a href="{{ route('admin.distribusi') }}" class="nav-link-item {{ request()->routeIs('admin.distribusi') ? 'active' : '' }}">
                         <span class="nav-item-left">
@@ -1071,14 +1115,6 @@
                 </li>
 
                 {{-- 6. PENYESUAIAN BILLING & VERIFIKASI KAS --}}
-                @php
-                    $sidebarBillingPendingCount = \App\Models\ShiftSalesSummary::where(function($q) {
-                        $q->where('billing_adjustment_status', 'pending_approval')
-                          ->orWhere('print_adjustment_status', 'pending_approval');
-                    })->count();
-                    $sidebarPendingDepositsCount = \App\Models\ShiftSalesSummary::where('deposit_status', 'pending_verification')->count();
-                    $sidebarTotalSalesAlerts = $sidebarBillingPendingCount + $sidebarPendingDepositsCount;
-                @endphp
                 <li>
                     <a href="{{ route('admin.penjualan.penyesuaian-billing') }}" class="nav-link-item {{ request()->routeIs('admin.penjualan.penyesuaian-billing*') || request()->routeIs('admin.penjualan.serah-terima*') ? 'active' : '' }}">
                         <span class="nav-item-left">
@@ -1093,21 +1129,6 @@
                 </li>
 
                 {{-- 7. APPROVAL PERMOHONAN & TUKAR SHIFT KARYAWAN --}}
-                @php
-                    $sidebarLeavesCount = \Illuminate\Support\Facades\Schema::hasTable('leave_requests')
-                        ? \App\Domains\Leave\Models\LeaveRequest::where('status', 'pending')->count()
-                        : 0;
-                    $sidebarSwapsCount = \Illuminate\Support\Facades\Schema::hasTable('shift_swap_requests')
-                        ? \App\Domains\Attendance\Models\ShiftSwapRequest::where('status', 'pending_supervisor')->count()
-                        : 0;
-                    $sidebarCorrectionsCount = \Illuminate\Support\Facades\Schema::hasTable('attendance_corrections')
-                        ? \App\Domains\Attendance\Models\AttendanceCorrection::where('status', 'pending')->count()
-                        : 0;
-                    $sidebarOvertimesCount = \Illuminate\Support\Facades\Schema::hasTable('overtime_claims')
-                        ? \App\Domains\Attendance\Models\OvertimeClaim::where('status', 'pending')->count()
-                        : 0;
-                    $sidebarTotalApprovals = $sidebarLeavesCount + $sidebarSwapsCount + $sidebarCorrectionsCount + $sidebarOvertimesCount;
-                @endphp
                 <li>
                     <a href="{{ route('admin.presensi.approval') }}" class="nav-link-item {{ request()->routeIs('admin.presensi.approval*') ? 'active' : '' }}">
                         <span class="nav-item-left">
