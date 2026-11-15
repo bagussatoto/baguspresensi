@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Domains\Employee\Models\Shift;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -175,33 +176,32 @@ class PosThermalVoidSlipTest extends TestCase
             'status' => 'completed',
         ]);
 
-        // Eksekusi pembatalan via route presensi2.penjualan.batal
+        // 1. Kasir mengajukan pembatalan tanpa PIN Supervisor -> masuk antrean Admin (pending_approval)
         $response = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
             ->postJson(route('presensi2.penjualan.batal', ['sale' => $sale->id]), [
                 'reason' => 'Salah klik varian minuman oleh kasir',
-                'supervisor_pin' => '998877',
             ]);
 
         $response->assertStatus(200);
         $response->assertJson([
             'success' => true,
-            'payment_status' => 'cancelled',
+            'pending_approval' => true,
+            'void_status' => 'pending_approval',
+            'payment_status' => 'paid',
             'invoice_number' => 'INV-VOID-TEST-001',
         ]);
 
-        $json = $response->json();
-        $this->assertArrayHasKey('void_data', $json);
-        $this->assertEquals('INV-VOID-TEST-001', $json['void_data']['invoice_number']);
-        $this->assertEquals('Salah klik varian minuman oleh kasir', $json['void_data']['reason']);
-        $this->assertEquals('Pak Joko Supervisor', $json['void_data']['supervisor_name']);
-        $this->assertEquals('Bagus Kasir', $json['void_data']['cashier_name']);
-        $this->assertCount(1, $json['void_data']['items']);
-        $this->assertEquals(15000.0, $json['void_data']['net_amount']);
+        // 2. Admin menyetujui antrean Void -> status berubah menjadi cancelled
+        $admin = User::factory()->create();
+        $approveResponse = $this->actingAs($admin)
+            ->postJson(route('admin.penjualan.void.approve', ['sale' => $sale->id]));
+        $approveResponse->assertStatus(200);
+        $approveResponse->assertJson(['success' => true]);
 
         // Verifikasi database
         $freshSale = $sale->fresh();
         $this->assertEquals('cancelled', $freshSale->payment_status);
-        $this->assertEquals($this->supervisor->id, $freshSale->void_by);
+        $this->assertEquals('approved', $freshSale->void_status);
         $this->assertNotNull($freshSale->void_at);
     }
 

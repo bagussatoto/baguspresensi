@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Modules\Kas\Domain\Services\AutoJournalService;
 use Modules\MasterData\Domain\Models\Branch;
@@ -20,6 +21,8 @@ use Modules\MasterData\Domain\Models\CafeSale;
 use Modules\MasterData\Domain\Models\Employee;
 use Modules\MasterData\Domain\Models\PcStation;
 use Modules\MasterData\Domain\Models\ProductVariant;
+use Modules\MasterData\Domain\Models\StockInventory;
+use Modules\MasterData\Domain\Models\Warehouse;
 use Modules\MasterData\Domain\Services\CafeCheckoutService;
 
 /**
@@ -217,15 +220,24 @@ class AdminSaleController extends Controller
             'payment_status' => ['sometimes', 'string', 'in:paid,pending,cancelled'],
             'payment_method' => ['sometimes', 'string', 'in:cash,qris,transfer,debit'],
             'cashier_notes' => ['nullable', 'string', 'max:500'],
+            'reason' => ['nullable', 'string', 'max:500'],
         ]);
+
+        if (($validated['payment_status'] ?? null) === 'cancelled') {
+            $nonStatusUpdates = array_diff_key($validated, ['payment_status' => true, 'reason' => true]);
+            if ($nonStatusUpdates !== []) {
+                $sale->update($nonStatusUpdates);
+            }
+
+            return $this->queueVoidResponse($request, $sale, (string) ($validated['reason'] ?? 'Pengajuan pembatalan dari Admin Penjualan'));
+        }
 
         $sale->update($validated);
 
-        // Sinkronisasi status payment jika diubah ke cancelled
+        // Sinkronisasi status payment jika diubah
         if (isset($validated['payment_status'])) {
             $paymentStatus = match ($validated['payment_status']) {
                 'paid' => 'completed',
-                'cancelled' => 'refunded',
                 default => 'pending',
             };
             CafePayment::where('cafe_sale_id', $sale->id)->update(['status' => $paymentStatus]);
@@ -249,13 +261,17 @@ class AdminSaleController extends Controller
     {
         $validated = $request->validate([
             'status' => ['required', 'string', 'in:paid,pending,cancelled'],
+            'reason' => ['nullable', 'string', 'max:500'],
         ]);
+
+        if ($validated['status'] === 'cancelled') {
+            return $this->queueVoidResponse($request, $sale, (string) ($validated['reason'] ?? 'Pengajuan pembatalan dari Admin Penjualan'));
+        }
 
         $sale->update(['payment_status' => $validated['status']]);
 
         $paymentStatus = match ($validated['status']) {
             'paid' => 'completed',
-            'cancelled' => 'refunded',
             default => 'pending',
         };
         CafePayment::where('cafe_sale_id', $sale->id)->update(['status' => $paymentStatus]);
@@ -407,6 +423,22 @@ class AdminSaleController extends Controller
             ->limit(20)
             ->get();
 
+        $pendingVoidRequests = CafeSale::with(['employee', 'branch', 'items'])
+            ->when($assignedBranchId, fn ($q) => $q->where('branch_id', $assignedBranchId))
+            ->where('void_status', 'pending_approval')
+            ->where('payment_status', '!=', 'cancelled')
+            ->orderByDesc('void_requested_at')
+            ->orderByDesc('id')
+            ->get();
+
+        $processedVoidRequests = CafeSale::with(['employee', 'branch', 'voidBy'])
+            ->when($assignedBranchId, fn ($q) => $q->where('branch_id', $assignedBranchId))
+            ->whereIn('void_status', ['approved', 'rejected'])
+            ->orderByDesc('void_reviewed_at')
+            ->orderByDesc('id')
+            ->limit(30)
+            ->get();
+
         $profileData = AdminDashboardController::getProfileData($request);
 
         return view('admin.penjualan.penyesuaian-billing', compact(
@@ -417,8 +449,234 @@ class AdminSaleController extends Controller
             'lockedShiftSummaries',
             'pendingDeposits',
             'verifiedDeposits',
+            'pendingVoidRequests',
+            'processedVoidRequests',
             'profileData'
         ));
+    }
+
+    /**
+     * Masukkan transaksi ke antrean persetujuan Void tanpa membatalkannya secara langsung.
+     */
+    private function queueVoidResponse(Request $request, CafeSale $sale, string $reason): JsonResponse|RedirectResponse
+    {
+        if ($sale->payment_status === 'cancelled') {
+            $msg = "Transaksi {$sale->invoice_number} sudah dibatalkan sebelumnya.";
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('warning', $msg);
+        }
+
+        if ($sale->is_locked) {
+            $msg = "Transaksi {$sale->invoice_number} sudah DIKUNCI oleh rekapitulasi shift dan tidak dapat diajukan pembatalan.";
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('error', $msg);
+        }
+
+        $requesterName = auth()->user()?->name ?? 'Admin';
+        $cleanReason = trim($reason) !== '' ? trim($reason) : 'Pengajuan pembatalan transaksi';
+
+        $sale->update([
+            'void_status' => 'pending_approval',
+            'void_reason' => $cleanReason,
+            'void_requested_by' => $requesterName,
+            'void_requested_at' => now(),
+            'void_rejected_reason' => null,
+        ]);
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => CafeSale::class,
+            'auditable_id' => $sale->id,
+            'action' => 'pos_sale_void_requested',
+            'new_values' => [
+                'invoice_number' => $sale->invoice_number,
+                'requested_by' => $requesterName,
+                'reason' => $cleanReason,
+                'requested_at' => now()->toDateTimeString(),
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Admin ERP',
+            'created_at' => now(),
+        ]));
+
+        $message = "Pengajuan pembatalan (Void) {$sale->invoice_number} masuk ke antrean persetujuan. Status transaksi belum dibatalkan sebelum disetujui.";
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'pending_approval' => true,
+                'void_status' => 'pending_approval',
+                'payment_status' => $sale->payment_status,
+                'message' => $message,
+                'redirect_url' => route('admin.penjualan.penyesuaian-billing'),
+                'sale' => $sale->fresh(['items', 'payments', 'employee', 'pcStation']),
+            ]);
+        }
+
+        return redirect()->route('admin.penjualan.penyesuaian-billing')->with('success', $message);
+    }
+
+    /**
+     * Setujui pengajuan pembatalan (Void) dari antrean: ubah ke cancelled, kembalikan stok, & catat jurnal.
+     */
+    public function approveVoidRequest(Request $request, CafeSale $sale): JsonResponse|RedirectResponse
+    {
+        if ($sale->payment_status === 'cancelled' || $sale->void_status !== 'pending_approval') {
+            $msg = "Transaksi {$sale->invoice_number} tidak sedang berada di antrean persetujuan Void.";
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('warning', $msg);
+        }
+
+        if ($sale->is_locked) {
+            $msg = "Transaksi {$sale->invoice_number} telah DIKUNCI oleh rekapitulasi shift sehingga pembatalan tidak dapat disetujui.";
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('error', $msg);
+        }
+
+        $reviewerName = auth()->user()?->name ?? 'Admin';
+        $reviewerEmployee = auth()->check()
+            ? Employee::where('email', auth()->user()->email)->first()
+            : null;
+        $reason = $sale->void_reason ?: 'Pembatalan transaksi disetujui Admin';
+
+        DB::transaction(function () use ($sale, $reviewerName, $reviewerEmployee, $reason): void {
+            $cancelNote = '[VOID APPROVED: '.$reason.' - Disetujui oleh '.$reviewerName.' pada '.now()->format('d/m/Y H:i:s').']';
+            $updatedNotes = $sale->cashier_notes ? $sale->cashier_notes.' | '.$cancelNote : $cancelNote;
+
+            $sale->update([
+                'payment_status' => 'cancelled',
+                'void_status' => 'approved',
+                'void_by' => $reviewerEmployee?->id,
+                'void_at' => now(),
+                'void_reviewed_by' => $reviewerName,
+                'void_reviewed_at' => now(),
+                'cashier_notes' => $updatedNotes,
+            ]);
+
+            $sale->load('items');
+            $warehouseId = ($sale->branch_id ? Warehouse::where('branch_id', $sale->branch_id)->value('id') : null)
+                ?? Warehouse::where('id', 5)->value('id')
+                ?? Warehouse::first()?->id;
+
+            foreach ($sale->items as $item) {
+                if ($item->product_variant_id && $item->qty > 0) {
+                    StockInventory::where('product_variant_id', $item->product_variant_id)
+                        ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
+                        ->increment('qty_on_hand', $item->qty);
+                }
+            }
+
+            CafePayment::where('cafe_sale_id', $sale->id)->update(['status' => 'refunded']);
+        });
+
+        try {
+            app(AutoJournalService::class)->journalVoidSale($sale->fresh(), $reason);
+        } catch (\Throwable $e) {
+            Log::warning('AutoJournal void error: '.$e->getMessage());
+        }
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => CafeSale::class,
+            'auditable_id' => $sale->id,
+            'action' => 'pos_sale_void',
+            'new_values' => [
+                'invoice_number' => $sale->invoice_number,
+                'void_status' => 'approved',
+                'requested_by' => $sale->void_requested_by,
+                'reviewed_by' => $reviewerName,
+                'void_by_id' => $reviewerEmployee?->id,
+                'cashier_id' => $sale->employee_id,
+                'reason' => $reason,
+                'gross_amount' => $sale->gross_amount,
+                'net_amount' => $sale->net_amount,
+                'void_at' => now()->toDateTimeString(),
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Admin ERP',
+            'created_at' => now(),
+        ]));
+
+        $message = "Pembatalan (Void) {$sale->invoice_number} disetujui. Status menjadi Dibatalkan dan stok telah dikembalikan.";
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'sale' => $sale->fresh(),
+            ]);
+        }
+
+        return back()->with('success', $message);
+    }
+
+    /**
+     * Tolak pengajuan pembatalan (Void): transaksi tetap sah (tidak dibatalkan).
+     */
+    public function rejectVoidRequest(Request $request, CafeSale $sale): JsonResponse|RedirectResponse
+    {
+        if ($sale->void_status !== 'pending_approval') {
+            $msg = "Transaksi {$sale->invoice_number} tidak sedang berada di antrean persetujuan Void.";
+            if ($request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 422);
+            }
+
+            return back()->with('warning', $msg);
+        }
+
+        $reviewerName = auth()->user()?->name ?? 'Admin';
+        $rejectedReason = trim((string) $request->input('rejected_reason', ''));
+        if ($rejectedReason === '') {
+            $rejectedReason = 'Pengajuan pembatalan ditolak oleh Admin';
+        }
+
+        $sale->update([
+            'void_status' => 'rejected',
+            'void_rejected_reason' => $rejectedReason,
+            'void_reviewed_by' => $reviewerName,
+            'void_reviewed_at' => now(),
+        ]);
+
+        rescue(fn () => AuditLog::create([
+            'user_id' => auth()->id(),
+            'auditable_type' => CafeSale::class,
+            'auditable_id' => $sale->id,
+            'action' => 'pos_sale_void_rejected',
+            'new_values' => [
+                'invoice_number' => $sale->invoice_number,
+                'void_status' => 'rejected',
+                'requested_by' => $sale->void_requested_by,
+                'reviewed_by' => $reviewerName,
+                'rejected_reason' => $rejectedReason,
+            ],
+            'ip_address' => $request->ip() ?? '127.0.0.1',
+            'user_agent' => $request->userAgent() ?? 'Admin ERP',
+            'created_at' => now(),
+        ]));
+
+        $message = "Pengajuan pembatalan {$sale->invoice_number} ditolak. Transaksi tetap berlaku.";
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'sale' => $sale->fresh(),
+            ]);
+        }
+
+        return back()->with('success', $message);
     }
 
     /**

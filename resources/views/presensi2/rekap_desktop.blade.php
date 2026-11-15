@@ -608,7 +608,7 @@
             <a href="{{ Route::has('pos') ? route('pos') : (Route::has('presensi2.pos') ? route('presensi2.pos') : url('/pos')) }}" class="btn-nav-pill success">
                 <span>🛒</span> POS Kasir Desktop
             </a>
-            <a href="{{ route('presensi2.serah-terima.desktop', array_filter(['date' => request('date'), 'shift' => request('shift'), 'summary_id' => $salesSummary?->id])) }}" class="btn-nav-pill primary">
+            <a href="{{ route('presensi2.serah-terima.desktop', array_filter(['summary_id' => $salesSummary?->id])) }}" class="btn-nav-pill primary">
                 <span>🤝</span> Serah Terima Kas & Shift
             </a>
             <a href="{{ route('presensi2.rekap', request()->query()) }}" class="btn-nav-pill">
@@ -676,23 +676,11 @@
 
     {{-- 3. FILTER & SETTING TOOLBAR --}}
     <div class="toolbar-container no-print">
-        <form method="GET" action="{{ url()->current() }}" class="filter-form-group">
-            <span style="font-weight: 700; color: #475569; font-size: 12px;">📅 Pilih Tanggal:</span>
-            <input type="date" name="date" value="{{ \Carbon\Carbon::parse($workDate)->toDateString() }}" class="filter-input" onchange="this.form.submit()">
-
-            <span style="font-weight: 700; color: #475569; font-size: 12px; margin-left: 8px;">🕒 Shift:</span>
-            <select name="shift" class="filter-input" onchange="this.form.submit()">
-                <option value="1" {{ (string) request('shift', $activeShift?->id) === '1' ? 'selected' : '' }}>Shift 1 (Pagi)</option>
-                <option value="2" {{ (string) request('shift', $activeShift?->id) === '2' ? 'selected' : '' }}>Shift 2 (Siang)</option>
-                <option value="3" {{ (string) request('shift', $activeShift?->id) === '3' ? 'selected' : '' }}>Shift 3 (Malam)</option>
-            </select>
-
-            @if(request('date') || request('shift'))
-                <a href="{{ url()->current() }}" class="btn-nav-pill" style="padding: 4px 8px; font-size: 11px;">
-                    ✖ Reset Filter
-                </a>
-            @endif
-        </form>
+        <div class="filter-form-group" style="gap: 8px;">
+            <span class="badge badge-blue" style="font-size: 12px; padding: 5px 10px;">
+                🔒 Terkunci Hari Ini: {{ \Carbon\Carbon::parse($workDate)->translatedFormat('d M Y') }} &bull; {{ $activeShift?->name ?? 'Shift Aktif' }}
+            </span>
+        </div>
 
         <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 11px; color: #64748b; font-weight: 600;">📐 Format Cetak:</span>
@@ -861,7 +849,7 @@
                     <span>⚡ Tindakan & Penutupan Shift</span>
                 </div>
                 <div class="panel-box-body">
-                    <a href="{{ route('presensi2.serah-terima.desktop', array_filter(['date' => request('date'), 'shift' => request('shift'), 'summary_id' => $salesSummary?->id])) }}" class="btn-block-action blue">
+                    <a href="{{ route('presensi2.serah-terima.desktop', array_filter(['summary_id' => $salesSummary?->id])) }}" class="btn-block-action blue">
                         <span>🤝</span> Lanjut ke Serah Terima Kas Shift ➔
                     </a>
                 </div>
@@ -1135,7 +1123,6 @@
                                     <th>Status</th>
                                     <th style="text-align: right;">Total Omset</th>
                                     <th style="text-align: right;">Fisik Laci</th>
-                                    <th style="text-align: center;">Aksi</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1154,11 +1141,6 @@
                                         </td>
                                         <td style="text-align: right; font-family: 'JetBrains Mono', monospace;">
                                             Rp {{ number_format($hist->cash_in_drawer ?? $hist->blind_cash_count ?? 0, 0, ',', '.') }}
-                                        </td>
-                                        <td style="text-align: center;">
-                                            <a href="{{ Route::has('presensi2.rekap.desktop') ? route('presensi2.rekap.desktop', ['date' => $hist->work_date?->toDateString(), 'shift' => $hist->shiftNumber(), 'summary_id' => $hist->id]) : url('/bagus/presensi2/rekap-desktop?date=' . $hist->work_date?->toDateString() . '&shift=' . $hist->shiftNumber() . '&summary_id=' . $hist->id) }}" class="btn-nav-pill" style="padding: 3px 8px; font-size: 11px;">
-                                                Buka
-                                            </a>
                                         </td>
                                     </tr>
                                 @endforeach

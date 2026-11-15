@@ -787,21 +787,37 @@ class ShiftStockAndSalesFlowTest extends TestCase
             ->value('qty_on_hand');
         $this->assertEquals($initialStock - 3, $stockAfterSale);
 
-        // 2. Batalkan pesanan invoice melalui route presensi2.penjualan.batal (masuk ke admin) dengan otorisasi Supervisor PIN (SoD)
+        // 2. Ajukan pembatalan pesanan invoice melalui route presensi2.penjualan.batal (masuk antrean Admin tanpa PIN Supervisor)
         $cancelResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
             ->post(route('presensi2.penjualan.batal', $sale), [
                 'reason' => 'Pelanggan salah pilih menu kopi',
-                'supervisor_pin' => '999888',
             ]);
 
-        $cancelResponse->assertRedirect(route('admin.penjualan', ['q' => $sale->invoice_number]));
+        $cancelResponse->assertRedirect(route('admin.penjualan.penyesuaian-billing'));
         $cancelResponse->assertSessionHas('success');
 
         $sale->refresh();
+        $this->assertEquals('paid', $sale->payment_status);
+        $this->assertEquals('pending_approval', $sale->void_status);
+        $this->assertEquals('Pelanggan salah pilih menu kopi', $sale->void_reason);
+
+        // Stok belum berubah sebelum Admin menyetujui
+        $stockWhilePending = (int) StockInventory::where('product_variant_id', $this->variantKopi->id)
+            ->where('warehouse_id', $this->warehouse->id)
+            ->value('qty_on_hand');
+        $this->assertEquals($initialStock - 3, $stockWhilePending);
+
+        // 3. Admin menyetujui antrean Void -> status menjadi cancelled dan stok kembali utuh
+        $admin = User::factory()->create();
+        $approveResponse = $this->actingAs($admin)
+            ->post(route('admin.penjualan.void.approve', $sale));
+        $approveResponse->assertSessionHas('success');
+
+        $sale->refresh();
         $this->assertEquals('cancelled', $sale->payment_status);
+        $this->assertEquals('approved', $sale->void_status);
         $this->assertStringContainsString('Pelanggan salah pilih menu kopi', $sale->cashier_notes);
 
-        // 3. Stok kembali utuh seperti sebelum penjualan
         $stockAfterCancel = (int) StockInventory::where('product_variant_id', $this->variantKopi->id)
             ->where('warehouse_id', $this->warehouse->id)
             ->value('qty_on_hand');
@@ -843,19 +859,21 @@ class ShiftStockAndSalesFlowTest extends TestCase
 
         $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
             ->postJson(route('presensi2.penjualan.batal', $sale), [
-                'supervisor_pin' => '999888',
                 'reason' => 'Salah input menu / pesanan',
             ]);
 
         $response->assertOk();
         $response->assertJson([
             'success' => true,
-            'payment_status' => 'cancelled',
+            'pending_approval' => true,
+            'void_status' => 'pending_approval',
+            'payment_status' => 'paid',
         ]);
 
         $sale->refresh();
-        $this->assertEquals('cancelled', $sale->payment_status);
-        $this->assertStringContainsString('Salah input menu', $sale->cashier_notes);
+        $this->assertEquals('paid', $sale->payment_status);
+        $this->assertEquals('pending_approval', $sale->void_status);
+        $this->assertStringContainsString('Salah input menu', $sale->void_reason);
     }
 
     public function test_cancelling_already_cancelled_order_is_handled_gracefully(): void
@@ -900,15 +918,15 @@ class ShiftStockAndSalesFlowTest extends TestCase
 
         $response = $this->get(route('presensi2.penjualan.batal', [
             'sale' => $sale,
-            'supervisor_pin' => '999888',
             'reason' => 'Batal via URL Admin',
         ]));
 
-        $response->assertRedirect(route('admin.penjualan', ['q' => $sale->invoice_number]));
+        $response->assertRedirect(route('admin.penjualan.penyesuaian-billing'));
         $response->assertSessionHas('success');
 
         $sale->refresh();
-        $this->assertEquals('cancelled', $sale->payment_status);
+        $this->assertEquals('paid', $sale->payment_status);
+        $this->assertEquals('pending_approval', $sale->void_status);
     }
 
     public function test_can_record_printer_job_via_api_and_sync_counter(): void

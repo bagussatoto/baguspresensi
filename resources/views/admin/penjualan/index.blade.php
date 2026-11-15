@@ -1367,7 +1367,7 @@
                         <select id="selectNewStatus" class="form-control">
                             <option value="paid">🟢 Lunas (Paid)</option>
                             <option value="pending">🟡 Menunggu Pembayaran (Pending)</option>
-                            <option value="cancelled">🔴 Dibatalkan / Void (Cancelled)</option>
+                            <option value="cancelled">🔴 Ajukan Pembatalan / Void (Masuk Antrean)</option>
                         </select>
                     </div>
                 </div>

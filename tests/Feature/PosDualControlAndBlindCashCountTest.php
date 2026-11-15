@@ -245,28 +245,32 @@ class PosDualControlAndBlindCashCountTest extends TestCase
             'payment_status' => 'paid',
         ]);
 
-        // Coba batalkan tanpa menyertakan PIN Supervisor
+        // Ajukan Void tanpa PIN Supervisor -> masuk antrean Admin, status tetap 'paid'
         $response = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
             ->postJson(route('presensi2.penjualan.batal', ['sale' => $sale->id]), [
                 'reason' => 'Salah pesan oleh pembeli',
             ]);
 
-        $response->assertStatus(403);
+        $response->assertStatus(200);
         $response->assertJson([
-            'success' => false,
-            'require_supervisor' => true,
+            'success' => true,
+            'pending_approval' => true,
+            'void_status' => 'pending_approval',
+            'payment_status' => 'paid',
         ]);
 
-        // Status penjualan tetap 'paid' (tidak dibatalkan)
+        // Status penjualan tetap 'paid' (belum dibatalkan sebelum Admin menyetujui)
         $this->assertEquals('paid', $sale->fresh()->payment_status);
+        $this->assertEquals('pending_approval', $sale->fresh()->void_status);
         $this->assertNull($sale->fresh()->void_by);
     }
 
     /**
-     * Test 4: Dual-Control Void - Ditolak jika PIN yang dimasukkan bukan Supervisor / Otorisator.
+     * Test 4: Admin yang membatalkan dari menu Admin Penjualan tetap masuk antrean persetujuan (tidak langsung cancelled).
      */
     public function test_cashier_cannot_void_with_invalid_or_non_supervisor_pin(): void
     {
+        $admin = User::factory()->create();
         $sale = CafeSale::create([
             'invoice_number' => 'INV-VOID-002',
             'branch_id' => $this->branch->id,
@@ -277,22 +281,38 @@ class PosDualControlAndBlindCashCountTest extends TestCase
             'payment_status' => 'paid',
         ]);
 
-        // Masukkan PIN milik kasir sendiri (bukan supervisor)
-        $response = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
-            ->postJson(route('presensi2.penjualan.batal', ['sale' => $sale->id]), [
-                'reason' => 'Salah pesan',
-                'supervisor_pin' => '123456', // PIN kasir
+        $response = $this->actingAs($admin)
+            ->postJson(route('admin.penjualan.status', ['sale' => $sale->id]), [
+                'status' => 'cancelled',
+                'reason' => 'Pembatalan dari Admin Penjualan',
             ]);
 
-        $response->assertStatus(403);
+        $response->assertStatus(200);
+        $response->assertJson([
+            'success' => true,
+            'pending_approval' => true,
+            'void_status' => 'pending_approval',
+            'payment_status' => 'paid',
+        ]);
         $this->assertEquals('paid', $sale->fresh()->payment_status);
+        $this->assertEquals('pending_approval', $sale->fresh()->void_status);
+
+        // Jika Admin menolak dari antrean, transaksi tetap paid
+        $rejectResponse = $this->actingAs($admin)
+            ->postJson(route('admin.penjualan.void.reject', ['sale' => $sale->id]), [
+                'rejected_reason' => 'Nota masih sah',
+            ]);
+        $rejectResponse->assertOk();
+        $this->assertEquals('paid', $sale->fresh()->payment_status);
+        $this->assertEquals('rejected', $sale->fresh()->void_status);
     }
 
     /**
-     * Test 5: Dual-Control Void - Supervisor PIN berhasil membatalkan nota, mengembalikan stok, dan mencatat AuditLog WORM.
+     * Test 5: Antrean Void - Kasir mengajukan tanpa PIN, Admin menyetujui dari antrean, mengembalikan stok, dan mencatat AuditLog WORM.
      */
     public function test_supervisor_pin_successfully_voids_pos_sale_and_returns_stock(): void
     {
+        $admin = User::factory()->create();
         $sale = CafeSale::create([
             'invoice_number' => 'INV-VOID-003',
             'branch_id' => $this->branch->id,
@@ -327,33 +347,40 @@ class PosDualControlAndBlindCashCountTest extends TestCase
             ->where('warehouse_id', $this->warehouse->id)
             ->update(['qty_on_hand' => 48]);
 
-        // Eksekusi Void dengan PIN Supervisor yang valid ('998877')
-        $response = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
+        // 1. Kasir mengajukan Void tanpa PIN -> masuk antrean Admin
+        $requestResponse = $this->withSession(['presensi2_employee_id' => $this->cashier->id])
             ->postJson(route('presensi2.penjualan.batal', ['sale' => $sale->id]), [
                 'reason' => 'Pelanggan membatalkan pesanan karena buru-buru',
-                'supervisor_pin' => '998877',
             ]);
 
-        $response->assertStatus(200);
-        $response->assertJson([
+        $requestResponse->assertStatus(200);
+        $requestResponse->assertJson([
             'success' => true,
-            'payment_status' => 'cancelled',
+            'pending_approval' => true,
+            'void_status' => 'pending_approval',
         ]);
 
-        // 1. Verifikasi Status Penjualan & Kolom Audit Dual-Control
+        // 2. Admin menyetujui antrean Void
+        $approveResponse = $this->actingAs($admin)
+            ->postJson(route('admin.penjualan.void.approve', ['sale' => $sale->id]));
+
+        $approveResponse->assertStatus(200);
+        $approveResponse->assertJson(['success' => true]);
+
+        // Verifikasi Status Penjualan & Kolom Audit
         $freshSale = $sale->fresh();
         $this->assertEquals('cancelled', $freshSale->payment_status);
-        $this->assertEquals($this->supervisor->id, $freshSale->void_by);
+        $this->assertEquals('approved', $freshSale->void_status);
         $this->assertEquals('Pelanggan membatalkan pesanan karena buru-buru', $freshSale->void_reason);
         $this->assertNotNull($freshSale->void_at);
 
-        // 2. Verifikasi Pengembalian Stok ke Inventaris (48 + 2 = 50)
+        // Verifikasi Pengembalian Stok ke Inventaris (48 + 2 = 50)
         $stock = StockInventory::where('product_variant_id', $this->variantFood->id)
             ->where('warehouse_id', $this->warehouse->id)
             ->first();
         $this->assertEquals(50, $stock->qty_on_hand);
 
-        // 3. Verifikasi WORM AuditLog ISO 27001
+        // Verifikasi WORM AuditLog ISO 27001
         $this->assertDatabaseHas('audit_logs', [
             'auditable_type' => CafeSale::class,
             'auditable_id' => $sale->id,

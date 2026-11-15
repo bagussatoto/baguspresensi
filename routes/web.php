@@ -234,6 +234,8 @@ Route::middleware(['web', 'auditor.readonly'])->group(function () {
     Route::post('/bagus/admin/penjualan/penyesuaian-billing/{summary}/reject', [AdminSaleController::class, 'rejectBillingAdjustment']);
     Route::post('/bagus/admin/penjualan/penyesuaian-print/{summary}/approve', [AdminSaleController::class, 'approvePrintAdjustment']);
     Route::post('/bagus/admin/penjualan/penyesuaian-print/{summary}/reject', [AdminSaleController::class, 'rejectPrintAdjustment']);
+    Route::post('/bagus/admin/penjualan/void/{sale}/approve', [AdminSaleController::class, 'approveVoidRequest']);
+    Route::post('/bagus/admin/penjualan/void/{sale}/reject', [AdminSaleController::class, 'rejectVoidRequest']);
     Route::post('/bagus/admin/penjualan/rekap-shift/{summary}/unlock-sales', [AdminSaleController::class, 'unlockShiftSales']);
     Route::post('/bagus/admin/penjualan/rekap-shift/{summary}/resolve-discrepancy', [AdminSaleController::class, 'resolveDiscrepancy']);
     Route::get('/bagus/admin/penjualan/serah-terima', [AdminSaleController::class, 'billingAdjustmentIndex']);
@@ -573,6 +575,8 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::post('/penjualan/penyesuaian-billing/{summary}/reject', [AdminSaleController::class, 'rejectBillingAdjustment'])->name('admin.penjualan.penyesuaian-billing.reject');
     Route::post('/penjualan/penyesuaian-print/{summary}/approve', [AdminSaleController::class, 'approvePrintAdjustment'])->name('admin.penjualan.penyesuaian-print.approve');
     Route::post('/penjualan/penyesuaian-print/{summary}/reject', [AdminSaleController::class, 'rejectPrintAdjustment'])->name('admin.penjualan.penyesuaian-print.reject');
+    Route::post('/penjualan/void/{sale}/approve', [AdminSaleController::class, 'approveVoidRequest'])->name('admin.penjualan.void.approve');
+    Route::post('/penjualan/void/{sale}/reject', [AdminSaleController::class, 'rejectVoidRequest'])->name('admin.penjualan.void.reject');
     Route::get('/penjualan/{sale}', [AdminSaleController::class, 'show'])->name('admin.penjualan.show');
     Route::put('/penjualan/{sale}', [AdminSaleController::class, 'update'])->name('admin.penjualan.update');
     Route::post('/penjualan/{sale}/status', [AdminSaleController::class, 'updateStatus'])->name('admin.penjualan.status');

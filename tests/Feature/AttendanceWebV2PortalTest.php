@@ -1115,4 +1115,35 @@ class AttendanceWebV2PortalTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    public function test_rekap_desktop_locks_to_current_date_and_shift_and_hides_filter(): void
+    {
+        Carbon::setTestNow(Carbon::create(2026, 11, 15, 10, 0, 0));
+
+        $oldSummary = ShiftSalesSummary::create([
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift->id,
+            'work_date' => '2026-11-10',
+            'total_revenue' => 500000,
+            'status' => 'closed',
+        ]);
+
+        $response = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->get(route('presensi2.rekap.desktop', [
+                'date' => '2026-11-10',
+                'shift' => 3,
+                'summary_id' => $oldSummary->id,
+            ]));
+
+        $response->assertOk();
+        $response->assertDontSee('Pilih Tanggal:');
+        $response->assertDontSee('Reset Filter');
+        $response->assertSee('Terkunci Hari Ini:');
+        $response->assertViewHas('workDate', fn ($workDate) => $workDate->toDateString() === '2026-11-15');
+        $response->assertViewHas('dateParam', null);
+        $response->assertViewHas('salesSummary', null);
+
+        Carbon::setTestNow();
+    }
 }

@@ -34,6 +34,12 @@ class CafeSale extends Model
         'void_by',
         'void_reason',
         'void_at',
+        'void_status',
+        'void_requested_by',
+        'void_requested_at',
+        'void_reviewed_by',
+        'void_reviewed_at',
+        'void_rejected_reason',
         'discount_percent',
         'discount_authorized_by',
         'is_locked',
@@ -53,6 +59,8 @@ class CafeSale extends Model
         'amount_paid' => 'float',
         'change_amount' => 'float',
         'void_at' => 'datetime',
+        'void_requested_at' => 'datetime',
+        'void_reviewed_at' => 'datetime',
     ];
 
     public function branch(): BelongsTo

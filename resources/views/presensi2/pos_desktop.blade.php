@@ -1715,8 +1715,8 @@
                 <div style="background: #fff1f2; border: 1px solid #fecaca; border-radius: 6px; padding: 10px 12px; margin-bottom: 14px; font-size: 11.5px; color: #991b1b; display: flex; gap: 8px;">
                     <span style="font-size: 16px;">📦</span>
                     <div>
-                        <strong>Peringatan Sistem:</strong><br>
-                        Seluruh stok produk makanan/minuman pada nota ini akan <strong>otomatis dikembalikan ke inventaris gudang</strong>, dan nilai transaksi dihapus dari omzet kasir.
+                        <strong>Informasi Antrean Persetujuan Admin:</strong><br>
+                        Pengajuan pembatalan (Void) akan masuk ke <strong>antrean persetujuan Admin</strong> terlebih dahulu. Stok dan omzet tidak berubah sebelum Admin menyetujui.
                     </div>
                 </div>
 
@@ -1739,24 +1739,13 @@
                     <input type="text" id="void-reason-custom" placeholder="Catatan tambahan alasan (opsional)..." style="width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 11.5px;">
                 </div>
 
-                {{-- OTORISASI PIN SUPERVISOR / ADMIN --}}
-                <div style="margin-bottom: 16px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px;">
-                    <label for="void-supervisor-pin" style="display: block; font-size: 11.5px; font-weight: 700; color: #1e293b; margin-bottom: 4px;">
-                        🔐 PIN Otorisasi Supervisor / Admin SoD: <span style="color: #ef4444;">*</span>
-                    </label>
-                    <input type="password" id="void-supervisor-pin" placeholder="Masukkan PIN Otorisasi Supervisor" required autocomplete="off" style="width: 100%; padding: 8px 10px; border: 1.5px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-family: monospace; letter-spacing: 2px;">
-                    <div style="font-size: 10.5px; color: #64748b; margin-top: 4px;">
-                        Kepatuhan Dual-Control: pembatalan nota kasir wajib diotorisasi atasan.
-                    </div>
-                </div>
-
                 {{-- ACTION BUTTONS --}}
                 <div style="display: flex; justify-content: flex-end; gap: 8px;">
                     <button type="button" onclick="closeVoidModal()" style="padding: 8px 16px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;">
                         Kembali
                     </button>
                     <button type="submit" id="btn-submit-void" style="padding: 8px 18px; border: none; background: #ef4444; color: #fff; font-weight: 700; border-radius: 6px; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);">
-                        <span>✕</span> Ya, Batalkan Transaksi (VOID)
+                        <span>📩</span> Ajukan Pembatalan (Antrean Admin)
                     </button>
                 </div>
             </form>
@@ -2679,7 +2668,6 @@
             }
             document.getElementById('void-items-summary').innerText = itemsStr;
 
-            document.getElementById('void-supervisor-pin').value = '';
             document.getElementById('void-reason-select').selectedIndex = 0;
             document.getElementById('void-reason-custom').value = '';
 
@@ -2687,7 +2675,7 @@
             if (modal) modal.style.display = 'flex';
 
             setTimeout(() => {
-                document.getElementById('void-supervisor-pin')?.focus();
+                document.getElementById('void-reason-select')?.focus();
             }, 120);
         }
 
@@ -2705,20 +2693,13 @@
             e.preventDefault();
             const saleId = document.getElementById('void-sale-id').value;
             const invoiceNum = document.getElementById('void-invoice-num').innerText;
-            const pin = document.getElementById('void-supervisor-pin').value.trim();
             const reasonSelect = document.getElementById('void-reason-select').value;
             const reasonCustom = document.getElementById('void-reason-custom').value.trim();
             const finalReason = reasonCustom ? `${reasonSelect} (${reasonCustom})` : reasonSelect;
 
-            if (!pin) {
-                alert('PIN Otorisasi Supervisor / Admin wajib diisi.');
-                document.getElementById('void-supervisor-pin')?.focus();
-                return;
-            }
-
             const btn = document.getElementById('btn-submit-void');
             btn.disabled = true;
-            btn.innerHTML = '<span>⏳</span> Membatalkan...';
+            btn.innerHTML = '<span>⏳</span> Mengirim ke Antrean...';
 
             try {
                 const cancelUrl = '{{ route("presensi2.penjualan.batal", ["sale" => ":saleId"]) }}'.replace(':saleId', saleId);
@@ -2730,7 +2711,6 @@
                         'Accept': 'application/json'
                     },
                     body: JSON.stringify({
-                        supervisor_pin: pin,
                         reason: finalReason
                     })
                 });
@@ -2738,6 +2718,12 @@
                 const data = await response.json();
                 if (response.ok && data.success) {
                     closeVoidModal();
+
+                    if (data.pending_approval) {
+                        alert(data.message || `Pengajuan pembatalan ${invoiceNum} berhasil masuk ke antrean persetujuan Admin.`);
+                        window.location.reload();
+                        return;
+                    }
 
                     const voidPayload = data.void_data || {
                         id: saleId,
@@ -2754,14 +2740,14 @@
                     // Tampilkan pop-up preview Cetak Slip VOID langsung!
                     showVoidReceiptModal(voidPayload);
                 } else {
-                    alert('Gagal membatalkan transaksi: ' + (data.message || 'PIN Supervisor salah atau wewenang tidak mencukupi.'));
+                    alert('Gagal mengajukan pembatalan transaksi: ' + (data.message || 'Terjadi kesalahan.'));
                 }
             } catch (err) {
                 console.error(err);
-                alert('Terjadi kesalahan jaringan saat memproses pembatalan.');
+                alert('Terjadi kesalahan jaringan saat memproses pengajuan pembatalan.');
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '<span>✕</span> Ya, Batalkan Transaksi (VOID)';
+                btn.innerHTML = '<span>📩</span> Ajukan Pembatalan (Antrean Admin)';
             }
         }
 

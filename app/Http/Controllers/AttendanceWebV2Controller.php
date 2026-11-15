@@ -4279,152 +4279,78 @@ class AttendanceWebV2Controller extends Controller
             return back()->with('error', $lockMsg);
         }
 
-        $isAdmin = auth()->check() && (auth()->user()->role === 'admin' || auth()->user()->role === 'superadmin' || (method_exists(auth()->user(), 'isAdmin') && auth()->user()->isAdmin()));
-        $supervisor = null;
-
-        if ($isAdmin) {
-            $supervisor = Employee::where('email', auth()->user()->email)->first()
-                ?? Employee::whereIn('role', [EmployeeRole::SUPERVISOR, EmployeeRole::OTORISATOR])->first()
-                ?? $employee;
-        } else {
-            $supervisorPin = (string) $request->input('supervisor_pin');
-            if (empty($supervisorPin)) {
-                $errMsg = 'Pembatalan nota (Void) memerlukan otorisasi Supervisor / Otorisator sesuai prinsip Segregation of Duties (SoD). Silakan masukkan PIN Supervisor.';
-                if ($request->wantsJson()) {
-                    return response()->json(['success' => false, 'message' => $errMsg, 'require_supervisor' => true], 403);
-                }
-
-                return back()->with('error', $errMsg);
+        if ($sale->void_status === 'pending_approval') {
+            $pendingMsg = "Transaksi {$sale->invoice_number} sudah berada di antrean persetujuan Admin.";
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'pending_approval' => true,
+                    'void_status' => 'pending_approval',
+                    'payment_status' => $sale->payment_status,
+                    'message' => $pendingMsg,
+                    'redirect_url' => route('admin.penjualan.penyesuaian-billing'),
+                ]);
             }
 
-            $supervisor = $this->resolveSupervisorByPin($supervisorPin, $sale->branch_id);
-            if (! $supervisor && $employee && $employee->canAuthorizeVoid()) {
-                // Cek jika kasir yang bertugas adalah supervisor dan memasukkan PIN akunnya sendiri
-                $isSelfMatch = ($employee->pin && ($employee->pin === $supervisorPin || Hash::check($supervisorPin, $employee->pin)))
-                    || ($employee->password && ($employee->password === $supervisorPin || Hash::check($supervisorPin, $employee->password)));
-                if ($isSelfMatch) {
-                    $supervisor = $employee;
-                }
-            }
-
-            if (! $supervisor || ! $supervisor->canAuthorizeVoid()) {
-                $errMsg = 'PIN Supervisor tidak valid atau wewenang tidak mencukupi untuk melakukan pembatalan nota (Void).';
-                if ($request->wantsJson()) {
-                    return response()->json(['success' => false, 'message' => $errMsg, 'require_supervisor' => true], 403);
-                }
-
-                return back()->with('error', $errMsg);
-            }
+            return back()->with('warning', $pendingMsg);
         }
 
         $reason = trim((string) $request->input('reason', ''));
         if (empty($reason)) {
-            $reason = 'Pembatalan nota kasir oleh supervisor';
+            $reason = 'Pengajuan pembatalan nota kasir';
         }
 
-        $cancelNote = '[VOID: '.$reason.' - Diotorisasi oleh '.($supervisor?->name ?? 'Supervisor').' pada '.Carbon::now()->format('d/m/Y H:i:s').']';
-        $updatedNotes = $sale->cashier_notes ? $sale->cashier_notes.' | '.$cancelNote : $cancelNote;
+        $requesterName = auth()->check()
+            ? (auth()->user()->name ?? 'Admin')
+            : ($employee?->name ?? 'Kasir');
 
-        // 1. Update status penjualan
         $sale->update([
-            'payment_status' => 'cancelled',
-            'void_by' => $supervisor?->id,
+            'void_status' => 'pending_approval',
             'void_reason' => $reason,
-            'void_at' => now(),
-            'cashier_notes' => $updatedNotes,
+            'void_requested_by' => $requesterName,
+            'void_requested_at' => now(),
+            'void_rejected_reason' => null,
         ]);
 
-        // 2. Kembalikan stok barang yang terjual jika ada item F&B / inventaris
-        $sale->load('items');
-        $warehouseId = ($sale->branch_id ? Warehouse::where('branch_id', $sale->branch_id)->value('id') : null)
-            ?? Warehouse::where('id', 5)->value('id')
-            ?? Warehouse::first()?->id;
-
-        foreach ($sale->items as $item) {
-            if ($item->product_variant_id && $item->qty > 0) {
-                StockInventory::where('product_variant_id', $item->product_variant_id)
-                    ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
-                    ->increment('qty_on_hand', $item->qty);
-            }
-        }
-
-        try {
-            app(AutoJournalService::class)->journalVoidSale($sale, $reason);
-        } catch (\Throwable $e) {
-            Log::warning('AutoJournal void error: '.$e->getMessage());
-        }
-
-        // 3. Update payment status jika ada
-        CafePayment::where('cafe_sale_id', $sale->id)->update(['status' => 'refunded']);
-
-        // 4. Jejak Audit ISO 27001 WORM
         rescue(fn () => AuditLog::create([
             'user_id' => auth()->id(),
             'auditable_type' => CafeSale::class,
             'auditable_id' => $sale->id,
-            'action' => 'pos_sale_void',
+            'action' => 'pos_sale_void_requested',
             'new_values' => [
                 'invoice_number' => $sale->invoice_number,
-                'void_by_id' => $supervisor?->id,
-                'void_by_name' => $supervisor?->name,
+                'requested_by' => $requesterName,
                 'cashier_id' => $sale->employee_id,
                 'reason' => $reason,
                 'gross_amount' => $sale->gross_amount,
                 'net_amount' => $sale->net_amount,
-                'void_at' => now()->toDateTimeString(),
+                'requested_at' => now()->toDateTimeString(),
             ],
             'ip_address' => $request->ip() ?? '127.0.0.1',
             'user_agent' => $request->userAgent() ?? 'POS Presensi v2',
             'created_at' => now(),
         ]));
 
-        $message = "Pesanan {$sale->invoice_number} berhasil dibatalkan dan stok produk telah dikembalikan ke inventaris!";
+        $message = "Pengajuan pembatalan (Void) untuk {$sale->invoice_number} berhasil dikirim ke antrean persetujuan Admin. Stok dan omzet belum berubah sebelum disetujui.";
 
         if ($request->wantsJson()) {
-            $sale->loadMissing(['items.variant', 'employee', 'customer', 'voidBy', 'branch']);
-
-            $voidData = [
-                'id' => $sale->id,
-                'invoice_number' => $sale->invoice_number,
-                'branch_name' => $sale->branch?->name ?? 'Pusat',
-                'branch_address' => $sale->branch?->address ?? 'MGK Internet Cafe Network',
-                'created_at' => $sale->created_at ? $sale->created_at->format('d/m/Y H:i') : '-',
-                'void_at' => $sale->void_at ? Carbon::parse($sale->void_at)->format('d/m/Y H:i') : now()->format('d/m/Y H:i'),
-                'cashier_name' => $sale->employee?->name ?? 'Kasir',
-                'supervisor_name' => $supervisor?->name ?? 'Supervisor / Admin',
-                'customer_name' => $sale->customer_name ?: ($sale->customer?->name ?? 'Umum'),
-                'reason' => $reason,
-                'payment_method' => strtoupper($sale->payment_method ?? 'CASH'),
-                'net_amount' => (float) ($sale->net_amount > 0 ? $sale->net_amount : $sale->total_fnb),
-                'gross_amount' => (float) ($sale->gross_amount ?? $sale->total_fnb),
-                'discount_amount' => (float) ($sale->discount_amount ?? 0),
-                'items' => $sale->items->map(function ($it) {
-                    return [
-                        'item_name' => $it->item_name,
-                        'qty' => $it->qty,
-                        'unit_price' => (float) $it->unit_price,
-                        'subtotal' => (float) $it->subtotal,
-                    ];
-                })->values()->all(),
-            ];
-
             return response()->json([
                 'success' => true,
-                'message' => $message,
+                'pending_approval' => true,
+                'void_status' => 'pending_approval',
+                'payment_status' => $sale->payment_status,
                 'invoice_number' => $sale->invoice_number,
-                'payment_status' => 'cancelled',
-                'redirect_url' => route('admin.penjualan', ['q' => $sale->invoice_number]),
-                'sale' => $sale,
-                'void_data' => $voidData,
+                'message' => $message,
+                'redirect_url' => route('admin.penjualan.penyesuaian-billing'),
+                'sale' => $sale->fresh(),
             ]);
         }
 
-        // Masuk ke Admin sesuai instruksi user: "bikinkan supaya masuk ke admin"
         if ($request->input('redirect_to') === 'presensi2') {
             return redirect()->route('presensi2.penjualan')->with('success', $message);
         }
 
-        return redirect()->route('admin.penjualan', ['q' => $sale->invoice_number])->with('success', $message);
+        return redirect()->route('admin.penjualan.penyesuaian-billing')->with('success', $message);
     }
 
     /**
@@ -5961,10 +5887,12 @@ BAT;
             return redirect()->route('presensi2.login');
         }
 
+        $useDesktop = $request->is('*rekap-desktop*') || $request->input('view') === 'desktop';
+
         $now = Carbon::now();
-        $dateParam = $request->input('date');
-        $shiftParam = $request->input('shift');
-        $summaryIdParam = $request->input('summary_id');
+        $dateParam = $useDesktop ? null : $request->input('date');
+        $shiftParam = $useDesktop ? null : $request->input('shift');
+        $summaryIdParam = $useDesktop ? null : $request->input('summary_id');
         $activeShift = $this->shiftResolverService->resolveShift(null, $now);
 
         if ($shiftParam) {
@@ -6275,7 +6203,6 @@ BAT;
             }
         }
 
-        $useDesktop = $request->is('*rekap-desktop*') || $request->input('view') === 'desktop';
         $viewName = $useDesktop ? 'presensi2.rekap_desktop' : 'presensi2.rekap';
 
         return view($viewName, [
@@ -6594,10 +6521,12 @@ BAT;
             return redirect()->route('presensi2.login');
         }
 
+        $useDesktop = $request->is('*rekap-desktop*') || $request->input('view') === 'desktop';
+
         $now = Carbon::now();
-        $dateParam = $request->input('date');
-        $shiftParam = $request->input('shift');
-        $summaryIdParam = $request->input('summary_id');
+        $dateParam = $useDesktop ? null : $request->input('date');
+        $shiftParam = $useDesktop ? null : $request->input('shift');
+        $summaryIdParam = $useDesktop ? null : $request->input('summary_id');
         $activeShift = $this->shiftResolverService->resolveShift(null, $now);
 
         if ($shiftParam) {

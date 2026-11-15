@@ -1569,7 +1569,7 @@
                         <strong style="color: #f87171; font-size: 13px;">Menu Pembatalan Pesanan</strong>
                     </div>
                     <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
-                        Jika pesanan ini dibatalkan, sistem akan <strong>mengembalikan stok barang</strong> ke inventaris dan memotong nominal dari total omzet shift.
+                        Pengajuan pembatalan (Void) akan masuk ke <strong>antrean persetujuan Admin</strong> terlebih dahulu. Stok dan omzet shift tidak berubah sebelum Admin menyetujui.
                     </p>
                     <form id="form-cancel-order" method="POST" action="" onsubmit="return confirmCancelOrder()">
                         @csrf
@@ -1578,20 +1578,12 @@
                             <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Alasan Pembatalan (Audit ISO 27001):</label>
                             <input type="text" name="reason" id="cancel_reason" placeholder="Misal: Salah input menu, pesanan batal beli, dll" style="width: 100%; padding: 8px 10px; background: rgba(10, 14, 26, 0.8); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; color: #fff; font-size: 12px;" required>
                         </div>
-                        <div style="margin-bottom: 14px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 10px;">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-                                <label style="font-size: 11px; font-weight: 700; color: #fca5a5; display: block;">🛡️ PIN Otorisasi Supervisor (Dual-Control):</label>
-                                <span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #fca5a5; font-size: 9.5px;">Wajib SoD</span>
-                            </div>
-                            <input type="password" name="supervisor_pin" id="cancel_supervisor_pin" maxlength="6" placeholder="Masukkan 6-digit PIN Supervisor..." style="width: 100%; padding: 8px 10px; background: rgba(10, 14, 26, 0.9); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 6px; color: #fff; font-size: 13px; font-weight: bold; letter-spacing: 0.1em;" required>
-                            <span style="font-size: 10.5px; color: var(--text-muted); display: block; margin-top: 4px;">Sesuai kepatuhan Segregation of Duties (SoD), pembatalan nota wajib disetujui langsung oleh Supervisor / Otorisator jaga.</span>
-                        </div>
                         <div style="display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
                             <button type="button" onclick="closeInvoiceModal()" class="btn" style="padding: 8px 14px; font-size: 12px; background: rgba(255, 255, 255, 0.08); color: var(--text-muted);">
                                 Tutup
                             </button>
                             <button type="submit" onclick="document.getElementById('cancel_redirect_to').value='presensi2'" class="btn" style="padding: 8px 14px; font-size: 12px; font-weight: 600; background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">
-                                ✖ Batalkan Saja
+                                📩 Ajukan Pembatalan (Antrean)
                             </button>
                            
                         </div>
@@ -2963,14 +2955,7 @@
             return false;
         }
 
-        const pin = (document.getElementById('cancel_supervisor_pin')?.value || '').trim();
-        if (!pin || pin.length < 4) {
-            alert('Sesuai aturan Segregation of Duties (SoD), pembatalan nota wajib diotorisasi oleh Supervisor dengan memasukkan PIN Supervisor yang valid.');
-            document.getElementById('cancel_supervisor_pin')?.focus();
-            return false;
-        }
-
-        return confirm('Apakah Anda yakin ingin MEMBATALKAN pesanan ini dengan otorisasi Supervisor?\n\nStok barang yang ada di dalam pesanan ini akan otomatis dikembalikan ke inventaris.');
+        return confirm('Ajukan pembatalan pesanan ini ke antrean persetujuan Admin?\n\nStok dan omzet belum berubah sebelum Admin menyetujui.');
     }
 
     document.addEventListener('keydown', function(e) {

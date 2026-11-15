@@ -14,7 +14,8 @@
         </div>
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
             @php
-                $totalPending = $pendingAdjustments->count() + $pendingPrintAdjustments->count();
+                $pendingVoidCount = isset($pendingVoidRequests) ? $pendingVoidRequests->count() : 0;
+                $totalPending = $pendingAdjustments->count() + $pendingPrintAdjustments->count() + $pendingVoidCount;
             @endphp
             <span class="badge-status {{ $totalPending > 0 ? 'badge-amber' : 'badge-emerald' }}">
                 {{ $totalPending }} Menunggu Persetujuan
@@ -71,6 +72,92 @@
                 ⚠️ {{ $errors->first() }}
             </div>
         @endif
+    </div>
+
+    <!-- ========================================== -->
+    <!-- BAGIAN 0A: ANTREAN PERSETUJUAN PEMBATALAN (VOID) -->
+    <!-- ========================================== -->
+    <div style="padding: 24px 24px 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+            <h3 style="font-size: 16px; font-weight: 700; color: #f87171; margin: 0; display: flex; align-items: center; gap: 8px;">
+                <span>🚫</span> Antrean Persetujuan Pembatalan Transaksi (Void)
+            </h3>
+            <span class="badge-status {{ ($pendingVoidCount ?? 0) > 0 ? 'badge-amber' : 'badge-slate' }}">
+                {{ $pendingVoidCount ?? 0 }} Menunggu Persetujuan
+            </span>
+        </div>
+        <div style="overflow-x: auto; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 14px;">
+            <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border-color); background: rgba(239, 68, 68, 0.08);">
+                        <th style="padding: 12px 16px; color: #fca5a5;">Waktu Pengajuan</th>
+                        <th style="padding: 12px 16px; color: #fca5a5;">No. Invoice</th>
+                        <th style="padding: 12px 16px; color: #fca5a5;">Cabang & Kasir</th>
+                        <th style="padding: 12px 16px; color: #fca5a5;">Diajukan Oleh & Alasan</th>
+                        <th style="padding: 12px 16px; color: #fca5a5; text-align: right;">Nominal</th>
+                        <th style="padding: 12px 16px; color: #fca5a5; text-align: center;">Aksi Persetujuan</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($pendingVoidRequests ?? [] as $voidSale)
+                        <tr style="border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
+                            <td style="padding: 12px 16px;">
+                                <strong style="color: #fff;">{{ $voidSale->void_requested_at?->format('d/m/Y') ?? $voidSale->created_at?->format('d/m/Y') }}</strong>
+                                <div style="font-size: 11px; color: var(--text-sub); font-family: monospace;">
+                                    {{ $voidSale->void_requested_at?->format('H:i') ?? '-' }} WIB
+                                </div>
+                            </td>
+                            <td style="padding: 12px 16px; font-family: monospace;">
+                                <strong style="color: #38bdf8;">{{ $voidSale->invoice_number }}</strong>
+                                <div style="font-size: 11px; color: var(--text-sub);">
+                                    {{ strtoupper($voidSale->payment_method ?? 'CASH') }} &bull; {{ $voidSale->customer_name ?: 'Umum' }}
+                                </div>
+                            </td>
+                            <td style="padding: 12px 16px;">
+                                <strong style="color: #e2e8f0;">{{ $voidSale->branch?->name ?? 'Pusat' }}</strong>
+                                <div style="font-size: 11px; color: var(--text-sub);">
+                                    Kasir: {{ $voidSale->employee?->name ?? '-' }}
+                                </div>
+                            </td>
+                            <td style="padding: 12px 16px;">
+                                <div style="font-size: 12px; font-weight: 700; color: #fbbf24;">
+                                    Pengaju: {{ $voidSale->void_requested_by ?? '-' }}
+                                </div>
+                                <div style="font-size: 12px; color: #fca5a5; margin-top: 2px;">
+                                    {{ $voidSale->void_reason ?: '-' }}
+                                </div>
+                            </td>
+                            <td style="padding: 12px 16px; text-align: right; font-family: monospace; font-weight: 700; color: #f87171;">
+                                Rp {{ number_format((float) ($voidSale->net_amount > 0 ? $voidSale->net_amount : $voidSale->total_fnb), 0, ',', '.') }}
+                            </td>
+                            <td style="padding: 12px 16px; text-align: center;">
+                                <div style="display: flex; gap: 6px; justify-content: center; flex-wrap: wrap;">
+                                    <form method="POST" action="{{ route('admin.penjualan.void.approve', $voidSale) }}" onsubmit="return confirm('Setujui pembatalan (Void) {{ $voidSale->invoice_number }}? Status akan menjadi Dibatalkan dan stok dikembalikan.');">
+                                        @csrf
+                                        <button type="submit" class="btn-action-sm" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);">
+                                            ✅ Setujui Void
+                                        </button>
+                                    </form>
+                                    <form method="POST" action="{{ route('admin.penjualan.void.reject', $voidSale) }}" onsubmit="return confirm('Tolak pengajuan pembatalan {{ $voidSale->invoice_number }}? Transaksi akan tetap berlaku.');">
+                                        @csrf
+                                        <input type="hidden" name="rejected_reason" value="Ditolak oleh Admin dari antrean Void">
+                                        <button type="submit" class="btn-action-sm" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35);">
+                                            ✖ Tolak
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="6" style="padding: 20px; text-align: center; color: var(--text-sub);">
+                                Tidak ada pengajuan pembatalan transaksi (Void) yang menunggu persetujuan.
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <!-- ========================================== -->
