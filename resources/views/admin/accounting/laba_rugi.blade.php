@@ -3,6 +3,60 @@
 @section('title', 'Laporan Laba Rugi (Income Statement)')
 
 @section('content')
+<style>
+    @media print {
+        .hero-banner-card, .tab-nav-pills, .filter-box-card, .btn-no-print, .btn-action-sm, #filterLabaRugiForm {
+            display: none !important;
+        }
+        body {
+            background: #fff !important;
+            color: #000 !important;
+        }
+        .dashboard-section-card {
+            border: 1px solid #cbd5e1 !important;
+            box-shadow: none !important;
+            background: #fff !important;
+            color: #000 !important;
+            margin-bottom: 15px !important;
+        }
+        .stats-grid-row {
+            display: grid !important;
+            grid-template-columns: repeat(4, 1fr) !important;
+            gap: 10px !important;
+            margin-bottom: 15px !important;
+        }
+        .metric-stat-card {
+            background: #f8fafc !important;
+            border: 1px solid #cbd5e1 !important;
+            color: #0f172a !important;
+            padding: 10px !important;
+        }
+        .print-header-only {
+            display: block !important;
+        }
+        table tr td, table tr th {
+            color: #000 !important;
+            border-color: #cbd5e1 !important;
+        }
+        a {
+            color: inherit !important;
+            text-decoration: none !important;
+        }
+    }
+    .print-header-only {
+        display: none;
+    }
+</style>
+
+<!-- PRINT-ONLY HEADER -->
+<div class="print-header-only" style="margin-bottom: 20px; text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px;">
+    <h2 style="margin: 0; font-size: 20px; font-weight: 800; color: #0f172a;">MAYA GRAHA KENCANA (MGK)</h2>
+    <h3 style="margin: 4px 0; font-size: 16px; font-weight: 700; color: #334155;">LAPORAN LABA RUGI (INCOME STATEMENT)</h3>
+    <p style="margin: 0; font-size: 12px; color: #64748b;">
+        Unit/Cabang: {{ $selectedBranchId ? ($branches->firstWhere('id', $selectedBranchId)?->name ?? 'Cabang #'.$selectedBranchId) : 'Konsolidasi Seluruh Cabang' }} &bull; Periode: {{ date('d F Y', strtotime($startDate)) }} s/d {{ date('d F Y', strtotime($endDate)) }}
+    </p>
+</div>
+
 <!-- HERO HEADER -->
 <div class="hero-banner-card">
     <div>
@@ -12,6 +66,12 @@
         </p>
     </div>
     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <a href="{{ route('admin.akuntansi.laba-rugi', array_merge(request()->query(), ['export' => 'csv'])) }}" class="btn-action-sm" style="padding: 10px 18px; font-size: 13px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; text-decoration: none;">
+            <span>📥</span> Unduh CSV
+        </a>
+        <button type="button" onclick="window.print()" class="btn-action-sm" style="padding: 10px 18px; font-size: 13px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; cursor: pointer;">
+            <span>🖨️</span> Cetak / PDF
+        </button>
         <a href="{{ route('admin.akuntansi.neraca') }}" class="btn-action-sm btn-action-emerald" style="padding: 10px 18px; font-size: 13px;">
             <span>🏛️</span> Buka Neraca Keuangan
         </a>
@@ -21,18 +81,41 @@
 <!-- NAVIGATION PILLS -->
 @include('admin.accounting.nav')
 
-<!-- FILTER PERIODE -->
+<!-- FILTER PERIODE & CABANG TERPADU -->
 <div class="dashboard-section-card" style="padding: 16px 20px; margin-bottom: 20px;">
-    <form method="GET" action="{{ route('admin.akuntansi.laba-rugi') }}" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <label style="font-size: 12px; color: #94a3b8;">Dari Tanggal:</label>
-            <input type="date" name="start_date" value="{{ $startDate }}" class="form-input-custom" style="padding: 6px 12px; width: 140px;">
+    <form id="filterLabaRugiForm" method="GET" action="{{ route('admin.akuntansi.laba-rugi') }}" style="display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap;">
+        @if(isset($branches) && $branches->count() > 0)
+        <div>
+            <label class="form-label-custom" style="display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Cabang / Unit Bisnis</label>
+            <select name="branch_id" class="form-input-custom" onchange="this.form.submit()" style="padding: 6px 12px; height: 38px;">
+                <option value="">🏢 Semua Cabang (Konsolidasi)</option>
+                @foreach($branches as $b)
+                <option value="{{ $b->id }}" {{ $selectedBranchId == $b->id ? 'selected' : '' }}>
+                    {{ $b->name }}
+                </option>
+                @endforeach
+            </select>
         </div>
+        @endif
+
         <div style="display: flex; align-items: center; gap: 8px;">
-            <label style="font-size: 12px; color: #94a3b8;">Sampai Tanggal:</label>
-            <input type="date" name="end_date" value="{{ $endDate }}" class="form-input-custom" style="padding: 6px 12px; width: 140px;">
+            <div>
+                <label class="form-label-custom" style="display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Dari Tanggal</label>
+                <input type="date" id="inputStartDate" name="start_date" value="{{ $startDate }}" class="form-input-custom" style="padding: 6px 12px; width: 140px; height: 38px;">
+            </div>
+            <div>
+                <label class="form-label-custom" style="display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Sampai Tanggal</label>
+                <input type="date" id="inputEndDate" name="end_date" value="{{ $endDate }}" class="form-input-custom" style="padding: 6px 12px; width: 140px; height: 38px;">
+            </div>
         </div>
-        <button type="submit" class="btn-action-sm btn-action-primary" style="padding: 8px 16px;">
+
+        <div style="display: flex; gap: 6px; align-items: center;">
+            <button type="button" onclick="setPeriodToday()" class="btn-action-sm" style="background: rgba(255, 255, 255, 0.06); color: #cbd5e1; height: 38px; padding: 0 12px; border: 1px solid rgba(255, 255, 255, 0.15); cursor: pointer;">Hari Ini</button>
+            <button type="button" onclick="setPeriodThisMonth()" class="btn-action-sm" style="background: rgba(255, 255, 255, 0.06); color: #cbd5e1; height: 38px; padding: 0 12px; border: 1px solid rgba(255, 255, 255, 0.15); cursor: pointer;">Bulan Ini</button>
+            <button type="button" onclick="setPeriodYtd()" class="btn-action-sm" style="background: rgba(255, 255, 255, 0.06); color: #cbd5e1; height: 38px; padding: 0 12px; border: 1px solid rgba(255, 255, 255, 0.15); cursor: pointer;">Tahun Ini (YTD)</button>
+        </div>
+
+        <button type="submit" class="btn-action-sm btn-action-primary" style="padding: 8px 18px; height: 38px; cursor: pointer;">
             <span>🔍</span> Tampilkan Laba Rugi
         </button>
     </form>
@@ -86,7 +169,9 @@
             <div class="section-header-icon" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">📊</div>
             <div>
                 <h3 class="section-title">Laporan Laba Rugi Komprehensif</h3>
-                <span class="section-subtitle">Periode: {{ date('d F Y', strtotime($startDate)) }} s/d {{ date('d F Y', strtotime($endDate)) }}</span>
+                <span class="section-subtitle">
+                    {{ $selectedBranchId ? ($branches->firstWhere('id', $selectedBranchId)?->name ?? 'Cabang Terpilih') : 'Konsolidasi Seluruh Cabang' }} &bull; Periode: {{ date('d F Y', strtotime($startDate)) }} s/d {{ date('d F Y', strtotime($endDate)) }}
+                </span>
             </div>
         </div>
     </div>
@@ -100,8 +185,16 @@
             </tr>
             @forelse($revenueList as $item)
             <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                <td style="width: 120px; padding: 8px 24px; font-family: monospace; color: #94a3b8;">{{ $item['account']->account_code }}</td>
-                <td style="padding: 8px 10px; color: #f8fafc;">{{ $item['account']->account_name }}</td>
+                <td style="width: 130px; padding: 8px 24px; font-family: monospace;">
+                    <a href="{{ route('admin.akuntansi.buku-besar', ['account_id' => $item['account']->id, 'start_date' => $startDate, 'end_date' => $endDate, 'branch_id' => $selectedBranchId]) }}" style="color: #38bdf8; text-decoration: none;" title="Buka Buku Besar Akun Ini">
+                        {{ $item['account']->account_code }}
+                    </a>
+                </td>
+                <td style="padding: 8px 10px;">
+                    <a href="{{ route('admin.akuntansi.buku-besar', ['account_id' => $item['account']->id, 'start_date' => $startDate, 'end_date' => $endDate, 'branch_id' => $selectedBranchId]) }}" style="color: #f8fafc; text-decoration: none;" title="Buka Buku Besar Akun Ini">
+                        {{ $item['account']->account_name }} <span style="font-size: 11px; color: #38bdf8;">↗</span>
+                    </a>
+                </td>
                 <td style="padding: 8px 14px; text-align: right; font-family: monospace; color: #e2e8f0;">
                     Rp {{ number_format($item['amount'], 0, ',', '.') }}
                 </td>
@@ -123,8 +216,16 @@
             </tr>
             @forelse($cogsList as $item)
             <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                <td style="width: 120px; padding: 8px 24px; font-family: monospace; color: #94a3b8;">{{ $item['account']->account_code }}</td>
-                <td style="padding: 8px 10px; color: #f8fafc;">{{ $item['account']->account_name }}</td>
+                <td style="width: 130px; padding: 8px 24px; font-family: monospace;">
+                    <a href="{{ route('admin.akuntansi.buku-besar', ['account_id' => $item['account']->id, 'start_date' => $startDate, 'end_date' => $endDate, 'branch_id' => $selectedBranchId]) }}" style="color: #fbbf24; text-decoration: none;" title="Buka Buku Besar Akun Ini">
+                        {{ $item['account']->account_code }}
+                    </a>
+                </td>
+                <td style="padding: 8px 10px;">
+                    <a href="{{ route('admin.akuntansi.buku-besar', ['account_id' => $item['account']->id, 'start_date' => $startDate, 'end_date' => $endDate, 'branch_id' => $selectedBranchId]) }}" style="color: #f8fafc; text-decoration: none;" title="Buka Buku Besar Akun Ini">
+                        {{ $item['account']->account_name }} <span style="font-size: 11px; color: #fbbf24;">↗</span>
+                    </a>
+                </td>
                 <td style="padding: 8px 14px; text-align: right; font-family: monospace; color: #e2e8f0;">
                     Rp {{ number_format($item['amount'], 0, ',', '.') }}
                 </td>
@@ -154,8 +255,16 @@
             </tr>
             @forelse($expenseList as $item)
             <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                <td style="width: 120px; padding: 8px 24px; font-family: monospace; color: #94a3b8;">{{ $item['account']->account_code }}</td>
-                <td style="padding: 8px 10px; color: #f8fafc;">{{ $item['account']->account_name }}</td>
+                <td style="width: 130px; padding: 8px 24px; font-family: monospace;">
+                    <a href="{{ route('admin.akuntansi.buku-besar', ['account_id' => $item['account']->id, 'start_date' => $startDate, 'end_date' => $endDate, 'branch_id' => $selectedBranchId]) }}" style="color: #fb7185; text-decoration: none;" title="Buka Buku Besar Akun Ini">
+                        {{ $item['account']->account_code }}
+                    </a>
+                </td>
+                <td style="padding: 8px 10px;">
+                    <a href="{{ route('admin.akuntansi.buku-besar', ['account_id' => $item['account']->id, 'start_date' => $startDate, 'end_date' => $endDate, 'branch_id' => $selectedBranchId]) }}" style="color: #f8fafc; text-decoration: none;" title="Buka Buku Besar Akun Ini">
+                        {{ $item['account']->account_name }} <span style="font-size: 11px; color: #fb7185;">↗</span>
+                    </a>
+                </td>
                 <td style="padding: 8px 14px; text-align: right; font-family: monospace; color: #e2e8f0;">
                     Rp {{ number_format($item['amount'], 0, ',', '.') }}
                 </td>
@@ -182,5 +291,34 @@
         </table>
     </div>
 </div>
-@endsection
 
+<script>
+function setPeriodToday() {
+    const now = new Date();
+    const iso = now.toISOString().split('T')[0];
+    document.getElementById('inputStartDate').value = iso;
+    document.getElementById('inputEndDate').value = iso;
+    document.getElementById('filterLabaRugiForm').submit();
+}
+
+function setPeriodThisMonth() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+    document.getElementById('inputStartDate').value = `${y}-${m}-01`;
+    document.getElementById('inputEndDate').value = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+    document.getElementById('filterLabaRugiForm').submit();
+}
+
+function setPeriodYtd() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    document.getElementById('inputStartDate').value = `${y}-01-01`;
+    document.getElementById('inputEndDate').value = `${y}-${m}-${d}`;
+    document.getElementById('filterLabaRugiForm').submit();
+}
+</script>
+@endsection

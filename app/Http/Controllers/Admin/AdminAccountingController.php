@@ -363,7 +363,7 @@ class AdminAccountingController extends Controller
     /**
      * 4. Halaman Laporan Laba Rugi (Income Statement / P&L).
      */
-    public function labaRugiIndex(Request $request): View|JsonResponse
+    public function labaRugiIndex(Request $request): View|JsonResponse|StreamedResponse
     {
         $startDate = $request->filled('start_date')
             ? Carbon::parse($request->input('start_date'))->toDateString()
@@ -371,6 +371,11 @@ class AdminAccountingController extends Controller
         $endDate = $request->filled('end_date')
             ? Carbon::parse($request->input('end_date'))->toDateString()
             : Carbon::now()->endOfMonth()->toDateString();
+
+        $branches = Branch::where('is_active', true)->orderBy('name')->get();
+        $selectedBranchId = $request->filled('branch_id') && $request->input('branch_id') !== 'all'
+            ? (int) $request->input('branch_id')
+            : null;
 
         // 1. PENDAPATAN (REVENUE - 4-xxxxx)
         $revenueAccounts = ChartOfAccount::where('account_category', 'revenue')
@@ -381,8 +386,11 @@ class AdminAccountingController extends Controller
         $revenueList = [];
         $totalRevenue = 0.0;
         foreach ($revenueAccounts as $acc) {
-            $lines = JournalEntryLine::whereHas('journalEntry', function ($q) use ($startDate, $endDate): void {
+            $lines = JournalEntryLine::whereHas('journalEntry', function ($q) use ($startDate, $endDate, $selectedBranchId): void {
                 $q->where('status', 'posted')->whereBetween('entry_date', [$startDate, $endDate]);
+                if ($selectedBranchId) {
+                    $q->where('branch_id', $selectedBranchId);
+                }
             })->where('chart_of_account_id', $acc->id)->get();
 
             // Pendapatan saldo normal kredit: Kredit - Debit
@@ -400,8 +408,11 @@ class AdminAccountingController extends Controller
         $cogsList = [];
         $totalCogs = 0.0;
         foreach ($cogsAccounts as $acc) {
-            $lines = JournalEntryLine::whereHas('journalEntry', function ($q) use ($startDate, $endDate): void {
+            $lines = JournalEntryLine::whereHas('journalEntry', function ($q) use ($startDate, $endDate, $selectedBranchId): void {
                 $q->where('status', 'posted')->whereBetween('entry_date', [$startDate, $endDate]);
+                if ($selectedBranchId) {
+                    $q->where('branch_id', $selectedBranchId);
+                }
             })->where('chart_of_account_id', $acc->id)->get();
 
             // HPP saldo normal debit: Debit - Kredit
@@ -422,8 +433,11 @@ class AdminAccountingController extends Controller
         $expenseList = [];
         $totalExpense = 0.0;
         foreach ($expenseAccounts as $acc) {
-            $lines = JournalEntryLine::whereHas('journalEntry', function ($q) use ($startDate, $endDate): void {
+            $lines = JournalEntryLine::whereHas('journalEntry', function ($q) use ($startDate, $endDate, $selectedBranchId): void {
                 $q->where('status', 'posted')->whereBetween('entry_date', [$startDate, $endDate]);
+                if ($selectedBranchId) {
+                    $q->where('branch_id', $selectedBranchId);
+                }
             })->where('chart_of_account_id', $acc->id)->get();
 
             // Beban saldo normal debit: Debit - Kredit
@@ -435,9 +449,62 @@ class AdminAccountingController extends Controller
         // LABA BERSIH OPERASIONAL (NET PROFIT)
         $netProfit = $grossProfit - $totalExpense;
 
+        // EKSPOR CSV FORMAL
+        if ($request->query('export') === 'csv') {
+            $branchName = $selectedBranchId ? (Branch::find($selectedBranchId)?->name ?? 'Cabang '.$selectedBranchId) : 'Konsolidasi Seluruh Cabang';
+            $filename = 'laba_rugi_'.date('Ymd').'.csv';
+
+            return response()->streamDownload(function () use ($revenueList, $totalRevenue, $cogsList, $totalCogs, $grossProfit, $expenseList, $totalExpense, $netProfit, $startDate, $endDate, $branchName) {
+                $handle = fopen('php://output', 'w');
+                fputcsv($handle, ['LAPORAN LABA RUGI (INCOME STATEMENT) MAYA GRAHA KENCANA']);
+                fputcsv($handle, ['Unit/Cabang', $branchName]);
+                fputcsv($handle, ['Periode', $startDate.' s/d '.$endDate]);
+                fputcsv($handle, []);
+
+                fputcsv($handle, ['1. PENDAPATAN USAHA (REVENUE)']);
+                fputcsv($handle, ['Kode Akun', 'Nama Akun', 'Jumlah (Rp)']);
+                foreach ($revenueList as $item) {
+                    if ($item['amount'] != 0) {
+                        fputcsv($handle, [$item['account']->account_code, $item['account']->account_name, (string) $item['amount']]);
+                    }
+                }
+                fputcsv($handle, ['TOTAL PENDAPATAN USAHA', '', (string) $totalRevenue]);
+                fputcsv($handle, []);
+
+                fputcsv($handle, ['2. HARGA POKOK PENJUALAN (COGS)']);
+                fputcsv($handle, ['Kode Akun', 'Nama Akun', 'Jumlah (Rp)']);
+                foreach ($cogsList as $item) {
+                    if ($item['amount'] != 0) {
+                        fputcsv($handle, [$item['account']->account_code, $item['account']->account_name, (string) $item['amount']]);
+                    }
+                }
+                fputcsv($handle, ['TOTAL HARGA POKOK PENJUALAN', '', (string) $totalCogs]);
+                fputcsv($handle, []);
+
+                fputcsv($handle, ['LABA KOTOR (GROSS PROFIT)', '', (string) $grossProfit]);
+                fputcsv($handle, []);
+
+                fputcsv($handle, ['3. BEBAN OPERASIONAL (EXPENSES)']);
+                fputcsv($handle, ['Kode Akun', 'Nama Akun', 'Jumlah (Rp)']);
+                foreach ($expenseList as $item) {
+                    if ($item['amount'] != 0) {
+                        fputcsv($handle, [$item['account']->account_code, $item['account']->account_name, (string) $item['amount']]);
+                    }
+                }
+                fputcsv($handle, ['TOTAL BEBAN OPERASIONAL', '', (string) $totalExpense]);
+                fputcsv($handle, []);
+
+                fputcsv($handle, ['LABA BERSIH OPERASIONAL (NET PROFIT)', '', (string) $netProfit]);
+                fclose($handle);
+            }, $filename, ['Content-Type' => 'text/csv']);
+        }
+
         if ($request->wantsJson()) {
             return response()->json([
                 'success' => true,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'selected_branch_id' => $selectedBranchId,
                 'total_revenue' => $totalRevenue,
                 'total_cogs' => $totalCogs,
                 'gross_profit' => $grossProfit,
@@ -449,6 +516,8 @@ class AdminAccountingController extends Controller
         return view('admin.accounting.laba_rugi', compact(
             'startDate',
             'endDate',
+            'branches',
+            'selectedBranchId',
             'revenueList',
             'totalRevenue',
             'cogsList',

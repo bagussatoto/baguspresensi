@@ -202,6 +202,13 @@
   - [x] Pencatatan WORM Audit Log ISO 27001 (`simulation_data_purge`).
   - [x] Modal UI `#modal-data-purge` di Pusat Kendali ERP lengkap dengan tombol konfirmasi SoD.
   - [x] Feature test `AdminErpHubTest` (scan & purge) lulus 100% (5 tests, 63 assertions).
+- [x] **Laporan Laba Rugi Multi-Cabang & Ekspor CSV SAK**:
+  - [x] Filter Cabang (`branch_id`): Konsolidasi Seluruh Cabang vs Unit Cabang Tertentu pada Pendapatan (4), HPP (5), dan Beban (6).
+  - [x] Preset Periode Cepat (`Hari Ini`, `Bulan Ini`, `Tahun Ini / YTD`) via JavaScript.
+  - [x] Tombol & fitur streaming ekspor CSV formal (`?export=csv`) dengan header PT Maya Graha Kencana.
+  - [x] Tombol & template ramah cetak / PDF (`window.print()`) dengan `@media print` styling bersih.
+  - [x] Drill-down link pada Kode & Nama Akun mengarah langsung ke Kartu Buku Besar (`admin.akuntansi.buku-besar`).
+  - [x] Feature test `AdminAccountingTest` (filter branch & export CSV) lulus 100% (13 tests, 51 assertions).
 - [x] **Standardisasi & Repositori**:
   - [x] Laravel Pint code formatter dijalankan pada seluruh file PHP yang dimodifikasi (`vendor/bin/pint --dirty --format agent`).
   - [x] Cache view Blade dibersihkan (`php artisan view:clear`).
@@ -218,7 +225,8 @@
 | `cd817a7` | `feat(deposit): add upload proof photo for shift cash deposit and admin modal preview` |
 | `f8b5673` | `feat(accounting): enhance unified General Ledger & Trial Balance dashboard with drill-down, branch filter and CSV export` |
 | `41de96d` | `feat(pos): add physical thermal VOID receipt slip (58mm/80mm) with auto-print, dual-tab reprint and audit trail` |
-| *(pending)* | `feat(erp): add simulation data purge tool for Go-Live with master data protection and audit trail` |
+| `f7d7de5` | `feat(erp): add simulation data purge tool for Go-Live with master data protection and audit trail` |
+| *(pending)* | `feat(accounting): add multi-branch filtering, CSV export and drill-down to Laba Rugi (P&L)` |
 
 ---
 

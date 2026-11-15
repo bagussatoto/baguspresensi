@@ -110,6 +110,37 @@ class AdminAccountingTest extends TestCase
         $response->assertSee('Laporan Laba Rugi');
         $response->assertSee('LABA KOTOR (GROSS PROFIT)');
         $response->assertSee('LABA BERSIH OPERASIONAL');
+        $response->assertSee('Unduh CSV');
+        $response->assertSee('Cetak / PDF');
+    }
+
+    public function test_admin_can_filter_laba_rugi_by_branch(): void
+    {
+        $branch = Branch::create([
+            'name' => 'Cabang Ritel Sentral',
+            'code' => 'CRS-01',
+            'is_active' => true,
+        ]);
+
+        $response = $this->get(route('admin.akuntansi.laba-rugi', [
+            'branch_id' => $branch->id,
+            'start_date' => date('Y-m-01'),
+            'end_date' => date('Y-m-t'),
+        ]));
+
+        $response->assertStatus(200);
+        $response->assertSee('Cabang Ritel Sentral');
+        $response->assertSee('Bulan Ini');
+    }
+
+    public function test_admin_can_export_laba_rugi_csv(): void
+    {
+        $response = $this->get(route('admin.akuntansi.laba-rugi', [
+            'export' => 'csv',
+        ]));
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
     }
 
     public function test_admin_can_access_neraca_keuangan(): void
