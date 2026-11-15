@@ -16,6 +16,7 @@ use App\Models\ShiftSalesSummary;
 use App\Models\ShiftStockRequest;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -660,8 +661,267 @@ class AdminErpHubController extends Controller
                         'stat_badge' => '2-Tier RBAC',
                         'roles' => ['Super Admin', 'Auditor'],
                     ],
+                    [
+                        'id' => 'mod-data-purge',
+                        'title' => 'Pembersihan Data Simulasi & Testing (Go-Live)',
+                        'code' => 'G-PURGE',
+                        'desc' => 'Pembersihan transaksi dummy kasir, rekap simulasi, dan jurnal uji coba sebelum Go-Live cabang tanpa menghapus Master Data.',
+                        'url' => 'javascript:openModalDataPurge()',
+                        'route_name' => 'admin.erp.purge-simulation',
+                        'icon' => '🧹',
+                        'stat_badge' => 'Go-Live Tool',
+                        'roles' => ['Super Admin'],
+                    ],
                 ],
             ],
         ];
+    }
+
+    /**
+     * Pindai (Scan) Seluruh Transaksi Dummy & Catatan Simulasi Pengujian di Database.
+     */
+    public function scanSimulationData(Request $request): JsonResponse
+    {
+        $cutoffDate = $request->query('cutoff_date');
+
+        // 1. Transaksi Penjualan Kasir POS Simulasi
+        $salesQuery = CafeSale::query()->where(function ($q) use ($cutoffDate): void {
+            $q->whereRaw('LOWER(cashier_notes) LIKE ?', ['%simulasi%'])
+                ->orWhereRaw('LOWER(cashier_notes) LIKE ?', ['%testing%'])
+                ->orWhereRaw('LOWER(cashier_notes) LIKE ?', ['%demo%'])
+                ->orWhereRaw('LOWER(customer_name) LIKE ?', ['%simulasi%'])
+                ->orWhereRaw('LOWER(customer_name) LIKE ?', ['%testing%'])
+                ->orWhereRaw('LOWER(customer_name) LIKE ?', ['%demo%'])
+                ->orWhereRaw('LOWER(invoice_number) LIKE ?', ['%simulasi%'])
+                ->orWhereRaw('LOWER(invoice_number) LIKE ?', ['%test%'])
+                ->orWhereRaw('LOWER(invoice_number) LIKE ?', ['%demo%']);
+
+            if ($cutoffDate) {
+                $q->orWhereDate('created_at', '<=', $cutoffDate);
+            }
+        });
+        $simSalesCount = $salesQuery->count();
+        $sampleSales = $salesQuery->latest('id')->limit(5)->get(['id', 'invoice_number', 'customer_name', 'net_amount', 'created_at']);
+
+        // 2. Rekapitulasi Kas & Serah Terima Shift Simulasi
+        $summariesQuery = ShiftSalesSummary::query()->where(function ($q) use ($cutoffDate): void {
+            $q->whereRaw('LOWER(handover_notes) LIKE ?', ['%simulasi%'])
+                ->orWhereRaw('LOWER(deposit_notes) LIKE ?', ['%simulasi%'])
+                ->orWhereRaw('LOWER(billing_adjustment_notes) LIKE ?', ['%simulasi%'])
+                ->orWhereRaw('LOWER(print_adjustment_notes) LIKE ?', ['%simulasi%'])
+                ->orWhereRaw('LOWER(discrepancy_resolution_notes) LIKE ?', ['%simulasi%']);
+
+            if ($cutoffDate) {
+                $q->orWhereDate('work_date', '<=', $cutoffDate);
+            }
+        });
+        $simSummariesCount = $summariesQuery->count();
+
+        // 3. Cek Stok Fisik Opname Simulasi
+        $opnamesCount = 0;
+        if (Schema::hasTable('stock_opnames')) {
+            $opnamesCount = DB::table('stock_opnames')->where(function ($q) use ($cutoffDate): void {
+                $q->whereRaw('LOWER(notes) LIKE ?', ['%simulasi%'])
+                    ->orWhereRaw('LOWER(notes) LIKE ?', ['%testing%']);
+                if ($cutoffDate) {
+                    $q->orWhereDate('created_at', '<=', $cutoffDate);
+                }
+            })->count();
+        }
+
+        // 4. Jurnal Akuntansi Simulasi
+        $journalsCount = 0;
+        if (Schema::hasTable('journal_entries')) {
+            $journalsCount = DB::table('journal_entries')->where(function ($q) use ($cutoffDate): void {
+                $q->whereRaw('LOWER(description) LIKE ?', ['%simulasi%'])
+                    ->orWhereRaw('LOWER(description) LIKE ?', ['%testing%']);
+                if ($cutoffDate) {
+                    $q->orWhereDate('entry_date', '<=', $cutoffDate);
+                }
+            })->count();
+        }
+
+        // 5. Presensi Simulasi Dummy
+        $attendanceCount = AttendanceRecord::where(function ($q) use ($cutoffDate): void {
+            $q->whereRaw('LOWER(notes) LIKE ?', ['%simulasi%'])
+                ->orWhereRaw('LOWER(notes) LIKE ?', ['%testing%']);
+            if ($cutoffDate) {
+                $q->orWhereDate('work_date', '<=', $cutoffDate);
+            }
+        })->count();
+
+        // 6. Master Data Protected Counts (Jaminan Integritas)
+        $masterProtected = [
+            'products' => ProductVariant::count(),
+            'branches' => DB::table('branches')->count(),
+            'employees' => DB::table('employees')->where('is_active', true)->count(),
+            'shifts' => DB::table('shifts')->count(),
+            'coa' => Schema::hasTable('chart_of_accounts') ? DB::table('chart_of_accounts')->count() : 0,
+            'warehouses' => Schema::hasTable('warehouses') ? DB::table('warehouses')->count() : 0,
+        ];
+
+        return response()->json([
+            'success' => true,
+            'simulation_summary' => [
+                'sales_count' => $simSalesCount,
+                'summaries_count' => $simSummariesCount,
+                'opnames_count' => $opnamesCount,
+                'journals_count' => $journalsCount,
+                'attendance_count' => $attendanceCount,
+                'total_records' => $simSalesCount + $simSummariesCount + $opnamesCount + $journalsCount + $attendanceCount,
+            ],
+            'sample_sales' => $sampleSales,
+            'master_data_protected' => $masterProtected,
+        ]);
+    }
+
+    /**
+     * Eksekusi Pembersihan Seluruh Transaksi Dummy & Catatan Simulasi Pengujian.
+     * Dijamin TIDAK menghapus Master Data Produk, Cabang, Shift, Karyawan, dan COA.
+     */
+    public function purgeSimulationData(Request $request): JsonResponse|RedirectResponse
+    {
+        $cutoffDate = $request->input('cutoff_date');
+        $purgeAllBeforeCutoff = (bool) $request->input('purge_all_before_cutoff', false);
+
+        $deletedSalesCount = 0;
+        $deletedSummariesCount = 0;
+        $deletedOpnamesCount = 0;
+        $deletedJournalsCount = 0;
+        $deletedAttendanceCount = 0;
+
+        DB::transaction(function () use ($cutoffDate, $purgeAllBeforeCutoff, &$deletedSalesCount, &$deletedSummariesCount, &$deletedOpnamesCount, &$deletedJournalsCount, &$deletedAttendanceCount): void {
+            // 1. Ambil ID Transaksi Penjualan yang merupakan simulasi
+            $salesQuery = CafeSale::query()->where(function ($q) use ($cutoffDate, $purgeAllBeforeCutoff): void {
+                $q->whereRaw('LOWER(cashier_notes) LIKE ?', ['%simulasi%'])
+                    ->orWhereRaw('LOWER(cashier_notes) LIKE ?', ['%testing%'])
+                    ->orWhereRaw('LOWER(cashier_notes) LIKE ?', ['%demo%'])
+                    ->orWhereRaw('LOWER(customer_name) LIKE ?', ['%simulasi%'])
+                    ->orWhereRaw('LOWER(customer_name) LIKE ?', ['%testing%'])
+                    ->orWhereRaw('LOWER(customer_name) LIKE ?', ['%demo%'])
+                    ->orWhereRaw('LOWER(invoice_number) LIKE ?', ['%simulasi%'])
+                    ->orWhereRaw('LOWER(invoice_number) LIKE ?', ['%test%'])
+                    ->orWhereRaw('LOWER(invoice_number) LIKE ?', ['%demo%']);
+
+                if ($purgeAllBeforeCutoff && $cutoffDate) {
+                    $q->orWhereDate('created_at', '<=', $cutoffDate);
+                }
+            });
+
+            $saleIds = $salesQuery->pluck('id')->all();
+            $deletedSalesCount = count($saleIds);
+
+            if ($deletedSalesCount > 0) {
+                // Hapus payments & items terkait
+                DB::table('cafe_payments')->whereIn('cafe_sale_id', $saleIds)->delete();
+                DB::table('cafe_sale_items')->whereIn('cafe_sale_id', $saleIds)->delete();
+                CafeSale::whereIn('id', $saleIds)->delete();
+            }
+
+            // 2. Hapus Rekapitulasi Shift Simulasi
+            $summariesQuery = ShiftSalesSummary::query()->where(function ($q) use ($cutoffDate, $purgeAllBeforeCutoff): void {
+                $q->whereRaw('LOWER(handover_notes) LIKE ?', ['%simulasi%'])
+                    ->orWhereRaw('LOWER(deposit_notes) LIKE ?', ['%simulasi%'])
+                    ->orWhereRaw('LOWER(billing_adjustment_notes) LIKE ?', ['%simulasi%'])
+                    ->orWhereRaw('LOWER(print_adjustment_notes) LIKE ?', ['%simulasi%'])
+                    ->orWhereRaw('LOWER(discrepancy_resolution_notes) LIKE ?', ['%simulasi%']);
+
+                if ($purgeAllBeforeCutoff && $cutoffDate) {
+                    $q->orWhereDate('work_date', '<=', $cutoffDate);
+                }
+            });
+            $deletedSummariesCount = $summariesQuery->delete();
+
+            // 3. Hapus Stock Opname Simulasi
+            if (Schema::hasTable('stock_opnames')) {
+                $opnameQuery = DB::table('stock_opnames')->where(function ($q) use ($cutoffDate, $purgeAllBeforeCutoff): void {
+                    $q->whereRaw('LOWER(notes) LIKE ?', ['%simulasi%'])
+                        ->orWhereRaw('LOWER(notes) LIKE ?', ['%testing%']);
+
+                    if ($purgeAllBeforeCutoff && $cutoffDate) {
+                        $q->orWhereDate('created_at', '<=', $cutoffDate);
+                    }
+                });
+                $opnameIds = $opnameQuery->pluck('id')->all();
+                if (! empty($opnameIds)) {
+                    if (Schema::hasTable('stock_opname_items')) {
+                        DB::table('stock_opname_items')->whereIn('stock_opname_id', $opnameIds)->delete();
+                    }
+                    $deletedOpnamesCount = DB::table('stock_opnames')->whereIn('id', $opnameIds)->delete();
+                }
+            }
+
+            // 4. Hapus Jurnal Akuntansi Simulasi
+            if (Schema::hasTable('journal_entries')) {
+                $journalQuery = DB::table('journal_entries')->where(function ($q) use ($cutoffDate, $purgeAllBeforeCutoff): void {
+                    $q->whereRaw('LOWER(description) LIKE ?', ['%simulasi%'])
+                        ->orWhereRaw('LOWER(description) LIKE ?', ['%testing%']);
+
+                    if ($purgeAllBeforeCutoff && $cutoffDate) {
+                        $q->orWhereDate('entry_date', '<=', $cutoffDate);
+                    }
+                });
+                $journalIds = $journalQuery->pluck('id')->all();
+                if (! empty($journalIds)) {
+                    if (Schema::hasTable('journal_entry_lines')) {
+                        DB::table('journal_entry_lines')->whereIn('journal_entry_id', $journalIds)->delete();
+                    }
+                    $deletedJournalsCount = DB::table('journal_entries')->whereIn('id', $journalIds)->delete();
+                }
+            }
+
+            // 5. Hapus Presensi Simulasi Dummy
+            $deletedAttendanceCount = AttendanceRecord::where(function ($q) use ($cutoffDate, $purgeAllBeforeCutoff): void {
+                $q->whereRaw('LOWER(notes) LIKE ?', ['%simulasi%'])
+                    ->orWhereRaw('LOWER(notes) LIKE ?', ['%testing%']);
+
+                if ($purgeAllBeforeCutoff && $cutoffDate) {
+                    $q->orWhereDate('work_date', '<=', $cutoffDate);
+                }
+            })->delete();
+
+            // 6. Pencatatan Audit Trail WORM ISO 27001
+            if (Schema::hasTable('audit_logs')) {
+                DB::table('audit_logs')->insert([
+                    'user_id' => auth()->id(),
+                    'auditable_type' => 'SystemMaintenance',
+                    'auditable_id' => 1,
+                    'action' => 'simulation_data_purge',
+                    'new_values' => json_encode([
+                        'sales_purged' => $deletedSalesCount,
+                        'summaries_purged' => $deletedSummariesCount,
+                        'opnames_purged' => $deletedOpnamesCount,
+                        'journals_purged' => $deletedJournalsCount,
+                        'attendance_purged' => $deletedAttendanceCount,
+                        'cutoff_date' => $cutoffDate,
+                        'purge_all_before_cutoff' => $purgeAllBeforeCutoff,
+                        'timestamp' => now()->toIso8601String(),
+                    ]),
+                    'ip_address' => request()->ip() ?? '127.0.0.1',
+                    'user_agent' => request()->userAgent() ?? 'Admin ERP System',
+                    'created_at' => now(),
+                ]);
+            }
+        });
+
+        $totalPurged = $deletedSalesCount + $deletedSummariesCount + $deletedOpnamesCount + $deletedJournalsCount + $deletedAttendanceCount;
+        $msg = "🧹 Pembersihan Data Simulasi Selesai! Sebanyak {$totalPurged} data testing telah dibersihkan ({$deletedSalesCount} penjualan POS, {$deletedSummariesCount} rekap kas shift, {$deletedOpnamesCount} opname stok, {$deletedJournalsCount} jurnal akuntansi, {$deletedAttendanceCount} absensi tes). Seluruh Master Data (Produk, Cabang, Shift, Karyawan, COA) 100% aman dan utuh.";
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $msg,
+                'purged_counts' => [
+                    'sales' => $deletedSalesCount,
+                    'summaries' => $deletedSummariesCount,
+                    'opnames' => $deletedOpnamesCount,
+                    'journals' => $deletedJournalsCount,
+                    'attendance' => $deletedAttendanceCount,
+                    'total' => $totalPurged,
+                ],
+            ]);
+        }
+
+        return redirect()->route('admin.erp')->with('success', $msg);
     }
 }

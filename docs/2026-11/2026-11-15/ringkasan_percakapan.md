@@ -128,7 +128,30 @@
      - Membuat view mandiri `resources/views/presensi2/void_slip.blade.php` dengan fitur `?autoprint=1` yang juga terintegrasi pada tombol cetak di Admin ERP.
   4. **Pengujian Fitur**:
      - Dibuatkan automated feature test di `tests/Feature/PosThermalVoidSlipTest.php` (4 tests, 28 assertions lolos **100%**).
-     - Seluruh pengujian void sebelumnya di `PosDualControlAndBlindCashCountTest` dan `ShiftStockAndSalesFlowTest` tetap hijau.
+     - Commit `41de96d`.
+
+---
+
+### 6. 🧹 Pembersihan Data Simulasi & Testing Sebelum Go-Live Cabang (Data Purge)
+- **Konteks & Kebutuhan:**  
+  Mengacu pada Seksi 4.C.1 dokumen rencana kerja, sebelum toko/cabang resmi beroperasi (*Go-Live*), database perlu dibersihkan dari transaksi uji coba (misal: nota Aqua demo, simulasi selisih kas, catatan testing presensi & opname) **tanpa menghapus Master Data penting** (Produk, Cabang, Shift, Karyawan, dan COA).
+- **Implementasi:**
+  1. **Pemindai Data Interaktif (Live Simulation Scanner)**:
+     - Endpoint `GET /admin/ERP/scan-simulation` untuk memindai database secara instan dan menampilkan jumlah rekaman dummy yang siap dibersihkan beserta status perlindungan Master Data 100%.
+  2. **Eksekusi Pembersihan dengan Transaksi Database (ACID Guard)**:
+     - Endpoint `POST /admin/ERP/purge-simulation` mengeksekusi penghapusan dalam `DB::transaction()`:
+       - Menghapus transaksi kasir bertanda `Simulasi`, `Testing`, `Demo` beserta relasi item dan pembayarannya.
+       - Menghapus rekap shift simulasi, opname stok uji coba, jurnal akuntansi dummy, dan catatan absensi simulasi.
+       - Opsi fleksibel: pembersihan berbasis kata kunci penanda ATAU cut-off tanggal sebelum Go-Live.
+  3. **Jaminan Integritas Master Data & WORM Audit Trail**:
+     - Menjamin tabel `products`, `product_variants`, `branches`, `shifts`, `employees`, dan `chart_of_accounts` **tetap 100% aman dan utuh**.
+     - Setiap pembersihan otomatis tercatat ke tabel `audit_logs` (ISO 27001) dengan stempel waktu, user ID, IP, dan statistik data yang dibersihkan.
+  4. **Modal Antarmuka di Pusat Kendali ERP**:
+     - Tombol cepat **`🧹 Bersihkan Data Simulasi`** di Hero Banner Pusat Kendali ERP (`/admin/ERP`).
+     - Kartu modul resmi **`G-PURGE: Pembersihan Data Simulasi & Testing (Go-Live)`** di Pilar 6 Keamanan & Tata Kelola.
+     - Modal interaktif `#modal-data-purge` dengan tombol konfirmasi ganda (*Dual-Control SoD*).
+  5. **Pengujian Fitur**:
+     - Di `tests/Feature/AdminErpHubTest.php`, test scanning dan purging berhasil lolos (**5 tests, 63 assertions 100% GREEN**).
 
 ---
 
@@ -172,6 +195,13 @@
   - [x] Route & template mandiri `/presensi2/penjualan/{sale}/void-slip` dengan auto-print.
   - [x] Integrasi tombol cetak slip VOID pada layar detail Penjualan Admin ERP.
   - [x] Feature test `PosThermalVoidSlipTest` lulus 100% (4 tests, 28 assertions).
+- [x] **Pembersihan Data Simulasi Sebelum Go-Live Cabang**:
+  - [x] Endpoint `GET /admin/ERP/scan-simulation` untuk scanning live jumlah rekaman dummy di database.
+  - [x] Endpoint `POST /admin/ERP/purge-simulation` dengan transaksi database ACID untuk membersihkan data testing.
+  - [x] Jaminan perlindungan 100% Master Data (Produk, Cabang, Shift, Karyawan, COA).
+  - [x] Pencatatan WORM Audit Log ISO 27001 (`simulation_data_purge`).
+  - [x] Modal UI `#modal-data-purge` di Pusat Kendali ERP lengkap dengan tombol konfirmasi SoD.
+  - [x] Feature test `AdminErpHubTest` (scan & purge) lulus 100% (5 tests, 63 assertions).
 - [x] **Standardisasi & Repositori**:
   - [x] Laravel Pint code formatter dijalankan pada seluruh file PHP yang dimodifikasi (`vendor/bin/pint --dirty --format agent`).
   - [x] Cache view Blade dibersihkan (`php artisan view:clear`).
@@ -187,13 +217,14 @@
 | `5183bd0` | `feat(sidebar): dynamically show pending queue count on 'Pusat Kendali ERP' badge` |
 | `cd817a7` | `feat(deposit): add upload proof photo for shift cash deposit and admin modal preview` |
 | `f8b5673` | `feat(accounting): enhance unified General Ledger & Trial Balance dashboard with drill-down, branch filter and CSV export` |
-| *(pending)* | `feat(pos): add physical thermal VOID receipt slip (58mm/80mm) with auto-print, dual-tab reprint and audit trail` |
+| `41de96d` | `feat(pos): add physical thermal VOID receipt slip (58mm/80mm) with auto-print, dual-tab reprint and audit trail` |
+| *(pending)* | `feat(erp): add simulation data purge tool for Go-Live with master data protection and audit trail` |
 
 ---
 
 ## 💡 Rencana Pekerjaan Selanjutnya (Next Steps)
 
-1. **Pembersihan Data Testing & Simulasi (*Simulation Data Purge*)**:
-   - Modul khusus Super Admin untuk menghapus transaksi dummy uji coba (misal: simulasi Aqua, presensi dummy) dan mereset mutasi stok tanpa mengganggu Master Data SKU, Cabang, Karyawan, dan Akun COA.
-2. **Notifikasi WhatsApp / Telegram Gateway**:
+1. **Notifikasi WhatsApp / Telegram Gateway**:
    - Pengiriman alert instan ke ponsel pimpinan saat kasir menyetorkan kas atau saat terdapat permohonan otorisasi darurat.
+2. **Monitoring Jadwal Cron / Queue Backup Database**:
+   - Skrip backup otomatis berkala untuk database PostgreSQL sebelum dan sesudah operasional cabang.

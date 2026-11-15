@@ -719,6 +719,9 @@
         <a href="{{ route('presensi2.index') }}" target="_blank" class="btn-erp-quick btn-erp-outline">
             <span>📱</span> Presensi v2
         </a>
+        <button type="button" onclick="openModalDataPurge()" class="btn-erp-quick" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;" title="Bersihkan data transaksi testing/simulasi sebelum Go-Live operasional">
+            <span>🧹</span> Bersihkan Data Simulasi
+        </button>
     </div>
 </div>
 
@@ -1443,6 +1446,239 @@ document.addEventListener('DOMContentLoaded', function () {
     // Polling setiap 30 detik untuk deteksi otomatis di background
     setInterval(pollQueueMetrics, 30000);
 });
+
+// MODAL PEMBERSIHAN DATA SIMULASI & TESTING (GO-LIVE)
+function openModalDataPurge() {
+    const modal = document.getElementById('modal-data-purge');
+    if (modal) {
+        modal.style.display = 'flex';
+        triggerScanSimulation();
+    }
+}
+
+function closeModalDataPurge() {
+    const modal = document.getElementById('modal-data-purge');
+    if (modal) modal.style.display = 'none';
+}
+
+function toggleCutoffDateInput(checked) {
+    const wrap = document.getElementById('cutoff-date-wrap');
+    if (wrap) wrap.style.display = checked ? 'block' : 'none';
+    triggerScanSimulation();
+}
+
+function togglePurgeSubmitBtn(confirmed) {
+    const btn = document.getElementById('btn-submit-purge');
+    if (btn) {
+        btn.disabled = !confirmed;
+        btn.style.opacity = confirmed ? '1' : '0.5';
+        btn.style.cursor = confirmed ? 'pointer' : 'not-allowed';
+    }
+}
+
+async function triggerScanSimulation() {
+    const loading = document.getElementById('scan-loading');
+    const grid = document.getElementById('scan-results-grid');
+    const isCutoff = document.getElementById('check-purge-cutoff')?.checked;
+    const cutoffDate = isCutoff ? document.getElementById('input-cutoff-date')?.value : '';
+
+    if (loading) loading.style.display = 'block';
+    if (grid) grid.style.opacity = '0.5';
+
+    try {
+        let url = '{{ route("admin.erp.scan-simulation") }}';
+        if (cutoffDate) {
+            url += `?cutoff_date=${encodeURIComponent(cutoffDate)}`;
+        }
+
+        const res = await fetch(url, {
+            headers: { 'Accept': 'application/json' }
+        });
+        const data = await res.json();
+
+        if (data.success && data.simulation_summary) {
+            const sum = data.simulation_summary;
+            document.getElementById('count-sim-sales').innerText = sum.sales_count ?? 0;
+            document.getElementById('count-sim-summaries').innerText = sum.summaries_count ?? 0;
+            document.getElementById('count-sim-opnames').innerText = sum.opnames_count ?? 0;
+            document.getElementById('count-sim-journals').innerText = sum.journals_count ?? 0;
+
+            const prot = data.master_data_protected || {};
+            const protText = `${prot.products ?? 0} SKU Produk | ${prot.branches ?? 0} Cabang | ${prot.employees ?? 0} Staf Aktif | ${prot.shifts ?? 0} Shift (100% AMAN)`;
+            document.getElementById('protected-summary').innerText = protText;
+        }
+    } catch (err) {
+        console.error('Scan error:', err);
+    } finally {
+        if (loading) loading.style.display = 'none';
+        if (grid) grid.style.opacity = '1';
+    }
+}
+
+async function submitPurgeSimulation(e) {
+    e.preventDefault();
+    const confirmed = document.getElementById('check-confirm-action')?.checked;
+    if (!confirmed) {
+        alert('Silakan centang konfirmasi pembersihan terlebih dahulu.');
+        return;
+    }
+
+    if (!confirm('PERINGATAN FINAL!\n\nApakah Anda benar-benar yakin ingin membersihkan seluruh data simulasi pengujian ini?\n\nTindakan ini tidak dapat dibatalkan (Irreversible) dan akan dicatat pada Log Audit ISO 27001.')) {
+        return;
+    }
+
+    const btn = document.getElementById('btn-submit-purge');
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳</span> Sedang Membersihkan Data...';
+
+    const isCutoff = document.getElementById('check-purge-cutoff')?.checked;
+    const cutoffDate = isCutoff ? document.getElementById('input-cutoff-date')?.value : null;
+
+    try {
+        const response = await fetch('{{ route("admin.erp.purge-simulation") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                cutoff_date: cutoffDate,
+                purge_all_before_cutoff: isCutoff,
+                confirm_purge: true
+            })
+        });
+
+        const result = await response.json();
+        if (response.ok && result.success) {
+            alert(result.message);
+            closeModalDataPurge();
+            window.location.reload();
+        } else {
+            alert('Gagal membersihkan data: ' + (result.message || 'Terjadi kesalahan sistem.'));
+        }
+    } catch (err) {
+        console.error(err);
+        alert('Koneksi terputus saat memproses pembersihan data.');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>🧹</span> Eksekusi Pembersihan Data';
+    }
+}
 </script>
+
+<!-- MODAL PEMBERSIHAN DATA SIMULASI & TESTING (GO-LIVE) -->
+<div id="modal-data-purge" class="erp-modal-backdrop" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(4px); z-index: 9999; align-items: center; justify-content: center; padding: 20px;">
+    <div style="background: #1e293b; border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 14px; max-width: 580px; width: 100%; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); overflow: hidden;">
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #991b1b, #ef4444); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1);">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 24px;">🧹</span>
+                <div>
+                    <h4 style="margin: 0; color: #ffffff; font-size: 1.05rem; font-weight: 800; letter-spacing: 0.2px;">Pembersihan Data Simulasi Sebelum Go-Live</h4>
+                    <span style="font-size: 0.75rem; color: #fee2e2;">Pemurnian Database: Hapus Transaksi Dummy &amp; Catatan Testing</span>
+                </div>
+            </div>
+            <button type="button" onclick="closeModalDataPurge()" style="background: transparent; border: none; color: #ffffff; font-size: 20px; cursor: pointer; line-height: 1;">✕</button>
+        </div>
+
+        <!-- Body -->
+        <div style="padding: 20px; max-height: 70vh; overflow-y: auto;">
+            <!-- Alert Peringatan & Jaminan Integritas Master Data -->
+            <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 0.82rem; color: #a7f3d0; line-height: 1.45;">
+                <div style="font-weight: 700; color: #34d399; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <span>🛡️</span> JAMINAN PERLINDUNGAN MASTER DATA 100%
+                </div>
+                Pembersihan ini <strong>HANYA</strong> menghapus data transaksi dummy yang memiliki penanda <code>Simulasi:</code>, <code>Testing</code>, atau <code>Demo</code>. Master Produk, Master Cabang, Akun Karyawan, Jadwal Shift, dan Bagan Akun (COA) <strong>DIJAMIN AMAN &amp; TIDAK DIHAPUS</strong>.
+            </div>
+
+            <!-- Kartu Pindai (Live Scanner) -->
+            <div style="background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 14px; margin-bottom: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span style="font-size: 0.85rem; font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 6px;">
+                        <span>🔍</span> Hasil Pemindaian Database
+                    </span>
+                    <button type="button" onclick="triggerScanSimulation()" id="btn-scan-sim" style="background: #3b82f6; color: #fff; border: none; padding: 5px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; cursor: pointer;">
+                        Pindai Ulang
+                    </button>
+                </div>
+
+                <div id="scan-loading" style="text-align: center; padding: 15px; color: #94a3b8; font-size: 0.82rem; display: none;">
+                    <span>⏳ Sedang memindai seluruh tabel transaksi...</span>
+                </div>
+
+                <div id="scan-results-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                    <div style="background: rgba(255,255,255,0.03); border: 1px solid #334155; border-radius: 6px; padding: 10px;">
+                        <span style="font-size: 0.75rem; color: #94a3b8; display: block;">Transaksi POS Testing:</span>
+                        <strong id="count-sim-sales" style="font-size: 1.15rem; color: #f43f5e; font-family: monospace;">0</strong>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.03); border: 1px solid #334155; border-radius: 6px; padding: 10px;">
+                        <span style="font-size: 0.75rem; color: #94a3b8; display: block;">Rekap Kas Shift Testing:</span>
+                        <strong id="count-sim-summaries" style="font-size: 1.15rem; color: #f59e0b; font-family: monospace;">0</strong>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.03); border: 1px solid #334155; border-radius: 6px; padding: 10px;">
+                        <span style="font-size: 0.75rem; color: #94a3b8; display: block;">Cek Stok Fisik Testing:</span>
+                        <strong id="count-sim-opnames" style="font-size: 1.15rem; color: #38bdf8; font-family: monospace;">0</strong>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.03); border: 1px solid #334155; border-radius: 6px; padding: 10px;">
+                        <span style="font-size: 0.75rem; color: #94a3b8; display: block;">Jurnal Akuntansi Testing:</span>
+                        <strong id="count-sim-journals" style="font-size: 1.15rem; color: #a855f7; font-family: monospace;">0</strong>
+                    </div>
+                </div>
+
+                <!-- Master data protected badge summary -->
+                <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed #334155; font-size: 0.75rem; color: #64748b; display: flex; justify-content: space-between;">
+                    <span>Master Data Dilindungi:</span>
+                    <span id="protected-summary" style="color: #34d399; font-weight: 700;">Memuat status...</span>
+                </div>
+            </div>
+
+            <!-- Form Opsi Pembersihan -->
+            <form id="form-data-purge" onsubmit="submitPurgeSimulation(event)">
+                <div style="margin-bottom: 12px;">
+                    <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 0.82rem; color: #e2e8f0;">
+                        <input type="checkbox" id="check-purge-tags" checked disabled style="margin-top: 3px;">
+                        <div>
+                            <strong>Hapus Transaksi Bertanda Simulasi &amp; Testing (Wajib)</strong>
+                            <div style="font-size: 0.73rem; color: #94a3b8;">Menghapus nota invoice test, catatan selisih kas simulasi, dan mutasi demo.</div>
+                        </div>
+                    </label>
+                </div>
+
+                <div style="margin-bottom: 16px; background: rgba(255,255,255,0.03); border: 1px solid #334155; border-radius: 8px; padding: 10px 12px;">
+                    <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 0.82rem; color: #e2e8f0; margin-bottom: 8px;">
+                        <input type="checkbox" id="check-purge-cutoff" onchange="toggleCutoffDateInput(this.checked)" style="margin-top: 3px;">
+                        <div>
+                            <strong>Opsi Ekstra: Bersihkan Seluruh Transaksi Sebelum Tanggal Tertentu</strong>
+                            <div style="font-size: 0.73rem; color: #94a3b8;">Gunakan jika Anda ingin mereset toko sebelum tanggal operasional resmi pertama (Cut-Off Go-Live).</div>
+                        </div>
+                    </label>
+                    <div id="cutoff-date-wrap" style="display: none; margin-left: 24px;">
+                        <label style="font-size: 0.75rem; color: #94a3b8; display: block; margin-bottom: 4px;">Pilih Tanggal Batas Pembersihan (Cut-Off):</label>
+                        <input type="date" id="input-cutoff-date" value="{{ date('Y-m-d') }}" style="background: #0f172a; border: 1px solid #475569; color: #f8fafc; padding: 6px 10px; border-radius: 6px; font-size: 0.82rem;">
+                    </div>
+                </div>
+
+                <!-- Konfirmasi Super Admin -->
+                <div style="margin-bottom: 16px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 10px 12px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.82rem; color: #fca5a5; font-weight: 700;">
+                        <input type="checkbox" id="check-confirm-action" required onchange="togglePurgeSubmitBtn(this.checked)">
+                        <span>Saya mengonfirmasi untuk mengeksekusi pembersihan data uji coba ini secara permanen.</span>
+                    </label>
+                </div>
+
+                <!-- Actions -->
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" onclick="closeModalDataPurge()" style="background: #334155; color: #f8fafc; border: none; padding: 8px 16px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer;">
+                        Batal
+                    </button>
+                    <button type="submit" id="btn-submit-purge" disabled style="background: #dc2626; color: #ffffff; border: none; padding: 8px 20px; border-radius: 6px; font-size: 0.82rem; font-weight: 700; cursor: not-allowed; opacity: 0.5; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);">
+                        <span>🧹</span> Eksekusi Pembersihan Data
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 @endsection
 

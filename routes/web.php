@@ -39,6 +39,8 @@ Route::get('/bagus', function () {
 Route::get('/bagus/admin', [AdminDashboardController::class, 'index']);
 Route::get('/bagus/admin/ERP', [AdminErpHubController::class, 'index']);
 Route::get('/bagus/admin/erp', [AdminErpHubController::class, 'index']);
+Route::get('/bagus/admin/ERP/scan-simulation', [AdminErpHubController::class, 'scanSimulationData']);
+Route::post('/bagus/admin/ERP/purge-simulation', [AdminErpHubController::class, 'purgeSimulationData']);
 Route::get('/bagus/admin/data', [AdminDashboardController::class, 'dataIndex']);
 Route::get('/bagus/admin/distribusi', [AdminDashboardController::class, 'distribusiIndex']);
 Route::get('/bagus/admin/stok', [AdminDashboardController::class, 'stokIndex']);
@@ -385,6 +387,8 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::get('/', [AdminDashboardController::class, 'index'])->name('admin.index');
     Route::get('/ERP', [AdminErpHubController::class, 'index'])->name('admin.erp');
     Route::get('/erp', [AdminErpHubController::class, 'index'])->name('admin.erp.alias');
+    Route::get('/ERP/scan-simulation', [AdminErpHubController::class, 'scanSimulationData'])->name('admin.erp.scan-simulation');
+    Route::post('/ERP/purge-simulation', [AdminErpHubController::class, 'purgeSimulationData'])->name('admin.erp.purge-simulation');
     Route::get('/data', [AdminDashboardController::class, 'dataIndex'])->name('admin.data');
     Route::get('/distribusi', [AdminDashboardController::class, 'distribusiIndex'])->name('admin.distribusi');
     Route::post('/distribusi/kirim', [AdminDashboardController::class, 'storeTransfer'])->name('admin.distribusi.kirim');
