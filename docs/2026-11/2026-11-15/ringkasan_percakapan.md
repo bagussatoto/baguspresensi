@@ -209,6 +209,13 @@
   - [x] Tombol & template ramah cetak / PDF (`window.print()`) dengan `@media print` styling bersih.
   - [x] Drill-down link pada Kode & Nama Akun mengarah langsung ke Kartu Buku Besar (`admin.akuntansi.buku-besar`).
   - [x] Feature test `AdminAccountingTest` (filter branch & export CSV) lulus 100% (13 tests, 51 assertions).
+- [x] **Neraca Keuangan Multi-Cabang & Ekspor CSV SAK**:
+  - [x] Filter Cabang (`branch_id`): Konsolidasi vs Unit Cabang spesifik untuk Aset (1), Kewajiban (2), Ekuitas (3), dan Laba Berjalan.
+  - [x] Preset Tanggal Cepat (`Hari Ini`, `Akhir Bulan Ini`, `Akhir Tahun Ini`).
+  - [x] Tombol & fitur streaming ekspor CSV formal (`?export=csv`) dengan validasi persamaan dasar akuntansi.
+  - [x] Tombol & template ramah cetak / PDF (`window.print()`) dengan `@media print` styling profesional.
+  - [x] Drill-down link pada Kode & Nama Akun mengarah ke Buku Besar dan Laba Berjalan mengarah ke Laba Rugi.
+  - [x] Feature test `AdminAccountingTest` (filter branch & export CSV Neraca) lulus 100% (15 tests, 59 assertions).
 - [x] **Standardisasi & Repositori**:
   - [x] Laravel Pint code formatter dijalankan pada seluruh file PHP yang dimodifikasi (`vendor/bin/pint --dirty --format agent`).
   - [x] Cache view Blade dibersihkan (`php artisan view:clear`).
@@ -226,7 +233,8 @@
 | `f8b5673` | `feat(accounting): enhance unified General Ledger & Trial Balance dashboard with drill-down, branch filter and CSV export` |
 | `41de96d` | `feat(pos): add physical thermal VOID receipt slip (58mm/80mm) with auto-print, dual-tab reprint and audit trail` |
 | `f7d7de5` | `feat(erp): add simulation data purge tool for Go-Live with master data protection and audit trail` |
-| *(pending)* | `feat(accounting): add multi-branch filtering, CSV export and drill-down to Laba Rugi (P&L)` |
+| `de8fe51` | `feat(accounting): add multi-branch filtering, CSV export and drill-down to Laba Rugi (P&L)` |
+| *(pending)* | `feat(accounting): add multi-branch filtering, CSV export and drill-down to Neraca Keuangan (Balance Sheet)` |
 
 ---
 

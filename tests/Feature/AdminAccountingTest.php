@@ -151,6 +151,36 @@ class AdminAccountingTest extends TestCase
         $response->assertSee('Neraca Keuangan (Balance Sheet)');
         $response->assertSee('AKTIVA / ASET PERUSAHAAN');
         $response->assertSee('PASIVA (KEWAJIBAN');
+        $response->assertSee('Unduh CSV');
+        $response->assertSee('Cetak / PDF');
+    }
+
+    public function test_admin_can_filter_neraca_keuangan_by_branch(): void
+    {
+        $branch = Branch::create([
+            'name' => 'Cabang MGK Cyber Barat',
+            'code' => 'MCB-01',
+            'is_active' => true,
+        ]);
+
+        $response = $this->get(route('admin.akuntansi.neraca', [
+            'branch_id' => $branch->id,
+            'as_of_date' => date('Y-m-d'),
+        ]));
+
+        $response->assertStatus(200);
+        $response->assertSee('Cabang MGK Cyber Barat');
+        $response->assertSee('Akhir Bulan Ini');
+    }
+
+    public function test_admin_can_export_neraca_keuangan_csv(): void
+    {
+        $response = $this->get(route('admin.akuntansi.neraca', [
+            'export' => 'csv',
+        ]));
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
     }
 
     public function test_admin_can_post_manual_balanced_journal(): void

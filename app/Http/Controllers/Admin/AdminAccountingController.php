@@ -532,11 +532,16 @@ class AdminAccountingController extends Controller
     /**
      * 5. Halaman Neraca Keuangan (Balance Sheet).
      */
-    public function neracaIndex(Request $request): View|JsonResponse
+    public function neracaIndex(Request $request): View|JsonResponse|StreamedResponse
     {
         $asOfDate = $request->filled('as_of_date')
             ? Carbon::parse($request->input('as_of_date'))->toDateString()
             : Carbon::today()->toDateString();
+
+        $branches = Branch::where('is_active', true)->orderBy('name')->get();
+        $selectedBranchId = $request->filled('branch_id') && $request->input('branch_id') !== 'all'
+            ? (int) $request->input('branch_id')
+            : null;
 
         // 1. ASET (1-xxxxx)
         $assetAccounts = ChartOfAccount::where('account_category', 'asset')
@@ -547,11 +552,15 @@ class AdminAccountingController extends Controller
         $assetList = [];
         $totalAssets = 0.0;
         foreach ($assetAccounts as $acc) {
-            $lines = JournalEntryLine::whereHas('journalEntry', function ($q) use ($asOfDate): void {
+            $lines = JournalEntryLine::whereHas('journalEntry', function ($q) use ($asOfDate, $selectedBranchId): void {
                 $q->where('status', 'posted')->where('entry_date', '<=', $asOfDate);
+                if ($selectedBranchId) {
+                    $q->where('branch_id', $selectedBranchId);
+                }
             })->where('chart_of_account_id', $acc->id)->get();
 
-            $bal = (float) $acc->opening_balance + ((float) $lines->sum('debit') - (float) $lines->sum('credit'));
+            $openingBal = (! $selectedBranchId || $acc->branch_id === $selectedBranchId) ? (float) $acc->opening_balance : 0.0;
+            $bal = $openingBal + ((float) $lines->sum('debit') - (float) $lines->sum('credit'));
             $assetList[] = ['account' => $acc, 'balance' => $bal];
             $totalAssets += $bal;
         }
@@ -565,11 +574,15 @@ class AdminAccountingController extends Controller
         $liabilityList = [];
         $totalLiabilities = 0.0;
         foreach ($liabilityAccounts as $acc) {
-            $lines = JournalEntryLine::whereHas('journalEntry', function ($q) use ($asOfDate): void {
+            $lines = JournalEntryLine::whereHas('journalEntry', function ($q) use ($asOfDate, $selectedBranchId): void {
                 $q->where('status', 'posted')->where('entry_date', '<=', $asOfDate);
+                if ($selectedBranchId) {
+                    $q->where('branch_id', $selectedBranchId);
+                }
             })->where('chart_of_account_id', $acc->id)->get();
 
-            $bal = (float) $acc->opening_balance + ((float) $lines->sum('credit') - (float) $lines->sum('debit'));
+            $openingBal = (! $selectedBranchId || $acc->branch_id === $selectedBranchId) ? (float) $acc->opening_balance : 0.0;
+            $bal = $openingBal + ((float) $lines->sum('credit') - (float) $lines->sum('debit'));
             $liabilityList[] = ['account' => $acc, 'balance' => $bal];
             $totalLiabilities += $bal;
         }
@@ -583,22 +596,43 @@ class AdminAccountingController extends Controller
         $equityList = [];
         $totalEquity = 0.0;
         foreach ($equityAccounts as $acc) {
-            $lines = JournalEntryLine::whereHas('journalEntry', function ($q) use ($asOfDate): void {
+            $lines = JournalEntryLine::whereHas('journalEntry', function ($q) use ($asOfDate, $selectedBranchId): void {
                 $q->where('status', 'posted')->where('entry_date', '<=', $asOfDate);
+                if ($selectedBranchId) {
+                    $q->where('branch_id', $selectedBranchId);
+                }
             })->where('chart_of_account_id', $acc->id)->get();
 
-            $bal = (float) $acc->opening_balance + ((float) $lines->sum('credit') - (float) $lines->sum('debit'));
+            $openingBal = (! $selectedBranchId || $acc->branch_id === $selectedBranchId) ? (float) $acc->opening_balance : 0.0;
+            $bal = $openingBal + ((float) $lines->sum('credit') - (float) $lines->sum('debit'));
             $equityList[] = ['account' => $acc, 'balance' => $bal];
             $totalEquity += $bal;
         }
 
         // Hitung Laba Periode Berjalan Kumulatif (Pendapatan - HPP - Beban hingga asOfDate)
         $revLines = JournalEntryLine::whereHas('chartOfAccount', fn ($q) => $q->where('account_category', 'revenue'))
-            ->whereHas('journalEntry', fn ($q) => $q->where('status', 'posted')->where('entry_date', '<=', $asOfDate))->get();
+            ->whereHas('journalEntry', function ($q) use ($asOfDate, $selectedBranchId): void {
+                $q->where('status', 'posted')->where('entry_date', '<=', $asOfDate);
+                if ($selectedBranchId) {
+                    $q->where('branch_id', $selectedBranchId);
+                }
+            })->get();
+
         $cogsLines = JournalEntryLine::whereHas('chartOfAccount', fn ($q) => $q->where('account_category', 'cogs'))
-            ->whereHas('journalEntry', fn ($q) => $q->where('status', 'posted')->where('entry_date', '<=', $asOfDate))->get();
+            ->whereHas('journalEntry', function ($q) use ($asOfDate, $selectedBranchId): void {
+                $q->where('status', 'posted')->where('entry_date', '<=', $asOfDate);
+                if ($selectedBranchId) {
+                    $q->where('branch_id', $selectedBranchId);
+                }
+            })->get();
+
         $expLines = JournalEntryLine::whereHas('chartOfAccount', fn ($q) => $q->where('account_category', 'expense'))
-            ->whereHas('journalEntry', fn ($q) => $q->where('status', 'posted')->where('entry_date', '<=', $asOfDate))->get();
+            ->whereHas('journalEntry', function ($q) use ($asOfDate, $selectedBranchId): void {
+                $q->where('status', 'posted')->where('entry_date', '<=', $asOfDate);
+                if ($selectedBranchId) {
+                    $q->where('branch_id', $selectedBranchId);
+                }
+            })->get();
 
         $currentPeriodNetProfit = ((float) $revLines->sum('credit') - (float) $revLines->sum('debit'))
             - ((float) $cogsLines->sum('debit') - (float) $cogsLines->sum('credit'))
@@ -609,10 +643,61 @@ class AdminAccountingController extends Controller
 
         $isBalanced = abs($totalAssets - $totalLiabilitiesAndEquity) < 1.0;
 
+        // EKSPOR CSV FORMAL
+        if ($request->query('export') === 'csv') {
+            $branchName = $selectedBranchId ? (Branch::find($selectedBranchId)?->name ?? 'Cabang '.$selectedBranchId) : 'Konsolidasi Seluruh Cabang';
+            $filename = 'neraca_keuangan_'.date('Ymd').'.csv';
+
+            return response()->streamDownload(function () use ($assetList, $totalAssets, $liabilityList, $totalLiabilities, $equityList, $totalEquity, $currentPeriodNetProfit, $totalEquityWithProfit, $totalLiabilitiesAndEquity, $asOfDate, $branchName, $isBalanced) {
+                $handle = fopen('php://output', 'w');
+                fputcsv($handle, ['NERACA KEUANGAN (BALANCE SHEET) MAYA GRAHA KENCANA']);
+                fputcsv($handle, ['Unit/Cabang', $branchName]);
+                fputcsv($handle, ['Posisi Per Tanggal', $asOfDate]);
+                fputcsv($handle, ['Status Persamaan Akuntansi', $isBalanced ? 'SEIMBANG (ASET = KEWAJIBAN + EKUITAS)' : 'SELISIH']);
+                fputcsv($handle, []);
+
+                fputcsv($handle, ['1. AKTIVA / ASET']);
+                fputcsv($handle, ['Kode Akun', 'Nama Akun', 'Saldo Akhir (Rp)']);
+                foreach ($assetList as $item) {
+                    if ($item['balance'] != 0) {
+                        fputcsv($handle, [$item['account']->account_code, $item['account']->account_name, (string) $item['balance']]);
+                    }
+                }
+                fputcsv($handle, ['TOTAL ASET', '', (string) $totalAssets]);
+                fputcsv($handle, []);
+
+                fputcsv($handle, ['2. KEWAJIBAN (LIABILITIES)']);
+                fputcsv($handle, ['Kode Akun', 'Nama Akun', 'Saldo Akhir (Rp)']);
+                foreach ($liabilityList as $item) {
+                    if ($item['balance'] != 0) {
+                        fputcsv($handle, [$item['account']->account_code, $item['account']->account_name, (string) $item['balance']]);
+                    }
+                }
+                fputcsv($handle, ['TOTAL KEWAJIBAN', '', (string) $totalLiabilities]);
+                fputcsv($handle, []);
+
+                fputcsv($handle, ['3. EKUITAS & MODAL (EQUITY)']);
+                fputcsv($handle, ['Kode Akun', 'Nama Akun', 'Saldo Akhir (Rp)']);
+                foreach ($equityList as $item) {
+                    if ($item['balance'] != 0) {
+                        fputcsv($handle, [$item['account']->account_code, $item['account']->account_name, (string) $item['balance']]);
+                    }
+                }
+                fputcsv($handle, ['SUBTOTAL EKUITAS', '', (string) $totalEquity]);
+                fputcsv($handle, ['Laba Bersih Periode Berjalan', '', (string) $currentPeriodNetProfit]);
+                fputcsv($handle, ['TOTAL EKUITAS TERMASUK LABA', '', (string) $totalEquityWithProfit]);
+                fputcsv($handle, []);
+
+                fputcsv($handle, ['TOTAL PASIVA (KEWAJIBAN + EKUITAS)', '', (string) $totalLiabilitiesAndEquity]);
+                fclose($handle);
+            }, $filename, ['Content-Type' => 'text/csv']);
+        }
+
         if ($request->wantsJson()) {
             return response()->json([
                 'success' => true,
                 'as_of_date' => $asOfDate,
+                'selected_branch_id' => $selectedBranchId,
                 'total_assets' => $totalAssets,
                 'total_liabilities' => $totalLiabilities,
                 'total_equity' => $totalEquityWithProfit,
@@ -622,6 +707,8 @@ class AdminAccountingController extends Controller
 
         return view('admin.accounting.neraca', compact(
             'asOfDate',
+            'branches',
+            'selectedBranchId',
             'assetList',
             'totalAssets',
             'liabilityList',
