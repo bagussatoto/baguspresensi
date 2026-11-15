@@ -462,4 +462,88 @@ class AdminAccountingTest extends TestCase
             'description' => 'Jurnal Koreksi Setelah Reopen',
         ]);
     }
+
+    public function test_admin_can_access_arus_kas_and_reconcile_balances(): void
+    {
+        $expenseAccount = ChartOfAccount::create([
+            'account_code' => '6-10001',
+            'account_name' => 'Beban Listrik & Internet',
+            'account_category' => AccountCategory::EXPENSE,
+            'normal_balance' => NormalBalance::DEBIT,
+            'level' => 3,
+            'is_header' => false,
+            'is_active' => true,
+            'opening_balance' => 0,
+            'current_balance' => 0,
+        ]);
+
+        $equityAccount = ChartOfAccount::create([
+            'account_code' => '3-10001',
+            'account_name' => 'Modal Disetor Pemilik',
+            'account_category' => AccountCategory::EQUITY,
+            'normal_balance' => NormalBalance::CREDIT,
+            'level' => 3,
+            'is_header' => false,
+            'is_active' => true,
+            'current_balance' => 0,
+        ]);
+
+        // Setoran modal bulan lalu -> membentuk Saldo Kas Awal periode bulan ini Rp 1.000.000
+        $prevMonthDate = date('Y-m-d', strtotime('first day of previous month'));
+        $this->post(route('admin.akuntansi.jurnal.manual'), [
+            'entry_date' => $prevMonthDate,
+            'description' => 'Setoran Modal Awal',
+            'lines' => [
+                ['chart_of_account_id' => $this->cashAccount->id, 'debit' => 1000000, 'credit' => 0],
+                ['chart_of_account_id' => $equityAccount->id, 'debit' => 0, 'credit' => 1000000],
+            ],
+        ]);
+
+        // Kas masuk Rp 400.000 dari Pendapatan bulan ini
+        $this->post(route('admin.akuntansi.jurnal.manual'), [
+            'entry_date' => date('Y-m-d'),
+            'description' => 'Penerimaan Tunai POS',
+            'lines' => [
+                ['chart_of_account_id' => $this->cashAccount->id, 'debit' => 400000, 'credit' => 0],
+                ['chart_of_account_id' => $this->revenueAccount->id, 'debit' => 0, 'credit' => 400000],
+            ],
+        ]);
+
+        // Kas keluar Rp 100.000 untuk Beban Listrik
+        $this->post(route('admin.akuntansi.jurnal.manual'), [
+            'entry_date' => date('Y-m-d'),
+            'description' => 'Bayar Tagihan Listrik',
+            'lines' => [
+                ['chart_of_account_id' => $expenseAccount->id, 'debit' => 100000, 'credit' => 0],
+                ['chart_of_account_id' => $this->cashAccount->id, 'debit' => 0, 'credit' => 100000],
+            ],
+        ]);
+
+        $htmlResponse = $this->get(route('admin.akuntansi.arus-kas'));
+        $htmlResponse->assertStatus(200);
+        $htmlResponse->assertSee('Laporan Arus Kas (Cash Flow Statement)');
+        $htmlResponse->assertSee('Unduh CSV');
+        $htmlResponse->assertSee('Cetak / PDF');
+
+        $jsonResponse = $this->getJson(route('admin.akuntansi.arus-kas'));
+        $jsonResponse->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'opening_cash_balance' => 1000000.0,
+                'total_operating_cash_flow' => 300000.0,
+                'net_cash_change' => 300000.0,
+                'ending_cash_balance' => 1300000.0,
+                'is_reconciled' => true,
+            ]);
+    }
+
+    public function test_admin_can_export_arus_kas_csv(): void
+    {
+        $response = $this->get(route('admin.akuntansi.arus-kas', [
+            'export' => 'csv',
+        ]));
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
+    }
 }

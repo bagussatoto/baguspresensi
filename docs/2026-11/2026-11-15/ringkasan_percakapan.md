@@ -223,6 +223,12 @@
   - [x] Fitur *Audit Controlled Reopen* (buka kembali periode dengan alasan wajib, pembalikan jurnal penutup, dan pencatatan WORM Audit Log).
   - [x] Antarmuka `/admin/akuntansi/tutup-buku` + pill navigasi di menu Akuntansi.
   - [x] Feature test `AdminAccountingTest` lulus 100% (19 tests, 77 assertions).
+- [x] **Laporan Arus Kas (Cash Flow Statement - Metode Langsung PSAK 202 / SAK EP)**:
+  - [x] Klasifikasi otomatis arus kas ke 3 aktivitas: **Operasional**, **Investasi**, dan **Pendanaan** berdasarkan akun lawan pada jurnal Kas & Bank (`1-10xxx` & `1-11xxx`).
+  - [x] Pemisahan mutasi internal Kas/Bank (seperti Setoran Shift Kasir ke Bank/Kantor) agar tidak mendistorsi arus kas bersih.
+  - [x] Rekonsiliasi matematis otomatis 100% (`Saldo Awal + Kenaikan/Penurunan Bersih = Saldo Akhir Buku Besar`).
+  - [x] Filter Multi-Cabang, Preset Periode Cepat, Rincian Saldo per Akun Kas/Bank dengan *drill-down* ke Buku Besar, Ekspor CSV, dan Cetak PDF (`@media print`).
+  - [x] Feature test `AdminAccountingTest` lulus 100% (21 tests, 86 assertions).
 - [x] **Standardisasi & Repositori**:
   - [x] Laravel Pint code formatter dijalankan pada seluruh file PHP yang dimodifikasi (`vendor/bin/pint --dirty --format agent`).
   - [x] Cache view Blade dibersihkan (`php artisan view:clear`).
@@ -242,7 +248,9 @@
 | `f7d7de5` | `feat(erp): add simulation data purge tool for Go-Live with master data protection and audit trail` |
 | `de8fe51` | `feat(accounting): add multi-branch filtering, CSV export and drill-down to Laba Rugi (P&L)` |
 | `e0da9ea` | `feat(accounting): add multi-branch filtering, CSV export and drill-down to Neraca Keuangan (Balance Sheet)` |
-| *(pending)* | `feat(accounting): add accounting period closing, lock enforcement and automated closing journal entries` |
+| `be6c6bd` | `feat(accounting): add accounting period closing, lock enforcement and automated closing journal entries` |
+| `6e313e4` | `docs: add project overview essay in Markdown format` |
+| *(pending)* | `feat(accounting): add Direct-Method Cash Flow Statement (Laporan Arus Kas) with branch filter, reconciliation and CSV export` |
 
 ---
 

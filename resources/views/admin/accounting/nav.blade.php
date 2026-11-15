@@ -14,6 +14,9 @@
     <a href="{{ route('admin.akuntansi.neraca') }}" class="tab-pill-btn {{ request()->routeIs('admin.akuntansi.neraca*') || request()->is('*akuntansi/neraca*') ? 'active' : '' }}">
         <span>🏛️</span> Neraca Keuangan (Balance Sheet)
     </a>
+    <a href="{{ route('admin.akuntansi.arus-kas') }}" class="tab-pill-btn {{ request()->routeIs('admin.akuntansi.arus-kas*') || request()->is('*akuntansi/arus-kas*') ? 'active' : '' }}">
+        <span>💵</span> Arus Kas (Cash Flow)
+    </a>
     <a href="{{ route('admin.akuntansi.pivot') }}" class="tab-pill-btn {{ request()->routeIs('admin.akuntansi.pivot*') || request()->is('*akuntansi/pivot*') ? 'active' : '' }}">
         <span>📊</span> Pivot Analisis Transaksi SAK
     </a>

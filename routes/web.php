@@ -268,6 +268,7 @@ Route::middleware(['web', 'auditor.readonly'])->group(function () {
     Route::get('/bagus/admin/akuntansi/neraca-saldo', [AdminAccountingController::class, 'neracaSaldoIndex']);
     Route::get('/bagus/admin/akuntansi/laba-rugi', [AdminAccountingController::class, 'labaRugiIndex']);
     Route::get('/bagus/admin/akuntansi/neraca', [AdminAccountingController::class, 'neracaIndex']);
+    Route::get('/bagus/admin/akuntansi/arus-kas', [AdminAccountingController::class, 'arusKasIndex']);
     Route::get('/bagus/admin/akuntansi/pivot', [AdminAccountingController::class, 'pivotIndex']);
     Route::get('/bagus/admin/akuntansi/tutup-buku', [AdminAccountingController::class, 'tutupBukuIndex']);
     Route::post('/bagus/admin/akuntansi/tutup-buku/close', [AdminAccountingController::class, 'closePeriod']);
@@ -477,6 +478,7 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::get('/akuntansi/neraca-saldo', [AdminAccountingController::class, 'neracaSaldoIndex'])->name('admin.akuntansi.neraca-saldo');
     Route::get('/akuntansi/laba-rugi', [AdminAccountingController::class, 'labaRugiIndex'])->name('admin.akuntansi.laba-rugi');
     Route::get('/akuntansi/neraca', [AdminAccountingController::class, 'neracaIndex'])->name('admin.akuntansi.neraca');
+    Route::get('/akuntansi/arus-kas', [AdminAccountingController::class, 'arusKasIndex'])->name('admin.akuntansi.arus-kas');
     Route::get('/akuntansi/pivot', [AdminAccountingController::class, 'pivotIndex'])->name('admin.akuntansi.pivot');
     Route::get('/akuntansi/tutup-buku', [AdminAccountingController::class, 'tutupBukuIndex'])->name('admin.akuntansi.tutup-buku');
     Route::post('/akuntansi/tutup-buku/close', [AdminAccountingController::class, 'closePeriod'])->name('admin.akuntansi.tutup-buku.close');

@@ -1182,4 +1182,255 @@ class AdminAccountingController extends Controller
 
         return redirect()->route('admin.akuntansi.tutup-buku')->with('success', $msg);
     }
+
+    /**
+     * 8. Halaman Laporan Arus Kas (Cash Flow Statement - Metode Langsung PSAK 202 / SAK EP).
+     */
+    public function arusKasIndex(Request $request): View|JsonResponse|StreamedResponse
+    {
+        $startDate = $request->filled('start_date')
+            ? Carbon::parse($request->input('start_date'))->toDateString()
+            : Carbon::now()->startOfMonth()->toDateString();
+        $endDate = $request->filled('end_date')
+            ? Carbon::parse($request->input('end_date'))->toDateString()
+            : Carbon::now()->endOfMonth()->toDateString();
+
+        $branches = Branch::where('is_active', true)->orderBy('name')->get();
+        $selectedBranchId = $request->filled('branch_id') && $request->input('branch_id') !== 'all'
+            ? (int) $request->input('branch_id')
+            : null;
+
+        // Identifikasi akun Kas & Setara Kas (1-10xxx dan 1-11xxx)
+        $cashAccounts = ChartOfAccount::where('is_header', false)
+            ->where(function ($q): void {
+                $q->where('account_code', 'like', '1-10%')
+                    ->orWhere('account_code', 'like', '1-11%');
+            })
+            ->orderBy('account_code')
+            ->get();
+
+        $cashAccountIds = $cashAccounts->pluck('id')->all();
+
+        // Hitung Saldo Kas Awal (sebelum $startDate) & Saldo Akhir (hingga $endDate) per akun
+        $cashAccountSummaries = [];
+        $openingCashBalance = 0.0;
+        $actualEndingCashBalance = 0.0;
+
+        foreach ($cashAccounts as $acc) {
+            $baseOpening = (! $selectedBranchId || $acc->branch_id === $selectedBranchId) ? (float) $acc->opening_balance : 0.0;
+
+            $beforeLines = JournalEntryLine::where('chart_of_account_id', $acc->id)
+                ->whereHas('journalEntry', function ($q) use ($startDate, $selectedBranchId): void {
+                    $q->where('status', 'posted')->where('entry_date', '<', $startDate);
+                    if ($selectedBranchId) {
+                        $q->where('branch_id', $selectedBranchId);
+                    }
+                })->get();
+
+            $accOpening = $baseOpening + ((float) $beforeLines->sum('debit') - (float) $beforeLines->sum('credit'));
+
+            $periodLines = JournalEntryLine::where('chart_of_account_id', $acc->id)
+                ->whereHas('journalEntry', function ($q) use ($startDate, $endDate, $selectedBranchId): void {
+                    $q->where('status', 'posted')->whereBetween('entry_date', [$startDate, $endDate]);
+                    if ($selectedBranchId) {
+                        $q->where('branch_id', $selectedBranchId);
+                    }
+                })->get();
+
+            $periodIn = (float) $periodLines->sum('debit');
+            $periodOut = (float) $periodLines->sum('credit');
+            $accEnding = $accOpening + ($periodIn - $periodOut);
+
+            $openingCashBalance += $accOpening;
+            $actualEndingCashBalance += $accEnding;
+
+            $cashAccountSummaries[] = [
+                'account' => $acc,
+                'opening' => $accOpening,
+                'inflow' => $periodIn,
+                'outflow' => $periodOut,
+                'ending' => $accEnding,
+            ];
+        }
+
+        // Ambil semua Jurnal yang menyentuh akun Kas & Bank pada periode ini
+        $cashJournals = empty($cashAccountIds)
+            ? collect()
+            : JournalEntry::with(['lines.chartOfAccount'])
+                ->where('status', 'posted')
+                ->whereBetween('entry_date', [$startDate, $endDate])
+                ->when($selectedBranchId, fn ($q) => $q->where('branch_id', $selectedBranchId))
+                ->whereHas('lines', fn ($q) => $q->whereIn('chart_of_account_id', $cashAccountIds))
+                ->orderBy('entry_date')
+                ->orderBy('id')
+                ->get();
+
+        $operatingItems = [];
+        $investingItems = [];
+        $financingItems = [];
+        $internalTransferTotal = 0.0;
+
+        foreach ($cashJournals as $journal) {
+            $cashDebit = 0.0;
+            $cashCredit = 0.0;
+            $counterpartLines = [];
+
+            foreach ($journal->lines as $line) {
+                if (in_array($line->chart_of_account_id, $cashAccountIds, true)) {
+                    $cashDebit += (float) $line->debit;
+                    $cashCredit += (float) $line->credit;
+                } else {
+                    $counterpartLines[] = $line;
+                }
+            }
+
+            $cashDelta = $cashDebit - $cashCredit;
+
+            if (abs($cashDelta) < 0.01) {
+                $internalTransferTotal += $cashDebit;
+
+                continue;
+            }
+
+            // Tentukan akun lawan utama untuk klasifikasi aktivitas arus kas
+            $primaryCounterpart = null;
+            if ($cashDelta > 0) {
+                // Kas masuk -> cari baris kredit non-kas terbesar (utamakan pendapatan/modal)
+                usort($counterpartLines, fn ($a, $b) => ((float) $b->credit) <=> ((float) $a->credit));
+                $primaryCounterpart = $counterpartLines[0]?->chartOfAccount ?? null;
+            } else {
+                // Kas keluar -> cari baris debit non-kas terbesar
+                usort($counterpartLines, fn ($a, $b) => ((float) $b->debit) <=> ((float) $a->debit));
+                $primaryCounterpart = $counterpartLines[0]?->chartOfAccount ?? null;
+            }
+
+            $code = $primaryCounterpart?->account_code ?? '0-00000';
+            $name = $primaryCounterpart?->account_name ?? 'Transaksi Kas Lainnya';
+            $cat = $primaryCounterpart ? strtolower($primaryCounterpart->account_category->value ?? (string) $primaryCounterpart->account_category) : 'other';
+
+            if (str_contains((string) $journal->reference_type, 'CafeSale') || str_starts_with($code, '4-')) {
+                $bucket = 'operating';
+                $label = $cashDelta >= 0
+                    ? 'Penerimaan Kas dari Penjualan POS & Billing'
+                    : 'Pengembalian / VOID Penjualan POS';
+                $key = $cashDelta >= 0 ? 'op_pos_in' : 'op_pos_void';
+            } elseif (str_starts_with($code, '1-2') || str_starts_with($code, '1-3') && $cat === 'asset' && str_contains(strtolower($name), 'tetap') || str_starts_with($code, '1-4')) {
+                $bucket = 'investing';
+                $label = $name;
+                $key = 'inv_'.$code;
+            } elseif (str_starts_with($code, '3-') || str_starts_with($code, '2-2') || $cat === 'equity') {
+                $bucket = 'financing';
+                $label = $name;
+                $key = 'fin_'.$code;
+            } else {
+                $bucket = 'operating';
+                $label = $name;
+                $key = 'op_'.$code;
+            }
+
+            if ($bucket === 'operating') {
+                $operatingItems[$key]['label'] = $label;
+                $operatingItems[$key]['code'] = $code;
+                $operatingItems[$key]['amount'] = ($operatingItems[$key]['amount'] ?? 0.0) + $cashDelta;
+            } elseif ($bucket === 'investing') {
+                $investingItems[$key]['label'] = $label;
+                $investingItems[$key]['code'] = $code;
+                $investingItems[$key]['amount'] = ($investingItems[$key]['amount'] ?? 0.0) + $cashDelta;
+            } else {
+                $financingItems[$key]['label'] = $label;
+                $financingItems[$key]['code'] = $code;
+                $financingItems[$key]['amount'] = ($financingItems[$key]['amount'] ?? 0.0) + $cashDelta;
+            }
+        }
+
+        $totalOperatingCashFlow = array_sum(array_column($operatingItems, 'amount'));
+        $totalInvestingCashFlow = array_sum(array_column($investingItems, 'amount'));
+        $totalFinancingCashFlow = array_sum(array_column($financingItems, 'amount'));
+
+        $netCashChange = $totalOperatingCashFlow + $totalInvestingCashFlow + $totalFinancingCashFlow;
+        $calculatedEndingCash = $openingCashBalance + $netCashChange;
+        $isReconciled = abs($calculatedEndingCash - $actualEndingCashBalance) < 1.0;
+
+        if ($request->query('export') === 'csv') {
+            $branchName = $selectedBranchId ? (Branch::find($selectedBranchId)?->name ?? 'Cabang '.$selectedBranchId) : 'Konsolidasi Seluruh Cabang';
+            $filename = 'arus_kas_'.date('Ymd').'.csv';
+
+            return response()->streamDownload(function () use (
+                $branchName, $startDate, $endDate, $openingCashBalance,
+                $operatingItems, $totalOperatingCashFlow,
+                $investingItems, $totalInvestingCashFlow,
+                $financingItems, $totalFinancingCashFlow,
+                $netCashChange, $actualEndingCashBalance, $internalTransferTotal
+            ) {
+                $handle = fopen('php://output', 'w');
+                fputcsv($handle, ['LAPORAN ARUS KAS (CASH FLOW STATEMENT) MAYA GRAHA KENCANA']);
+                fputcsv($handle, ['Unit/Cabang', $branchName]);
+                fputcsv($handle, ['Periode', $startDate.' s/d '.$endDate]);
+                fputcsv($handle, ['Saldo Kas Awal Periode', (string) $openingCashBalance]);
+                fputcsv($handle, []);
+
+                fputcsv($handle, ['A. ARUS KAS DARI AKTIVITAS OPERASIONAL']);
+                fputcsv($handle, ['Kode Referensi', 'Keterangan', 'Arus Kas Bersih (Rp)']);
+                foreach ($operatingItems as $item) {
+                    fputcsv($handle, [$item['code'], $item['label'], (string) $item['amount']]);
+                }
+                fputcsv($handle, ['', 'Arus Kas Bersih Aktivitas Operasional', (string) $totalOperatingCashFlow]);
+                fputcsv($handle, []);
+
+                fputcsv($handle, ['B. ARUS KAS DARI AKTIVITAS INVESTASI']);
+                foreach ($investingItems as $item) {
+                    fputcsv($handle, [$item['code'], $item['label'], (string) $item['amount']]);
+                }
+                fputcsv($handle, ['', 'Arus Kas Bersih Aktivitas Investasi', (string) $totalInvestingCashFlow]);
+                fputcsv($handle, []);
+
+                fputcsv($handle, ['C. ARUS KAS DARI AKTIVITAS PENDANAAN']);
+                foreach ($financingItems as $item) {
+                    fputcsv($handle, [$item['code'], $item['label'], (string) $item['amount']]);
+                }
+                fputcsv($handle, ['', 'Arus Kas Bersih Aktivitas Pendanaan', (string) $totalFinancingCashFlow]);
+                fputcsv($handle, []);
+
+                fputcsv($handle, ['KENAIKAN / (PENURUNAN) KAS BERSIH', '', (string) $netCashChange]);
+                fputcsv($handle, ['SALDO KAS AKHIR PERIODE', '', (string) $actualEndingCashBalance]);
+                fputcsv($handle, ['Catatan Mutasi Internal Kas/Bank (Setoran Shift)', '', (string) $internalTransferTotal]);
+                fclose($handle);
+            }, $filename, ['Content-Type' => 'text/csv']);
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'selected_branch_id' => $selectedBranchId,
+                'opening_cash_balance' => $openingCashBalance,
+                'total_operating_cash_flow' => $totalOperatingCashFlow,
+                'total_investing_cash_flow' => $totalInvestingCashFlow,
+                'total_financing_cash_flow' => $totalFinancingCashFlow,
+                'net_cash_change' => $netCashChange,
+                'ending_cash_balance' => $actualEndingCashBalance,
+                'is_reconciled' => $isReconciled,
+            ]);
+        }
+
+        return view('admin.accounting.arus_kas', compact(
+            'startDate',
+            'endDate',
+            'branches',
+            'selectedBranchId',
+            'cashAccountSummaries',
+            'openingCashBalance',
+            'operatingItems',
+            'totalOperatingCashFlow',
+            'investingItems',
+            'totalInvestingCashFlow',
+            'financingItems',
+            'totalFinancingCashFlow',
+            'netCashChange',
+            'actualEndingCashBalance',
+            'internalTransferTotal',
+            'isReconciled'
+        ));
+    }
 }
