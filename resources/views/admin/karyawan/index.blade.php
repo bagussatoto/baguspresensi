@@ -1,25 +1,12 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maya Graha Kencana — Pengaturan Karyawan</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+@extends('admin.dashboard.layout')
 
+@section('title', 'Pengaturan Karyawan')
+
+@section('extra-styles')
     <style>
         :root {
             --header-blue: #2c7ea1;
             --header-dark-blue: #236784;
-            --subnav-blue: #277799;
-            --subnav-active: #195673;
-            --sidebar-bg: #222d32;
-            --sidebar-header: #1a2226;
-            --sidebar-hover: #1e282c;
-            --sidebar-text: #b8c7ce;
-            --sidebar-active-text: #ffffff;
             --body-bg: #f4f6f9;
             --content-border: #d2d6de;
             --text-dark: #333333;
@@ -32,18 +19,14 @@
             --border-red: #dd4b39;
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        .erp-legacy-surface {
+            font-family: 'Roboto', 'Plus Jakarta Sans', sans-serif;
             background-color: var(--body-bg);
             color: var(--text-dark);
             font-size: 13px;
-            overflow-x: hidden;
+            padding: 18px 20px 30px;
+            border-radius: 12px;
+            min-height: calc(100vh - 120px);
         }
 
         /* TOP HEADER */
@@ -1094,99 +1077,14 @@
             }
         }
     </style>
-</head>
-<body>
+@endsection
 
-    @include('admin.partials.erp_navbar')
-
-    <!-- APP WRAPPER -->
-    <div class="app-wrapper">
-        <!-- LEFT SIDEBAR -->
-        <aside class="main-sidebar">
-            <!-- USER PANEL -->
-            <div class="sidebar-user-panel">
-                <div class="user-avatar-circle">B</div>
-                <div class="user-info-text">
-                    <div class="user-info-name">Bagus</div>
-                    <div class="user-info-role">manager @PUSAT</div>
-                    <div class="user-status-badge">
-                        <span class="status-dot-blink"></span>
-                        <span id="liveTimeBadge">03:31:51 ON</span>
-                    </div>
-                </div>
+@section('content')
+    <div class="erp-legacy-surface">
+            <div style="display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
+                <button type="button" onclick="switchMainTab('karyawan')" style="padding: 7px 14px; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #1e293b; font-size: 12.5px; font-weight: 600; cursor: pointer;">🗄️ Data Karyawan</button>
+                <button type="button" onclick="switchMainTab('profile')" style="padding: 7px 14px; border-radius: 6px; border: 1px solid #cbd5e1; background: #ffffff; color: #1e293b; font-size: 12.5px; font-weight: 600; cursor: pointer;">👤 Profil Karyawan</button>
             </div>
-
-            <!-- MENU -->
-            <div class="sidebar-nav-header">MAIN NAVIGATION</div>
-            <ul class="sidebar-menu">
-                <li class="active" id="sidebarMenuKaryawan">
-                    <a href="javascript:void(0)" onclick="switchMainTab('karyawan')">
-                        <span class="menu-item-left">🗄️ <span>data karyawan</span></span>
-                    </a>
-                </li>
-                <li id="sidebarMenuProfile">
-                    <a href="javascript:void(0)" onclick="switchMainTab('profile')">
-                        <span class="menu-item-left">👤 <span>profil karyawan</span></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="#pembelian">
-                        <span class="menu-item-left">💳 <span>pembelian</span></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ route('warnet.index') }}#stocks">
-                        <span class="menu-item-left">📦 <span>stok gudang</span></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ route('warnet.index') }}#transfers">
-                        <span class="menu-item-left">🚚 <span>distribusi</span></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ route('admin.penjualan') }}">
-                        <span class="menu-item-left">🛒 <span>penjualan</span></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="#akunting">
-                        <span class="menu-item-left">🧮 <span>akunting</span></span>
-                    </a>
-                </li>
-                <!-- <li>
-                    <a href="#laporan">
-                        <span class="menu-item-left">📊 <span>laporan</span></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="#speedtest">
-                        <span class="menu-item-left">⚡ <span>speedtest</span></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="#link">
-                        <span class="menu-item-left">🔗 <span>link</span></span>
-                    </a>
-                </li>
-                <li> -->
-                    <a href="#setting">
-                        <span class="menu-item-left">⚙️ <span>Setting</span></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="javascript:void(0)" onclick="document.getElementById('logoutFormSidebar').submit()">
-                        <span class="menu-item-left">🔒 <span>Logout</span></span>
-                    </a>
-                    <form id="logoutFormSidebar" action="{{ route('logout') }}" method="POST" style="display: none;">
-                        @csrf
-                    </form>
-                </li>
-            </ul>
-        </aside>
-
-        <!-- MAIN CONTENT -->
-        <main class="content-wrapper">
             <div id="sectionKaryawan" class="main-tab-panel">
                 <!-- PAGE TITLE RIBBON -->
                 <div class="page-title-banner">
@@ -1727,9 +1625,10 @@
                     </div>
                 </div>
             </div> <!-- CLOSE #sectionProfile -->
-        </main>
     </div>
+@endsection
 
+@section('modals')
     <!-- MODAL 1: ATUR HAK AKSES -->
     <div class="modal-overlay" id="aksesModal">
         <div class="modal-window">
@@ -1938,26 +1837,11 @@
 
     <!-- TOAST NOTIFICATION -->
     <div class="toast-notify" id="toastBox">Notifikasi</div>
+@endsection
 
+@section('scripts')
     <script>
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
-        // LIVE TIME CLOCK (Matching screenshot 03:31:51 ON)
-        function updateLiveClock() {
-            const now = new Date();
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            const seconds = String(now.getSeconds()).padStart(2, '0');
-            const el = document.getElementById('liveTimeBadge');
-            if (el) el.innerText = `${hours}:${minutes}:${seconds} ON`;
-        }
-        setInterval(updateLiveClock, 1000);
-        updateLiveClock();
-
-        // TOGGLE SIDEBAR
-        function toggleSidebar() {
-            document.body.classList.toggle('sidebar-collapse');
-        }
 
         // TOAST ALERT
         function showToast(message) {
@@ -2562,5 +2446,4 @@
         window.addEventListener('hashchange', handleHashRouting);
         document.addEventListener('DOMContentLoaded', handleHashRouting);
     </script>
-</body>
-</html>
+@endsection

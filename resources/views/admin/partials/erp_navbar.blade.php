@@ -47,20 +47,6 @@
     .brand-title:hover {
         color: #e0f2fe !important;
     }
-    .sidebar-toggle-btn {
-        background: transparent !important;
-        border: none !important;
-        color: #ffffff !important;
-        font-size: 19px !important;
-        cursor: pointer !important;
-        padding: 4px 8px !important;
-        border-radius: 4px !important;
-        line-height: 1 !important;
-        transition: background 0.15s ease !important;
-    }
-    .sidebar-toggle-btn:hover {
-        background: rgba(255, 255, 255, 0.18) !important;
-    }
     .header-right-tools, .header-right-user {
         display: flex !important;
         align-items: center !important;
@@ -259,9 +245,6 @@
 <!-- TOP MAIN HEADER (MGK ERP) -->
 <header class="main-header">
     <div class="header-brand-wrap">
-        <button class="sidebar-toggle-btn" id="sidebarToggle" onclick="toggleErpSidebar()" title="Toggle Sidebar">
-            ☰
-        </button>
         <a href="{{ route('admin.index') }}" class="brand-title" title="Kembali ke Dashboard Utama MGK ERP">
             🏢 MGK ERP
         </a>
@@ -441,14 +424,6 @@
 </div>
 
 <script>
-    function toggleErpSidebar() {
-        const sidebar = document.getElementById('mainSidebar') || document.querySelector('.main-sidebar') || document.querySelector('.admin-sidebar');
-        if (sidebar) {
-            document.body.classList.toggle('sidebar-collapsed');
-            document.body.classList.toggle('sidebar-open');
-        }
-    }
-
     function openErpModal(id) {
         const modal = document.getElementById(id);
         if (modal) {

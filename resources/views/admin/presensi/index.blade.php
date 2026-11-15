@@ -1,14 +1,8 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maya Graha Kencana — Monitoring & Audit Presensi (SoT)</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+@extends('admin.dashboard.layout')
 
+@section('title', 'Monitoring & Audit Presensi (SoT)')
+
+@section('extra-styles')
     <!-- Leaflet.js untuk Visualisasi Geofence & Radar Presensi (Free OpenStreetMap) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -17,13 +11,6 @@
         :root {
             --header-blue: #2c7ea1;
             --header-dark-blue: #236784;
-            --subnav-blue: #277799;
-            --subnav-active: #195673;
-            --sidebar-bg: #222d32;
-            --sidebar-header: #1a2226;
-            --sidebar-hover: #1e282c;
-            --sidebar-text: #b8c7ce;
-            --sidebar-active-text: #ffffff;
             --body-bg: #f4f6f9;
             --content-border: #d2d6de;
             --text-dark: #333333;
@@ -34,13 +21,14 @@
             --btn-red: #d9534f;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        .erp-legacy-surface {
+            font-family: 'Roboto', 'Plus Jakarta Sans', sans-serif;
             background-color: var(--body-bg);
             color: var(--text-dark);
             font-size: 13px;
-            overflow-x: hidden;
+            padding: 18px 20px 30px;
+            border-radius: 12px;
+            min-height: calc(100vh - 120px);
         }
 
         /* HEADER */
@@ -443,27 +431,10 @@
             50% { opacity: 0.5; }
         }
     </style>
-</head>
-<body>
+@endsection
 
-    <!-- TOP MAIN HEADER -->
-    @include('admin.partials.erp_navbar')
-
-    <!-- APP WRAPPER -->
-    <div class="app-wrapper">
-        <!-- SIDEBAR -->
-        <aside class="main-sidebar">
-            <div class="sidebar-user-panel">
-                <div class="user-avatar-circle">B</div>
-                <div class="user-info-text">
-                    <div class="user-info-name">Bagus Administrator</div>
-                    <div class="user-info-role">Manager Operasional @PUSAT</div>
-                </div>
-            </div>
-        </aside>
-
-        <!-- CONTENT -->
-        <main class="content-wrapper">
+@section('content')
+    <div class="erp-legacy-surface">
             <!-- INTERNAL TABS -->
             <div class="internal-nav-tabs">
                 <a href="{{ route('admin.presensi') }}" class="internal-tab-link active">📅 Presensi Harian (SoT)</a>
@@ -716,9 +687,10 @@
                     </table>
                 </div>
             </div>
-        </main>
     </div>
+@endsection
 
+@section('modals')
     <!-- MODAL 1: INSPEKSI 360° SOT AUDIT RECORD -->
     <div class="modal-overlay" id="sotAuditModal">
         <div class="modal-box modal-box-lg">
@@ -774,12 +746,10 @@
             </div>
         </div>
     </div>
+@endsection
 
+@section('scripts')
     <script>
-        document.getElementById('sidebarToggleBtn')?.addEventListener('click', function() {
-            document.body.classList.toggle('sidebar-collapse');
-        });
-
         // 1. Photo Modal Sederhana
         function openPhotoModal(src, title) {
             document.getElementById('modalImg').src = src;
@@ -1003,5 +973,4 @@
             }
         });
     </script>
-</body>
-</html>
+@endsection

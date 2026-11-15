@@ -1,25 +1,12 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maya Graha Kencana — Daftar Supplier</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+@extends('admin.dashboard.layout')
 
+@section('title', 'Daftar Supplier')
+
+@section('extra-styles')
     <style>
         :root {
             --header-blue: #2c7ea1;
             --header-dark-blue: #236784;
-            --subnav-blue: #287a9e;
-            --subnav-active: #1a5975;
-            --sidebar-bg: #222d32;
-            --sidebar-header: #1a2226;
-            --sidebar-hover: #1e282c;
-            --sidebar-text: #b8c7ce;
-            --sidebar-active-text: #ffffff;
             --body-bg: #f4f6f9;
             --content-border: #d2d6de;
             --text-dark: #333333;
@@ -28,18 +15,14 @@
             --orange-note: #d35400;
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        .erp-legacy-surface {
+            font-family: 'Roboto', 'Plus Jakarta Sans', sans-serif;
             background-color: var(--body-bg);
             color: var(--text-dark);
             font-size: 13px;
-            overflow-x: hidden;
+            padding: 18px 20px 30px;
+            border-radius: 12px;
+            min-height: calc(100vh - 120px);
         }
 
         /* TOP HEADER */
@@ -842,123 +825,17 @@
             background: #dc3545;
         }
 
-        /* COLLAPSED SIDEBAR */
-        body.sidebar-collapsed .main-sidebar {
-            width: 0;
-            transform: translateX(-230px);
-        }
-        body.sidebar-collapsed .sub-navbar,
-        body.sidebar-collapsed .content-wrapper {
-            margin-left: 0;
-            left: 0;
-        }
-
         /* RESPONSIVE */
         @media (max-width: 768px) {
-            .main-sidebar {
-                transform: translateX(-230px);
-            }
-            .sub-navbar,
-            .content-wrapper {
-                margin-left: 0;
-                left: 0;
-            }
-            body.sidebar-mobile-open .main-sidebar {
-                transform: translateX(0);
-            }
             .form-row {
                 grid-template-columns: 1fr;
             }
         }
     </style>
-</head>
-<body>
+@endsection
 
-    @include('admin.partials.erp_navbar')
-
-    <!-- APP WRAPPER -->
-    <div class="app-wrapper">
-        <!-- LEFT SIDEBAR -->
-        <aside class="main-sidebar" id="mainSidebar">
-            <!-- USER PANEL -->
-            <div class="sidebar-user-panel">
-                <div class="user-avatar-circle">B</div>
-                <div class="user-info-text">
-                    <div class="user-info-name">Bagus</div>
-                    <div class="user-info-role">manager @PUSAT</div>
-                    <div class="user-status-badge">
-                        <span class="status-dot-blink"></span>
-                        <span id="liveTimeBadge">10:37:48 ON</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- MENU -->
-            <div class="sidebar-nav-header">MAIN NAVIGATION</div>
-            <ul class="sidebar-menu">
-                <li class="active">
-                    <a href="{{ route('admin.supplier') }}#supplier">
-                        <span class="menu-item-left">🗄️ <span>data</span></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="#pembelian">
-                        <span class="menu-item-left">💳 <span>pembelian</span></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ route('warnet.index') }}#stocks">
-                        <span class="menu-item-left">📦 <span>stok</span></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ route('warnet.index') }}#transfers">
-                        <span class="menu-item-left">🚚 <span>distribusi</span></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ route('admin.penjualan') }}">
-                        <span class="menu-item-left">🛒 <span>penjualan</span></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="#akunting">
-                        <span class="menu-item-left">🧮 <span>akunting</span></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="#laporan">
-                        <span class="menu-item-left">📊 <span>laporan</span></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="#speedtest">
-                        <span class="menu-item-left">⚡ <span>speedtest</span></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="#link">
-                        <span class="menu-item-left">🔗 <span>link</span></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="#setting">
-                        <span class="menu-item-left">⚙️ <span>Setting</span></span>
-                    </a>
-                </li>
-                <li>
-                    <a href="javascript:void(0)" onclick="document.getElementById('logoutFormSidebar').submit()">
-                        <span class="menu-item-left">🔒 <span>Logout</span></span>
-                    </a>
-                    <form id="logoutFormSidebar" action="{{ route('logout') }}" method="POST" style="display: none;">
-                        @csrf
-                    </form>
-                </li>
-            </ul>
-        </aside>
-
-        <!-- MAIN CONTENT WRAPPER -->
-        <main class="content-wrapper">
+@section('content')
+    <div class="erp-legacy-surface">
             <!-- TOP RIGHT BREADCRUMB / DATA COUNTER -->
             <div class="top-info-bar">
                 <span>🗄️ data &gt; <strong id="topDataCount">{{ $totalCount }}</strong></span>
@@ -1056,9 +933,10 @@
                 <button type="button" class="page-btn active" id="btnPage1">1</button>
                 <button type="button" class="page-btn disabled" id="btnNextPage" onclick="nextPage()">Next</button>
             </div>
-        </main>
     </div>
+@endsection
 
+@section('modals')
     <!-- MODAL TAMBAH SUPPLIER -->
     <div class="modal-overlay" id="addSupplierModal">
         <div class="modal-card">
@@ -1217,7 +1095,9 @@
         <span id="toastIcon">✔</span>
         <span id="toastMessage">Operasi berhasil</span>
     </div>
+@endsection
 
+@section('scripts')
     <script>
         // Data supplier dari server
         let allSuppliers = @json($suppliers);
@@ -1231,7 +1111,7 @@
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
         // TOGGLE SIDEBAR
-        document.getElementById('sidebarToggle').addEventListener('click', function() {
+        document.getElementById('sidebarToggle')?.addEventListener('click', function() {
             if (window.innerWidth <= 768) {
                 document.body.classList.toggle('sidebar-mobile-open');
             } else {
@@ -1705,5 +1585,4 @@
             }
         });
     </script>
-</body>
-</html>
+@endsection

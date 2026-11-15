@@ -1,26 +1,12 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maya Graha Kencana — Daftar Kategori</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+@extends('admin.dashboard.layout')
 
+@section('title', 'Daftar Kategori')
+
+@section('extra-styles')
     <style>
         :root {
             --header-blue: #2c7ea1;
             --header-dark-blue: #236784;
-            --subnav-blue: #287a9e;
-            --subnav-active: #1a5975;
-            --subnav-active-bg: #ffffff;
-            --sidebar-bg: #222d32;
-            --sidebar-header: #1a2226;
-            --sidebar-hover: #1e282c;
-            --sidebar-text: #b8c7ce;
-            --sidebar-active-text: #ffffff;
             --body-bg: #f4f6f9;
             --content-border: #d2d6de;
             --text-dark: #333333;
@@ -34,18 +20,14 @@
             --btn-orange: #f0ad4e;
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        .erp-legacy-surface {
+            font-family: 'Roboto', 'Plus Jakarta Sans', sans-serif;
             background-color: var(--body-bg);
             color: var(--text-dark);
             font-size: 13px;
-            overflow-x: hidden;
+            padding: 18px 20px 30px;
+            border-radius: 12px;
+            min-height: calc(100vh - 120px);
         }
 
         /* TOP HEADER */
@@ -928,118 +910,15 @@
         }
 
         @media (max-width: 768px) {
-            .sub-navbar {
-                left: 0;
-            }
-            .main-sidebar {
-                transform: translateX(-100%);
-            }
-            .content-wrapper {
-                margin-left: 0;
-            }
-            body.sidebar-mobile-open .main-sidebar {
-                transform: translateX(0);
-            }
             .category-columns-container {
                 grid-template-columns: 1fr;
             }
         }
-
-        body.sidebar-collapsed .main-sidebar {
-            width: 0;
-            transform: translateX(-100%);
-        }
-
-        body.sidebar-collapsed .sub-navbar,
-        body.sidebar-collapsed .content-wrapper {
-            margin-left: 0;
-            left: 0;
-        }
     </style>
-</head>
-<body>
+@endsection
 
-    @include('admin.partials.erp_navbar')
-
-    <!-- APP WRAPPER -->
-    <div class="app-wrapper">
-        <!-- LEFT SIDEBAR -->
-        <aside class="main-sidebar" id="mainSidebar">
-            <!-- USER PANEL -->
-            <div class="sidebar-user-panel">
-                <div class="user-avatar-circle">B</div>
-                <div class="user-info-text">
-                    <div class="user-info-name">Bagus</div>
-                    <div class="user-info-role">manager @PUSAT</div>
-                    <div class="user-status-badge">
-                        <span class="status-dot-blink"></span>
-                        <span id="liveTimeBadge">10:37:48 ON</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- MENU -->
-            <div class="sidebar-nav-header">MAIN NAVIGATION</div>
-            <ul class="sidebar-menu">
-                <li>
-                    <a href="{{ route('admin.index') }}">
-                        <span class="menu-item-left">📊 Dashboard Admin</span>
-                    </a>
-                </li>
-            </ul>
-
-            <div class="sidebar-nav-header">MASTER DATA & INVENTARIS</div>
-            <ul class="sidebar-menu">
-                <li>
-                    <a href="{{ route('admin.merk') }}">
-                        <span class="menu-item-left">🏷️ Merk Produk</span>
-                    </a>
-                </li>
-                <li class="active">
-                    <a href="{{ route('admin.kategori') }}">
-                        <span class="menu-item-left">📁 Kategori Produk</span>
-                        <span class="menu-badge" id="menuBadgeCount">{{ $totalCount }}</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ route('admin.supplier') }}">
-                        <span class="menu-item-left">🏢 Supplier & Vendor</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ route('admin.jadwal') }}">
-                        <span class="menu-item-left">🕒 Jadwal Shift Kerja</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ route('admin.karyawan') }}">
-                        <span class="menu-item-left">👤 Karyawan & Staff</span>
-                    </a>
-                </li>
-            </ul>
-
-            <div class="sidebar-nav-header">TRANSAKSI & OPERASIONAL</div>
-            <ul class="sidebar-menu">
-                <li>
-                    <a href="{{ route('admin.penjualan') }}">
-                        <span class="menu-item-left">🛒 Penjualan & POS Kasir</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ route('admin.presensi') }}">
-                        <span class="menu-item-left">📅 Data Presensi Kerja</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="{{ route('warnet.index') }}">
-                        <span class="menu-item-left">🖥️ Billing & POS Warnet</span>
-                    </a>
-                </li>
-            </ul>
-        </aside>
-
-        <!-- MAIN CONTENT -->
-        <main class="content-wrapper">
+@section('content')
+    <div class="erp-legacy-surface">
             <!-- PAGE TITLE -->
             <h1 class="page-title-center">📁 DAFTAR KATEGORI PRODUK</h1>
             <p class="page-subtitle-center">Kelola hierarki kategori, pengelompokan produk, status aktif, dan data katalog MGK ERP</p>
@@ -1113,9 +992,10 @@
             <div class="category-columns-container" id="categoryGridContainer">
                 <!-- Di-render dinamis oleh JavaScript -->
             </div>
-        </main>
     </div>
+@endsection
 
+@section('modals')
     <!-- MODAL TAMBAH KATEGORI -->
     <div class="modal-overlay" id="addCategoryModal">
         <div class="modal-card">
@@ -1230,7 +1110,9 @@
         <span id="toastIcon">✔</span>
         <span id="toastMessage">Operasi berhasil</span>
     </div>
+@endsection
 
+@section('scripts')
     <script>
         // Data inisial kategori dari server
         let allCategories = @json($categories);
@@ -1246,7 +1128,7 @@
         const baseUrl = "{{ url('/') }}";
 
         // SIDEBAR TOGGLE
-        document.getElementById('sidebarToggle').addEventListener('click', function() {
+        document.getElementById('sidebarToggle')?.addEventListener('click', function() {
             if (window.innerWidth <= 768) {
                 document.body.classList.toggle('sidebar-mobile-open');
             } else {
@@ -1744,5 +1626,4 @@
             renderCategoryGrid();
         });
     </script>
-</body>
-</html>
+@endsection

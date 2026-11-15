@@ -1,25 +1,12 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maya Graha Kencana — Persetujuan Cuti & Lembur</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+@extends('admin.dashboard.layout')
 
+@section('title', 'Persetujuan Cuti & Lembur')
+
+@section('extra-styles')
     <style>
         :root {
             --header-blue: #2c7ea1;
             --header-dark-blue: #236784;
-            --subnav-blue: #277799;
-            --subnav-active: #195673;
-            --sidebar-bg: #222d32;
-            --sidebar-header: #1a2226;
-            --sidebar-hover: #1e282c;
-            --sidebar-text: #b8c7ce;
-            --sidebar-active-text: #ffffff;
             --body-bg: #f4f6f9;
             --content-border: #d2d6de;
             --text-dark: #333333;
@@ -30,13 +17,14 @@
             --btn-red: #d9534f;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        .erp-legacy-surface {
+            font-family: 'Roboto', 'Plus Jakarta Sans', sans-serif;
             background-color: var(--body-bg);
             color: var(--text-dark);
             font-size: 13px;
-            overflow-x: hidden;
+            padding: 18px 20px 30px;
+            border-radius: 12px;
+            min-height: calc(100vh - 120px);
         }
 
         /* HEADER */
@@ -355,26 +343,10 @@
         }
         .btn-secondary:hover { background: #64748b; }
     </style>
-</head>
-<body>
+@endsection
 
-    @include('admin.partials.erp_navbar')
-
-    <!-- APP WRAPPER -->
-    <div class="app-wrapper">
-        <!-- SIDEBAR -->
-        <aside class="main-sidebar">
-            <div class="sidebar-user-panel">
-                <div class="user-avatar-circle">B</div>
-                <div class="user-info-text">
-                    <div class="user-info-name">Bagus</div>
-                    <div class="user-info-role">manager @PUSAT</div>
-                </div>
-            </div>
-        </aside>
-
-        <!-- CONTENT -->
-        <main class="content-wrapper">
+@section('content')
+    <div class="erp-legacy-surface">
             <!-- FLASH MESSAGES -->
             @if(session('success'))
                 <div class="alert-box alert-success">
@@ -873,9 +845,10 @@
                     </table>
                 </div>
             </div>
-        </main>
     </div>
+@endsection
 
+@section('modals')
     <!-- MODAL TOLAK CUTI -->
     <div class="modal-overlay" id="rejectLeaveModal">
         <div class="modal-box">
@@ -1006,14 +979,10 @@
             </form>
         </div>
     </div>
+@endsection
 
+@section('scripts')
     <script>
-        // Sidebar Toggle
-        const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
-        sidebarToggleBtn.addEventListener('click', () => {
-            document.body.classList.toggle('sidebar-collapse');
-        });
-
         // Tab Segment Switcher
         function switchSegment(type) {
             const btnLeaves = document.getElementById('tabLeavesBtn');
@@ -1098,5 +1067,4 @@
             });
         });
     </script>
-</body>
-</html>
+@endsection

@@ -187,13 +187,6 @@
     @endif
 </a>
 
-{{-- 14. REKAP LIST KLAIM JAM KERJA --}}
-<a href="{{ route('admin.data', ['tab' => 'tab-jamkerja']) }}" 
-   class="subnav-item {{ (request()->routeIs('admin.data') && request('tab') == 'tab-jamkerja') || request()->routeIs('admin.presensi.approval*') || request()->is('*jam-kerja*') ? 'active' : '' }}" 
-   title="Rekapitulasi List Klaim Jam Kerja & Lembur">
-    📝 rekap list klaim jam kerja
-</a>
-
 {{-- 15. DATA BILLING --}}
 <a href="{{ route('admin.data', ['tab' => 'tab-billing']) }}" 
    class="subnav-item {{ (request()->routeIs('admin.data') && request('tab') == 'tab-billing') || (request()->routeIs('warnet*') && request()->is('*billing*')) ? 'active' : '' }}" 

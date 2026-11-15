@@ -104,7 +104,6 @@ class AdminDashboardRevampTest extends TestCase
         $dataResponse->assertSee('Data Billing Setiap Shift');
         $dataResponse->assertSee('Jumlah Presensi Karyawan');
         $dataResponse->assertSee('Jam Kerja Karyawan');
-        $dataResponse->assertSee('Standard Operating Procedure');
 
         // 3. Dedicated Distribution page
         $distResponse = $this->actingAs($this->adminUser)->get(route('admin.distribusi'));

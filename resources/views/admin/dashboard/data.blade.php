@@ -1080,197 +1080,64 @@
         <!-- ============================================================== -->
         <!-- 1.5 JAM KERJA KARYAWAN (CRUD & MONITORING) -->
         <!-- ============================================================== -->
-        <div id="tab-jamkerja" class="data-sub-tab" style="{{ $activeTab == 'tab-jamkerja' ? 'display: block;' : 'display: none;' }}">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
-                <div>
-                    <h3 style="font-size: 15px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px;">
-                        <span>⏱️</span> Akumulasi & Monitoring Jam Kerja Karyawan
-                    </h3>
-                    <span style="font-size: 12px; color: var(--text-muted);">
-                        Kelola rekaman presensi, jam kerja, lembur, serta edit dan delete jam kerja karyawan
-                    </span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <span class="badge-status badge-sky">Target Standar: 8 Jam / Shift</span>
-                    <button type="button" onclick="toggleAddWorkHoursForm()" class="btn-action-sm btn-action-emerald" style="padding: 9px 16px; font-size: 12px; font-weight: 700; border-radius: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);">
-                        <span>➕</span> Tambah Jam Kerja
-                    </button>
-                </div>
-            </div>
-
-            <!-- FORM TAMBAH JAM KERJA -->
-            <div id="addWorkHoursFormCard" style="display: none; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 14px; padding: 20px; margin-bottom: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.3);">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid var(--border-glass); padding-bottom: 10px;">
-                    <h4 style="font-size: 14px; font-weight: 700; color: #34d399; display: flex; align-items: center; gap: 8px;">
-                        <span>📝</span> Form Tambah Jam Kerja Karyawan
-                    </h4>
-                    <button type="button" onclick="toggleAddWorkHoursForm()" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px;">✕</button>
-                </div>
-
-                <form action="{{ route('admin.jamkerja.store') }}" method="POST">
-                    @csrf
-                    <input type="hidden" name="redirect_to" value="{{ url()->current() }}?tab=tab-jamkerja">
-
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px;">
-                        <div>
-                            <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">Pilih Karyawan *</label>
-                            <select name="employee_id" required style="width: 100%; padding: 9px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                                <option value="">-- Pilih Karyawan --</option>
-                                @foreach($allEmployees as $emp)
-                                    <option value="{{ $emp->id }}">{{ $emp->name }} ({{ $emp->code }}) - {{ $emp->position }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <div>
-                            <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">Shift Penugasan</label>
-                            <select name="shift_id" style="width: 100%; padding: 9px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                                <option value="">-- Shift Otomatis / Roster --</option>
-                                @foreach($shifts as $sf)
-                                    <option value="{{ $sf->id }}">{{ $sf->name }} ({{ substr($sf->start_time, 0, 5) }} - {{ substr($sf->end_time, 0, 5) }})</option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <div>
-                            <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">Tanggal Kerja *</label>
-                            <input type="date" name="work_date" value="{{ date('Y-m-d') }}" required style="width: 100%; padding: 9px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                        </div>
-
-                        <div>
-                            <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">Jam Masuk *</label>
-                            <input type="time" name="clock_in_time" value="08:00" required style="width: 100%; padding: 9px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                        </div>
-
-                        <div>
-                            <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">Jam Pulang</label>
-                            <input type="time" name="clock_out_time" value="16:00" style="width: 100%; padding: 9px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                        </div>
-
-                        <div>
-                            <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">Lembur (Menit)</label>
-                            <input type="number" min="0" step="15" name="overtime_minutes" value="0" style="width: 100%; padding: 9px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                        </div>
-
-                        <div>
-                            <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">Status Kehadiran</label>
-                            <select name="status" style="width: 100%; padding: 9px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                                <option value="present">Hadir Tepat Waktu</option>
-                                <option value="late">Terlambat</option>
-                                <option value="half_day">Setengah Hari</option>
-                                <option value="absent">Alpa / Tidak Hadir</option>
-                                <option value="on_leave">Cuti / Izin</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px;">Catatan (Opsional)</label>
-                            <input type="text" name="notes" placeholder="Contoh: Input presensi manual" style="width: 100%; padding: 9px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                        </div>
-                    </div>
-
-                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                        <button type="button" onclick="toggleAddWorkHoursForm()" class="btn-action-sm" style="background: rgba(255,255,255,0.08); color: #fff; padding: 9px 16px;">Batal</button>
-                        <button type="submit" class="btn-action-sm btn-action-emerald" style="padding: 9px 20px; font-weight: 700;">
-                            <span>💾</span> Simpan Jam Kerja
-                        </button>
-                    </div>
-                </form>
-            </div>
-
-            <!-- TABEL JAM KERJA -->
-            <div style="overflow-x: auto; background: rgba(15, 23, 42, 0.5); border: 1px solid var(--border-glass); border-radius: 12px;">
-                <table class="custom-data-table">
-                    <thead>
-                        <tr>
-                            <th>Karyawan</th>
-                            <th>Shift</th>
-                            <th>Tanggal Kerja</th>
-                            <th>Masuk - Pulang</th>
-                            <th>Durasi Kerja</th>
-                            <th>Lembur</th>
-                            <th>Status Pemenuhan Kuota</th>
-                            <th style="text-align: right;">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($workHoursRecords as $wh)
-                        <tr>
-                            <td>
-                                <div style="font-weight: 600; color: #fff;">{{ $wh['employee_name'] }}</div>
-                                <div style="font-size: 10px; color: var(--text-sub); font-family: monospace;">{{ $wh['employee_code'] }}</div>
-                            </td>
-                            <td>{{ $wh['shift_name'] }}</td>
-                            <td>{{ $wh['work_date'] }}</td>
-                            <td style="font-family: monospace;">{{ $wh['clock_in'] }} - {{ $wh['clock_out'] }}</td>
-                            <td style="font-weight: 700; color: #38bdf8; font-family: 'Outfit';">
-                                {{ $wh['duration_formatted'] }}
-                            </td>
-                            <td>
-                                @if($wh['overtime_minutes'] > 0)
-                                    <span class="badge-status badge-amber">+{{ $wh['overtime_minutes'] }} Menit</span>
-                                @else
-                                    <span style="color: var(--text-sub);">-</span>
-                                @endif
-                            </td>
-                            <td>
-                                <span class="badge-status {{ $wh['status_target'] === 'Memenuhi Kuota' ? 'badge-emerald' : 'badge-sky' }}">
-                                    {{ $wh['status_target'] }}
-                                </span>
-                            </td>
-                            <td style="text-align: right; white-space: nowrap;">
-                                <button type="button" onclick="openEditWorkHoursModal({{ json_encode($wh) }})" class="btn-action-sm btn-action-primary" style="padding: 5px 10px; font-size: 11px;" title="Edit Jam Kerja">
-                                    <span>✏️</span> Edit
-                                </button>
-
-                                <form action="{{ route('admin.jamkerja.destroy', $wh['id']) }}" method="POST" style="display: inline;" onsubmit="return confirm('Hapus rekaman jam kerja karyawan ini?')">
-                                    @csrf
-                                    @method('DELETE')
-                                    <input type="hidden" name="redirect_to" value="{{ url()->current() }}?tab=tab-jamkerja">
-                                    <button type="submit" class="btn-action-sm" style="background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); padding: 5px 10px; font-size: 11px;" title="Hapus Jam Kerja">
-                                        <span>🗑️</span> Hapus
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                        @empty
-                        <tr>
-                            <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 24px;">
-                                Belum ada rekaman jam kerja karyawan.
-                            </td>
-                        </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
         <!-- ============================================================== -->
         <!-- 1.6 STANDARD OPERATING PROCEDURE (SOP) -->
         <!-- ============================================================== -->
         <div id="tab-sop" class="data-sub-tab" style="{{ $activeTab == 'tab-sop' ? 'display: block;' : 'display: none;' }}">
-            <div style="margin-bottom: 16px;">
-                <h3 style="font-size: 15px; font-weight: 700; color: #fff;">📜 Standard Operating Procedure (SOP) Maya Graha Kencana</h3>
-                <span style="font-size: 12px; color: var(--text-muted);">Seluruh staff dan admin wajib mematuhi seluruh tahapan kerja di bawah ini.</span>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px;">
+                <div>
+                    <h3 style="font-size: 15px; font-weight: 700; color: #fff;">📜 Standard Operating Procedure (SOP) Maya Graha Kencana</h3>
+                    <span style="font-size: 12px; color: var(--text-muted);">Seluruh staff dan admin wajib mematuhi seluruh tahapan kerja di bawah ini.</span>
+                </div>
+                <button type="button" onclick="openCreateSopModal()" class="btn-action-sm btn-action-primary" style="padding: 8px 14px; font-size: 12px; font-weight: 700;">
+                    <span>➕</span> Tambah SOP
+                </button>
             </div>
 
             <div class="sop-grid-container">
-                @foreach($sopList as $sop)
-                <div class="sop-card-item">
+                @forelse($sopList as $sop)
+                <div class="sop-card-item" style="{{ !($sop['is_active'] ?? true) ? 'opacity: 0.65;' : '' }}">
                     <div class="sop-card-header">
-                        <span class="sop-code-badge">{{ $sop['code'] }}</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span class="sop-code-badge">{{ $sop['code'] }}</span>
+                            @if(!($sop['is_active'] ?? true))
+                                <span class="badge-status badge-rose" style="font-size: 10px;">Nonaktif</span>
+                            @endif
+                        </div>
                         <span style="font-size: 11px; color: var(--text-sub);">{{ $sop['category'] }}</span>
                     </div>
                     <div class="sop-title-text">{{ $sop['title'] }}</div>
-                    <div class="sop-summary-text">{{ $sop['summary'] }}</div>
+                    @if(!empty($sop['summary']))
+                        <div class="sop-summary-text">{{ $sop['summary'] }}</div>
+                    @endif
                     <div style="font-size: 11px; font-weight: 700; color: #38bdf8; margin-bottom: 6px; text-transform: uppercase;">Tahapan SOP:</div>
                     <ol class="sop-step-list">
                         @foreach($sop['steps'] as $st)
                         <li>{{ $st }}</li>
                         @endforeach
                     </ol>
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-glass);">
+                        <span style="font-size: 11px; color: var(--text-sub);">Diperbarui: {{ $sop['updated_at'] ?? '-' }}</span>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <button type="button" onclick="openEditSopModal({{ json_encode($sop) }})" class="btn-action-sm btn-action-primary" style="padding: 4px 10px; font-size: 11px;" title="Edit SOP">
+                                <span>✏️</span> Edit
+                            </button>
+                            <form action="{{ route('admin.sop.destroy', $sop['id']) }}" method="POST" style="display: inline;" onsubmit="return confirm('Hapus SOP {{ $sop['code'] }}?')">
+                                @csrf
+                                @method('DELETE')
+                                <input type="hidden" name="redirect_to" value="{{ url()->current() }}?tab=tab-sop">
+                                <button type="submit" class="btn-action-sm" style="background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); padding: 4px 10px; font-size: 11px;" title="Hapus SOP">
+                                    <span>🗑️</span>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
                 </div>
-                @endforeach
+                @empty
+                <div style="grid-column: 1 / -1; text-align: center; padding: 36px; color: var(--text-muted); border: 1px dashed var(--border-glass); border-radius: 12px;">
+                    Belum ada data SOP. Klik tombol <strong>➕ Tambah SOP</strong> untuk menambahkan prosedur baru.
+                </div>
+                @endforelse
             </div>
         </div>
     </div>
@@ -1347,88 +1214,6 @@
 
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
                 <button type="button" onclick="closeEditEmployeeModal()" class="btn-action-sm" style="background: rgba(255,255,255,0.08); color: #fff; padding: 10px 18px;">Batal</button>
-                <button type="submit" class="btn-action-sm btn-action-primary" style="padding: 10px 22px; font-weight: 700;">
-                    <span>💾</span> Simpan Perubahan
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- MODAL EDIT JAM KERJA -->
-<div id="editWorkHoursModal" class="modal-overlay">
-    <div class="modal-box" style="max-width: 560px; text-align: left;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid var(--border-glass); padding-bottom: 10px;">
-            <h3 style="font-size: 16px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px;">
-                <span>⏱️</span> Edit Jam Kerja Karyawan
-            </h3>
-            <button type="button" onclick="closeEditWorkHoursModal()" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px;">✕</button>
-        </div>
-
-        <form id="editWorkHoursForm" method="POST" action="">
-            @csrf
-            @method('PUT')
-            <input type="hidden" name="redirect_to" value="{{ url()->current() }}?tab=tab-jamkerja">
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
-                <div style="grid-column: span 2;">
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Karyawan *</label>
-                    <select id="edit_wh_employee_id" name="employee_id" required style="width: 100%; padding: 9px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                        @foreach($allEmployees as $emp)
-                            <option value="{{ $emp->id }}">{{ $emp->name }} ({{ $emp->code }})</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div>
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Shift Penugasan</label>
-                    <select id="edit_wh_shift_id" name="shift_id" style="width: 100%; padding: 9px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                        <option value="">-- Shift Otomatis / Roster --</option>
-                        @foreach($shifts as $sf)
-                            <option value="{{ $sf->id }}">{{ $sf->name }} ({{ substr($sf->start_time, 0, 5) }} - {{ substr($sf->end_time, 0, 5) }})</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div>
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Tanggal Kerja *</label>
-                    <input type="date" id="edit_wh_work_date" name="work_date" required style="width: 100%; padding: 9px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                </div>
-
-                <div>
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Jam Masuk *</label>
-                    <input type="time" id="edit_wh_clock_in" name="clock_in_time" required style="width: 100%; padding: 9px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                </div>
-
-                <div>
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Jam Pulang</label>
-                    <input type="time" id="edit_wh_clock_out" name="clock_out_time" style="width: 100%; padding: 9px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                </div>
-
-                <div>
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Lembur (Menit)</label>
-                    <input type="number" id="edit_wh_overtime" min="0" step="15" name="overtime_minutes" style="width: 100%; padding: 9px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                </div>
-
-                <div>
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Status Kehadiran</label>
-                    <select id="edit_wh_status" name="status" style="width: 100%; padding: 9px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                        <option value="present">Hadir Tepat Waktu</option>
-                        <option value="late">Terlambat</option>
-                        <option value="half_day">Setengah Hari</option>
-                        <option value="absent">Alpa / Tidak Hadir</option>
-                        <option value="on_leave">Cuti / Izin</option>
-                    </select>
-                </div>
-
-                <div style="grid-column: span 2;">
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Catatan (Opsional)</label>
-                    <input type="text" id="edit_wh_notes" name="notes" style="width: 100%; padding: 9px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                </div>
-            </div>
-
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button type="button" onclick="closeEditWorkHoursModal()" class="btn-action-sm" style="background: rgba(255,255,255,0.08); color: #fff; padding: 10px 18px;">Batal</button>
                 <button type="submit" class="btn-action-sm btn-action-primary" style="padding: 10px 22px; font-weight: 700;">
                     <span>💾</span> Simpan Perubahan
                 </button>
@@ -1529,6 +1314,69 @@
         </form>
     </div>
 </div>
+
+<!-- MODAL TAMBAH / EDIT SOP -->
+<div id="sopModal" class="modal-overlay">
+    <div class="modal-box" style="max-width: 620px; text-align: left;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid var(--border-glass); padding-bottom: 10px;">
+            <h3 id="sopModalTitle" style="font-size: 16px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px;">
+                <span>📜</span> Tambah SOP Baru
+            </h3>
+            <button type="button" onclick="closeSopModal()" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px;">✕</button>
+        </div>
+
+        <form id="sopForm" action="{{ route('admin.sop.store') }}" method="POST">
+            @csrf
+            <input type="hidden" name="_method" id="sopFormMethod" value="POST">
+            <input type="hidden" name="redirect_to" value="{{ url()->current() }}?tab=tab-sop">
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Kode SOP</label>
+                    <input type="text" id="sop_code" name="code" required maxlength="32" placeholder="Contoh: SOP-06" style="width: 100%; padding: 8px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Kategori</label>
+                    <input type="text" id="sop_category" name="category" required maxlength="100" placeholder="Contoh: Keuangan & Kasir" style="width: 100%; padding: 8px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
+                </div>
+
+                <div style="grid-column: span 2;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Judul SOP</label>
+                    <input type="text" id="sop_title" name="title" required maxlength="255" placeholder="Contoh: Prosedur Tutup Kasir Shift" style="width: 100%; padding: 8px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
+                </div>
+
+                <div style="grid-column: span 2;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Ringkasan</label>
+                    <textarea id="sop_summary" name="summary" rows="2" placeholder="Penjelasan singkat tujuan SOP..." style="width: 100%; padding: 8px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px; resize: vertical;"></textarea>
+                </div>
+
+                <div style="grid-column: span 2;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Tahapan SOP (1 baris = 1 langkah)</label>
+                    <textarea id="sop_steps_text" name="steps_text" rows="5" required placeholder="Langkah 1&#10;Langkah 2&#10;Langkah 3" style="width: 100%; padding: 8px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px; resize: vertical;"></textarea>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Urutan Tampil</label>
+                    <input type="number" id="sop_sort_order" name="sort_order" min="0" max="9999" value="0" style="width: 100%; padding: 8px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 8px; padding-top: 20px;">
+                    <input type="hidden" name="is_active" value="0">
+                    <input type="checkbox" id="sop_is_active" name="is_active" value="1" checked style="width: 16px; height: 16px; cursor: pointer;">
+                    <label for="sop_is_active" style="font-size: 13px; font-weight: 600; color: #cbd5e1; cursor: pointer;">SOP Aktif</label>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button type="button" onclick="closeSopModal()" class="btn-action-sm" style="background: rgba(255,255,255,0.08); color: #fff; padding: 10px 18px;">Batal</button>
+                <button type="submit" class="btn-action-sm btn-action-primary" style="padding: 10px 22px; font-weight: 700;">
+                    <span>💾</span> Simpan SOP
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 @endsection
 
 @section('scripts')
@@ -1581,36 +1429,6 @@
 
     function closeEditEmployeeModal() {
         document.getElementById('editEmployeeModal').style.display = 'none';
-    }
-
-    function toggleAddWorkHoursForm() {
-        const el = document.getElementById('addWorkHoursFormCard');
-        if (el) {
-            el.style.display = el.style.display === 'none' ? 'block' : 'none';
-            if (el.style.display === 'block') {
-                el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
-        }
-    }
-
-    function openEditWorkHoursModal(wh) {
-        document.getElementById('edit_wh_employee_id').value = wh.employee_id || '';
-        document.getElementById('edit_wh_shift_id').value = wh.shift_id || '';
-        document.getElementById('edit_wh_work_date').value = wh.raw_work_date || '';
-        document.getElementById('edit_wh_clock_in').value = wh.raw_clock_in || '';
-        document.getElementById('edit_wh_clock_out').value = wh.raw_clock_out || '';
-        document.getElementById('edit_wh_overtime').value = wh.overtime_minutes || 0;
-        document.getElementById('edit_wh_status').value = wh.status || 'present';
-        document.getElementById('edit_wh_notes').value = wh.notes || '';
-
-        const form = document.getElementById('editWorkHoursForm');
-        form.action = "{{ url('admin/jam-kerja') }}/" + wh.id;
-
-        document.getElementById('editWorkHoursModal').style.display = 'flex';
-    }
-
-    function closeEditWorkHoursModal() {
-        document.getElementById('editWorkHoursModal').style.display = 'none';
     }
 
     function toggleAddActivityForm() {
@@ -1777,6 +1595,38 @@
             toast.style.opacity = '0';
             toast.style.transform = 'translateY(10px)';
         }, 3000);
+    }
+
+    function openCreateSopModal() {
+        document.getElementById('sopModalTitle').innerHTML = '<span>📜</span> Tambah SOP Baru';
+        document.getElementById('sopForm').action = "{{ route('admin.sop.store') }}";
+        document.getElementById('sopFormMethod').value = 'POST';
+        document.getElementById('sop_code').value = '';
+        document.getElementById('sop_category').value = '';
+        document.getElementById('sop_title').value = '';
+        document.getElementById('sop_summary').value = '';
+        document.getElementById('sop_steps_text').value = '';
+        document.getElementById('sop_sort_order').value = '0';
+        document.getElementById('sop_is_active').checked = true;
+        document.getElementById('sopModal').classList.add('active');
+    }
+
+    function openEditSopModal(sop) {
+        document.getElementById('sopModalTitle').innerHTML = '<span>✏️</span> Edit SOP ' + (sop.code || '');
+        document.getElementById('sopForm').action = "{{ url('/admin/sop') }}/" + sop.id;
+        document.getElementById('sopFormMethod').value = 'PUT';
+        document.getElementById('sop_code').value = sop.code || '';
+        document.getElementById('sop_category').value = sop.category || '';
+        document.getElementById('sop_title').value = sop.title || '';
+        document.getElementById('sop_summary').value = sop.summary || '';
+        document.getElementById('sop_steps_text').value = Array.isArray(sop.steps) ? sop.steps.join('\n') : '';
+        document.getElementById('sop_sort_order').value = sop.sort_order ?? 0;
+        document.getElementById('sop_is_active').checked = Boolean(sop.is_active ?? true);
+        document.getElementById('sopModal').classList.add('active');
+    }
+
+    function closeSopModal() {
+        document.getElementById('sopModal').classList.remove('active');
     }
 </script>
 

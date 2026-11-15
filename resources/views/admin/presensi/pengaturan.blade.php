@@ -1,33 +1,19 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maya Graha Kencana — Pengaturan Enterprise Presensi</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+@extends('admin.dashboard.layout')
 
+@section('title', 'Pengaturan Enterprise Presensi')
+
+@section('extra-styles')
     <style>
         :root {
             --header-blue: #2c7ea1;
             --header-dark-blue: #236784;
-            --subnav-blue: #277799;
-            --subnav-active: #195673;
             --body-bg: #f4f6f9;
             --content-border: #d2d6de;
             --text-dark: #333333;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Roboto', sans-serif; background-color: var(--body-bg); color: var(--text-dark); }
-        .main-header { background: linear-gradient(to bottom, var(--header-blue), var(--header-dark-blue)); color: #fff; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
-        .sub-navbar { background-color: var(--subnav-blue); padding: 0 20px; display: flex; overflow-x: auto; white-space: nowrap; }
-        .subnav-item { color: #eaf2f8; text-decoration: none; padding: 10px 14px; font-size: 13px; font-weight: 500; text-transform: uppercase; border-right: 1px solid rgba(255,255,255,0.1); }
-        .subnav-item:hover { background: rgba(0,0,0,0.15); color: #fff; }
-        .subnav-item.active { background-color: var(--subnav-active); color: #fff; font-weight: 700; }
-        .container { max-width: 1200px; margin: 24px auto; padding: 0 20px; }
+        .erp-legacy-surface { font-family: 'Roboto', 'Plus Jakarta Sans', sans-serif; background-color: var(--body-bg); color: var(--text-dark); padding: 18px 20px 30px; border-radius: 12px; min-height: calc(100vh - 120px); }
+        .container { max-width: 1200px; margin: 0 auto; }
         .card { background: #fff; border-radius: 8px; border: 1px solid var(--content-border); box-shadow: 0 2px 6px rgba(0,0,0,0.05); overflow: hidden; margin-bottom: 24px; }
         .card-header { padding: 16px 20px; background: #fafbfc; border-bottom: 1px solid var(--content-border); display: flex; justify-content: space-between; align-items: center; }
         .card-title { font-size: 16px; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 8px; }
@@ -43,11 +29,11 @@
         .btn-submit:hover { background: #047857; }
         .alert-success { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; font-size: 13px; font-weight: 600; }
     </style>
-</head>
-<body>
-    @include('admin.partials.erp_navbar')
+@endsection
 
-    <div class="container" style="padding-top: 100px;">
+@section('content')
+    <div class="erp-legacy-surface">
+    <div class="container">
         <div style="display: flex; gap: 8px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 4px;">
             <a href="{{ route('admin.presensi') }}" style="padding: 7px 14px; background: #e0f2fe; color: #0369a1; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: 600;">📅 Presensi Hari Ini</a>
             <a href="{{ route('admin.presensi.rekap') }}" style="padding: 7px 14px; background: #e0f2fe; color: #0369a1; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: 600;">📊 Rekapitulasi Bulanan</a>
@@ -111,5 +97,5 @@
             </div>
         </form>
     </div>
-</body>
-</html>
+    </div>
+@endsection

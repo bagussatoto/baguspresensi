@@ -1,20 +1,11 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maya Graha Kencana — Rekapitulasi Presensi Karyawan</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
+@extends('admin.dashboard.layout')
 
+@section('title', 'Rekapitulasi Presensi Karyawan')
+
+@section('extra-styles')
     <style>
         :root {
             --header-blue: #2c7ea1;
-            --subnav-blue: #277799;
-            --subnav-active: #195673;
-            --sidebar-bg: #222d32;
             --body-bg: #f4f6f9;
             --content-border: #d2d6de;
             --text-dark: #333333;
@@ -22,67 +13,15 @@
             --btn-green: #28a745;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        .erp-legacy-surface {
+            font-family: 'Roboto', 'Plus Jakarta Sans', sans-serif;
             background-color: var(--body-bg);
             color: var(--text-dark);
             font-size: 13px;
+            padding: 18px 20px 30px;
+            border-radius: 12px;
+            min-height: calc(100vh - 120px);
         }
-
-        .main-header {
-            background: linear-gradient(to right, #246e8c, var(--header-blue));
-            height: 48px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 16px;
-            color: #ffffff;
-            position: fixed;
-            top: 0; left: 0; right: 0;
-            z-index: 1030;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-        }
-        .header-brand-wrap { display: flex; align-items: center; gap: 14px; }
-        .sidebar-toggle-btn { background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 3px; }
-        .brand-title { font-size: 18px; font-weight: 700; letter-spacing: 0.3px; }
-        .header-right-user { display: flex; align-items: center; gap: 12px; font-size: 12px; }
-        .header-link-btn { color: #e0f2fe; text-decoration: none; padding: 4px 10px; border-radius: 3px; background: rgba(255,255,255,0.12); display: flex; align-items: center; gap: 5px; }
-        .header-link-btn:hover { background: rgba(255,255,255,0.25); color: #fff; }
-
-        .sub-navbar {
-            background-color: var(--subnav-blue);
-            height: 38px;
-            position: fixed;
-            top: 48px; left: 230px; right: 0;
-            z-index: 1020;
-            display: flex;
-            align-items: center;
-            overflow-x: auto;
-            white-space: nowrap;
-            padding: 0 10px;
-            gap: 4px;
-            transition: left 0.3s;
-        }
-        .subnav-item {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            padding: 5px 9px;
-            color: #e8f4f8;
-            text-decoration: none;
-            font-size: 11px;
-            font-weight: 500;
-            border-radius: 3px;
-        }
-        .subnav-item:hover { background: rgba(0,0,0,0.15); color: #fff; }
-        .subnav-item.active { background-color: var(--subnav-active); color: #fff; font-weight: 700; }
-
-        .app-wrapper { display: flex; min-height: 100vh; padding-top: 86px; }
-        .main-sidebar {
-            width: 230px;
-            background-color: var(--sidebar-bg);
-            position: fixed;
             top: 48px; bottom: 0; left: 0;
             z-index: 1025;
             transition: width 0.3s;
@@ -138,28 +77,13 @@
         .rekap-table tr:hover { background-color: #f8fafc; }
 
         @media print {
-            .main-header, .sub-navbar, .main-sidebar, .filter-box, .internal-nav-tabs, .btn-print, .btn-export { display: none !important; }
-            .content-wrapper { margin-left: 0 !important; padding: 0 !important; }
-            .app-wrapper { padding-top: 0 !important; }
+            .filter-box, .internal-nav-tabs, .btn-print, .btn-export { display: none !important; }
         }
     </style>
-</head>
-<body>
+@endsection
 
-    @include('admin.partials.erp_navbar')
-
-    <div class="app-wrapper">
-        <aside class="main-sidebar">
-            <div class="sidebar-user-panel">
-                <div class="user-avatar-circle">B</div>
-                <div class="user-info-text">
-                    <div class="user-info-name">Bagus</div>
-                    <div class="user-info-role">manager @PUSAT</div>
-                </div>
-            </div>
-        </aside>
-
-        <main class="content-wrapper">
+@section('content')
+    <div class="erp-legacy-surface">
             <div class="internal-nav-tabs">
                 <a href="{{ route('admin.presensi') }}" class="internal-tab-link">📅 Presensi Harian</a>
                 <a href="{{ route('admin.presensi.rekap') }}" class="internal-tab-link active">📊 Rekapitulasi Bulanan</a>
@@ -260,13 +184,5 @@
                     </table>
                 </div>
             </div>
-        </main>
     </div>
-
-    <script>
-        document.getElementById('sidebarToggleBtn').addEventListener('click', function() {
-            document.body.classList.toggle('sidebar-collapse');
-        });
-    </script>
-</body>
-</html>
+@endsection

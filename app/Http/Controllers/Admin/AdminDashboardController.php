@@ -17,10 +17,10 @@ use App\Models\PrinterPrintJob;
 use App\Models\ShiftHandoverChecklist;
 use App\Models\ShiftSalesSummary;
 use App\Models\ShiftStockRequest;
+use App\Models\Sop;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -152,7 +152,6 @@ class AdminDashboardController extends Controller
         $rekapOutletSummary = $rekapData['rekapOutletSummary'];
         $rekapKegiatanSummary = $rekapData['rekapKegiatanSummary'];
 
-        $workHoursRecords = $this->getWorkHoursRecords();
         $sopList = $this->getSopList();
 
         $stockTransfersCount = DB::table('stock_transfer_dispatches')->where('status', '!=', 'received')->count();
@@ -170,7 +169,6 @@ class AdminDashboardController extends Controller
             'rekapBulanSummary',
             'rekapOutletSummary',
             'rekapKegiatanSummary',
-            'workHoursRecords',
             'sopList',
             'stockTransfersCount',
             'stockStatsTotalSku'
@@ -1003,53 +1001,6 @@ class AdminDashboardController extends Controller
     }
 
     /**
-     * Ambil 30 data rekaman jam kerja terakhir.
-     */
-    private function getWorkHoursRecords(): Collection
-    {
-        return AttendanceRecord::with(['employee', 'shift'])
-            ->latest('work_date')
-            ->latest('id')
-            ->limit(30)
-            ->get()
-            ->map(function (AttendanceRecord $rec): array {
-                $durationMin = $rec->duration_minutes;
-                if ($durationMin <= 0 && $rec->clock_in_at) {
-                    $endTime = $rec->clock_out_at ?? Carbon::now();
-                    $durationMin = max(0, (int) $rec->clock_in_at->diffInMinutes($endTime));
-                }
-                $hours = floor($durationMin / 60);
-                $minutes = $durationMin % 60;
-
-                $targetHours = $rec->employee->default_contract_hours ?? 8;
-                $targetMin = $targetHours * 60;
-                $statusTarget = $durationMin >= $targetMin ? 'Memenuhi Kuota' : 'Sedang Berjalan';
-
-                return [
-                    'id' => $rec->id,
-                    'employee_id' => $rec->employee_id,
-                    'employee_name' => $rec->employee->name ?? 'Karyawan',
-                    'employee_code' => $rec->employee->code ?? '-',
-                    'shift_id' => $rec->shift_id,
-                    'shift_name' => $rec->shift->name ?? 'Shift Reguler',
-                    'work_date' => Carbon::parse($rec->work_date)->format('d M Y'),
-                    'raw_work_date' => $rec->work_date ? Carbon::parse($rec->work_date)->format('Y-m-d') : '',
-                    'clock_in' => $rec->clock_in_at ? $rec->clock_in_at->format('H:i') : '-',
-                    'raw_clock_in' => $rec->clock_in_at ? $rec->clock_in_at->format('H:i') : '',
-                    'clock_out' => $rec->clock_out_at ? $rec->clock_out_at->format('H:i') : ($rec->clock_in_at ? '(Aktif)' : '-'),
-                    'raw_clock_out' => $rec->clock_out_at ? $rec->clock_out_at->format('H:i') : '',
-                    'duration_formatted' => sprintf('%d Jam %d Menit', $hours, $minutes),
-                    'duration_minutes' => $durationMin,
-                    'target_hours' => $targetHours,
-                    'overtime_minutes' => $rec->overtime_minutes ?? 0,
-                    'status_target' => $statusTarget,
-                    'status' => $rec->status instanceof AttendanceStatus ? $rec->status->value : (string) ($rec->status ?? 'present'),
-                    'notes' => $rec->notes ?? '',
-                ];
-            });
-    }
-
-    /**
      * Ambil data pengiriman stok distribusi.
      */
     private function getStockTransfersData()
@@ -1552,80 +1503,30 @@ class AdminDashboardController extends Controller
 
     /**
      * Daftar Standard Operating Procedure (SOP) Maya Graha Kencana.
+     *
+     * @return array<int, array<string, mixed>>
      */
     private function getSopList(): array
     {
-        return [
-            [
-                'code' => 'SOP-01',
-                'title' => 'Presensi Masuk & Checklist Serah Terima Shift',
-                'category' => 'Presensi & Disiplin',
-                'updated_at' => '17 Okt 2026',
-                'summary' => 'Setiap staff wajib clock-in tepat waktu di radius cabang (<100m) dan langsung menyelesaikan pemeriksaan stok kertas (A4 & F4), kulkas showcase, dan etalase kasir.',
-                'steps' => [
-                    'Buka portal http://192.168.5.10:8086/bagus/presensi2 lalu masukkan PIN 6-digit.',
-                    'Tekan tombol Presensi Masuk (Clock-in). Sistem otomatis mengarahkan ke Halaman Stok.',
-                    'Periksa fisik kertas HVS A4 & F4 di loker meja kasir.',
-                    'Periksa fisik minuman di showcase kulkas dan makanan di etalase kasir.',
-                    'Pastikan kondisi PC Client 1-15, Printer Kasir EPSON, dan jaringan internet normal.',
-                    'Klik "Selesai" untuk langsung diarahkan ke Halaman Penjualan kasir.',
-                ],
-            ],
-            [
-                'code' => 'SOP-02',
-                'title' => 'Serah Terima Kas Billing Internet & Saldo Laci Kasir',
-                'category' => 'Keuangan & Kasir',
-                'updated_at' => '17 Okt 2026',
-                'summary' => 'Operator shift masuk wajib mencocokkan uang fisik di laci kasir dengan rekapan billing shift sebelumnya sebelum operator shift lama meninggalkan tempat.',
-                'steps' => [
-                    'Periksa nominal "Billing Shift Sebelumnya" pada Bagian 5 Halaman Stok.',
-                    'Hitung fisik uang tunai di laci kasir bersama-sama dengan operator shift sebelumnya.',
-                    'Jika terdapat selisih uang kas fisik dengan catatan sistem, wajib tulis di kolom catatan.',
-                    'Beri centang verifikasi serah terima kas billing shift sebelumnya.',
-                    'Operator shift lama tidak diperkenankan check-out presensi sebelum serah terima kas selesai.',
-                ],
-            ],
-            [
-                'code' => 'SOP-03',
-                'title' => 'Pencatatan Penjualan F&B & Permintaan Stok Barang',
-                'category' => 'Logistik & Penjualan',
-                'updated_at' => '17 Okt 2026',
-                'summary' => 'Seluruh transaksi makanan, minuman, dan pemakaian kertas wajib diinput saat itu juga (realtime) melalui POS Halaman Penjualan.',
-                'steps' => [
-                    'Input menu F&B yang dipesan customer, pilih varian dan metode bayar (Tunai/QRIS).',
-                    'Stok inventaris berkurang secara otomatis pada database sistem.',
-                    'Jika stok kertas, mie instan, atau minuman tersisa di bawah batas aman, klik menu Permintaan Stok Barang.',
-                    'Pilih kategori barang, nama item, jumlah permintaan (qty), dan tingkat urgensi (Normal/Darurat).',
-                    'Admin/logistik gudang pusat akan memproses dan mendistribusikan barang.',
-                ],
-            ],
-            [
-                'code' => 'SOP-04',
-                'title' => 'Kelayakan Hardware PC Station & Jaringan Internet',
-                'category' => 'IT Support & Hardware',
-                'updated_at' => '17 Okt 2026',
-                'summary' => 'Menjaga performa 15 unit PC station, server billing, printer EPSON, dan switch LAN agar tidak ada kendala bagi pelanggan warnet.',
-                'steps' => [
-                    'Uji fungsi keyboard, mouse gaming, dan headset stereo pada setiap pergantian shift.',
-                    'Pastikan printer thermal EPSON memiliki kertas struk minimal 1 rol cadangan.',
-                    'Pastikan printer HVS Epson L3210 tinta tabung aman di atas garis batas minimum.',
-                    'Bila ada PC bermasalah, ubah status hardware menjadi "Ada Kendala" dan input nomor PC.',
-                ],
-            ],
-            [
-                'code' => 'SOP-05',
-                'title' => 'Selesai Shift & Check-Out Presensi Kepulangan',
-                'category' => 'Presensi & Operasional',
-                'updated_at' => '17 Okt 2026',
-                'summary' => 'Menutup buku kasir shift, mencetak rekapitulasi penjualan, dan melakukan check-out kepulangan resmi di sistem.',
-                'steps' => [
-                    'Pada akhir shift, buka Halaman Penjualan dan scroll ke Bagian 4: Selesai (Rekap Kasir Shift).',
-                    'Masukkan jumlah uang tunai fisik yang ada di laci kasir.',
-                    'Klik tombol "Tutup Kasir Shift & Simpan Rekapitulasi".',
-                    'Setelah operator shift pengganti hadir dan siap serah terima, klik Bagian 5: Check Out Presensi.',
-                    'Sistem mencatat jam pulang dan durasi kerja karyawan secara akurat.',
-                ],
-            ],
-        ];
+        if (! Schema::hasTable('sops')) {
+            return [];
+        }
+
+        return Sop::query()
+            ->orderBy('sort_order')
+            ->orderBy('code')
+            ->get()
+            ->map(static fn (Sop $sop): array => [
+                'id' => $sop->id,
+                'code' => $sop->code,
+                'title' => $sop->title,
+                'category' => $sop->category,
+                'summary' => $sop->summary,
+                'steps' => is_array($sop->steps) ? $sop->steps : [],
+                'sort_order' => $sop->sort_order,
+                'is_active' => $sop->is_active,
+                'updated_at' => $sop->updated_at?->translatedFormat('d M Y') ?? '-',
+            ])
+            ->all();
     }
 }

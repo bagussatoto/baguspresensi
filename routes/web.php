@@ -17,6 +17,7 @@ use App\Http\Controllers\Admin\AdminProductController;
 use App\Http\Controllers\Admin\AdminRbacController;
 use App\Http\Controllers\Admin\AdminSaleController;
 use App\Http\Controllers\Admin\AdminScheduleController;
+use App\Http\Controllers\Admin\AdminSopController;
 use App\Http\Controllers\Admin\AdminStockController;
 use App\Http\Controllers\Admin\AdminStockOpnameController;
 use App\Http\Controllers\Admin\AdminSupplierController;
@@ -599,15 +600,15 @@ Route::prefix('admin')->middleware(['web', 'auditor.readonly'])->group(function 
     Route::get('/presensi/pengaturan', [AdminAttendanceSettingController::class, 'index'])->name('admin.presensi.pengaturan');
     Route::post('/presensi/pengaturan', [AdminAttendanceSettingController::class, 'update'])->name('admin.presensi.pengaturan.update');
 
-    // Jam Kerja Karyawan CRUD (Edit & Delete Rekaman Presensi)
-    Route::post('/jam-kerja', [AdminAttendanceController::class, 'storeWorkHours'])->name('admin.jamkerja.store');
-    Route::put('/jam-kerja/{record}', [AdminAttendanceController::class, 'updateWorkHours'])->name('admin.jamkerja.update');
-    Route::delete('/jam-kerja/{record}', [AdminAttendanceController::class, 'destroyWorkHours'])->name('admin.jamkerja.destroy');
-
     // Kehadiran Kegiatan (Meeting, Pelatihan, GC) CRUD
     Route::post('/kegiatan', [AdminAttendanceController::class, 'storeActivity'])->name('admin.kegiatan.store');
     Route::put('/kegiatan/{activity}', [AdminAttendanceController::class, 'updateActivity'])->name('admin.kegiatan.update');
     Route::delete('/kegiatan/{activity}', [AdminAttendanceController::class, 'destroyActivity'])->name('admin.kegiatan.destroy');
+
+    // Standard Operating Procedure (SOP) CRUD
+    Route::post('/sop', [AdminSopController::class, 'store'])->name('admin.sop.store');
+    Route::put('/sop/{sop}', [AdminSopController::class, 'update'])->name('admin.sop.update');
+    Route::delete('/sop/{sop}', [AdminSopController::class, 'destroy'])->name('admin.sop.destroy');
 });
 
 // Autentikasi Admin Maya Graha Kencana (Manager vs Staff)

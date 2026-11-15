@@ -707,8 +707,8 @@
         </p>
     </div>
     <div class="erp-quick-actions-row">
-        <a href="{{ route('presensi2.penjualan') }}" target="_blank" class="btn-erp-quick btn-erp-emerald">
-            <span>🛒</span> Buka POS Kasir
+        <a href="{{ route('pos') }}" target="_blank" class="btn-erp-quick btn-erp-emerald">
+            <span>🛒</span> Buka POS Desktop
         </a>
         <a href="{{ route('presensi2.stok') }}" target="_blank" class="btn-erp-quick btn-erp-primary">
             <span>📋</span> Checklist Stok
