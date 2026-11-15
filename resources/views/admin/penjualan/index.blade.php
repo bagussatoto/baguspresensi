@@ -1790,6 +1790,12 @@
 
         function printReceiptPopup() {
             if (!currentDetailSale) return;
+            if (currentDetailSale.payment_status === 'cancelled') {
+                const voidUrl = `{{ url('admin/penjualan') }}/${currentDetailSale.id}/void-slip?autoprint=1`;
+                const w = window.open(voidUrl, '_blank', 'width=450,height=650');
+                if (w) w.focus();
+                return;
+            }
             const printUrl = `{{ url('admin/penjualan') }}/${currentDetailSale.id}/print`;
             const w = window.open(printUrl, '_blank', 'width=450,height=650');
             if (w) w.focus();

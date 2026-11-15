@@ -3104,7 +3104,7 @@ class AttendanceWebV2Controller extends Controller
         $branchId = $employee->branch_id;
 
         // 1. Daftar Penjualan Makanan dan Minuman Hari Ini (Isolasi per Cabang)
-        $fnbSales = CafeSale::with(['items.variant', 'employee', 'customer'])
+        $fnbSales = CafeSale::with(['items.variant', 'employee', 'customer', 'voidBy', 'branch'])
             ->where('total_fnb', '>', 0)
             ->whereDate('created_at', $workDate->toDateString())
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
@@ -4381,12 +4381,41 @@ class AttendanceWebV2Controller extends Controller
         $message = "Pesanan {$sale->invoice_number} berhasil dibatalkan dan stok produk telah dikembalikan ke inventaris!";
 
         if ($request->wantsJson()) {
+            $sale->loadMissing(['items.variant', 'employee', 'customer', 'voidBy', 'branch']);
+
+            $voidData = [
+                'id' => $sale->id,
+                'invoice_number' => $sale->invoice_number,
+                'branch_name' => $sale->branch?->name ?? 'Pusat',
+                'branch_address' => $sale->branch?->address ?? 'MGK Internet Cafe Network',
+                'created_at' => $sale->created_at ? $sale->created_at->format('d/m/Y H:i') : '-',
+                'void_at' => $sale->void_at ? Carbon::parse($sale->void_at)->format('d/m/Y H:i') : now()->format('d/m/Y H:i'),
+                'cashier_name' => $sale->employee?->name ?? 'Kasir',
+                'supervisor_name' => $supervisor?->name ?? 'Supervisor / Admin',
+                'customer_name' => $sale->customer_name ?: ($sale->customer?->name ?? 'Umum'),
+                'reason' => $reason,
+                'payment_method' => strtoupper($sale->payment_method ?? 'CASH'),
+                'net_amount' => (float) ($sale->net_amount > 0 ? $sale->net_amount : $sale->total_fnb),
+                'gross_amount' => (float) ($sale->gross_amount ?? $sale->total_fnb),
+                'discount_amount' => (float) ($sale->discount_amount ?? 0),
+                'items' => $sale->items->map(function ($it) {
+                    return [
+                        'item_name' => $it->item_name,
+                        'qty' => $it->qty,
+                        'unit_price' => (float) $it->unit_price,
+                        'subtotal' => (float) $it->subtotal,
+                    ];
+                })->values()->all(),
+            ];
+
             return response()->json([
                 'success' => true,
                 'message' => $message,
                 'invoice_number' => $sale->invoice_number,
                 'payment_status' => 'cancelled',
                 'redirect_url' => route('admin.penjualan', ['q' => $sale->invoice_number]),
+                'sale' => $sale,
+                'void_data' => $voidData,
             ]);
         }
 
@@ -4396,6 +4425,54 @@ class AttendanceWebV2Controller extends Controller
         }
 
         return redirect()->route('admin.penjualan', ['q' => $sale->invoice_number])->with('success', $message);
+    }
+
+    /**
+     * Tampilkan atau Ambil Data Cetak Slip Struk Pembatalan Kasir (VOID) Thermal.
+     */
+    public function penjualanVoidSlip(Request $request, CafeSale $sale): View|JsonResponse
+    {
+        $sale->loadMissing(['items.variant', 'employee', 'customer', 'voidBy', 'branch']);
+
+        $voidData = [
+            'id' => $sale->id,
+            'invoice_number' => $sale->invoice_number,
+            'branch_name' => $sale->branch?->name ?? 'Pusat',
+            'branch_address' => $sale->branch?->address ?? 'MGK Internet Cafe Network',
+            'created_at' => $sale->created_at ? $sale->created_at->format('d/m/Y H:i') : '-',
+            'void_at' => $sale->void_at ? Carbon::parse($sale->void_at)->format('d/m/Y H:i') : ($sale->updated_at ? $sale->updated_at->format('d/m/Y H:i') : now()->format('d/m/Y H:i')),
+            'cashier_name' => $sale->employee?->name ?? 'Kasir',
+            'supervisor_name' => $sale->voidBy?->name ?? 'Supervisor / Admin',
+            'customer_name' => $sale->customer_name ?: ($sale->customer?->name ?? 'Umum'),
+            'reason' => $sale->void_reason ?: 'Pembatalan nota kasir (VOID)',
+            'payment_method' => strtoupper($sale->payment_method ?? 'CASH'),
+            'net_amount' => (float) ($sale->net_amount > 0 ? $sale->net_amount : $sale->total_fnb),
+            'gross_amount' => (float) ($sale->gross_amount ?? $sale->total_fnb),
+            'discount_amount' => (float) ($sale->discount_amount ?? 0),
+            'items' => $sale->items->map(function ($it) {
+                return [
+                    'item_name' => $it->item_name,
+                    'qty' => $it->qty,
+                    'unit_price' => (float) $it->unit_price,
+                    'subtotal' => (float) $it->subtotal,
+                ];
+            })->values()->all(),
+            'paper_size' => $request->query('paper', '58mm'),
+        ];
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'sale' => $sale,
+                'void_data' => $voidData,
+            ]);
+        }
+
+        return view('presensi2.void_slip', [
+            'sale' => $sale,
+            'voidData' => $voidData,
+            'paperSize' => $request->query('paper', '58mm'),
+        ]);
     }
 
     /**

@@ -502,10 +502,11 @@
 
         @media print {
             body * { visibility: hidden !important; }
-            #printable-thermal-area, #printable-thermal-area * {
+            .printing-active, .printing-active *,
+            #printable-thermal-area:not(.not-printing), #printable-thermal-area:not(.not-printing) * {
                 visibility: visible !important;
             }
-            #printable-thermal-area {
+            .printing-active, #printable-thermal-area:not(.not-printing) {
                 position: absolute !important;
                 left: 0 !important;
                 top: 0 !important;
@@ -514,12 +515,12 @@
                 margin: 0 !important;
                 padding: 0 !important;
             }
-            #printable-thermal-area.paper-58mm {
+            .printing-active.paper-58mm, #printable-thermal-area.paper-58mm {
                 width: 48mm !important;
                 max-width: 48mm !important;
                 font-size: 10px !important;
             }
-            #printable-thermal-area.paper-80mm {
+            .printing-active.paper-80mm, #printable-thermal-area.paper-80mm {
                 width: 72mm !important;
                 max-width: 72mm !important;
                 font-size: 12px !important;
@@ -1046,11 +1047,15 @@
                                     @endif
                                 </td>
                                 <td style="padding: 8px 10px; text-align: center;">
-                                    <button type="button" onclick='reprintFromHistory(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #e0f2fe; border: 1px solid #bae6fd; color: #0369a1; border-radius: 3px; cursor: pointer;">
-                                        🖨️ Cetak
-                                    </button>
-                                    @if(!$isCancelled)
-                                        <button type="button" onclick='openVoidModal(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #fee2e2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 3px; cursor: pointer; margin-left: 4px;">
+                                    @if($isCancelled)
+                                        <button type="button" onclick='printVoidSlipFromHistory(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #fee2e2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 3px; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 3px;" title="Cetak ulang slip bukti pembatalan (VOID)">
+                                            <span>🖨️</span> Slip VOID
+                                        </button>
+                                    @else
+                                        <button type="button" onclick='reprintFromHistory(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #e0f2fe; border: 1px solid #bae6fd; color: #0369a1; border-radius: 3px; cursor: pointer;" title="Cetak ulang struk pelanggan">
+                                            🖨️ Cetak
+                                        </button>
+                                        <button type="button" onclick='openVoidModal(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #fee2e2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 3px; cursor: pointer; margin-left: 4px;" title="Batalkan transaksi (VOID) dengan otorisasi supervisor">
                                             ✕ Batal
                                         </button>
                                     @endif
@@ -1117,9 +1122,15 @@
                                     </span>
                                 </td>
                                 <td style="padding: 8px 10px; text-align: center;">
-                                    <button type="button" onclick='reprintFromHistory(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #e0f2fe; border: 1px solid #bae6fd; color: #0369a1; border-radius: 3px; cursor: pointer;" title="Cetak ulang struk pelanggan">
-                                        🖨️ Cetak
-                                    </button>
+                                    @if($isCancelled)
+                                        <button type="button" onclick='printVoidSlipFromHistory(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #fee2e2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 3px; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 3px;" title="Cetak ulang slip bukti pembatalan (VOID)">
+                                            <span>🖨️</span> Slip VOID
+                                        </button>
+                                    @else
+                                        <button type="button" onclick='reprintFromHistory(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #e0f2fe; border: 1px solid #bae6fd; color: #0369a1; border-radius: 3px; cursor: pointer;" title="Cetak ulang struk pelanggan">
+                                            🖨️ Cetak
+                                        </button>
+                                    @endif
                                 </td>
                             </tr>
                         @empty
@@ -1245,6 +1256,117 @@
                     </button>
                     <button type="button" onclick="printReceipt()" style="padding: 6px 16px; border: none; background: var(--pos-green); color: #fff; font-weight: 700; border-radius: 3px; cursor: pointer;">
                         🖨️ Cetak Struk (Enter)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- MODAL 1B: PREVIEW & CETAK STRUK VOID THERMAL (58MM & 80MM) --}}
+    <div id="modal-void-receipt" class="pos-modal-overlay">
+        <div class="pos-modal-box" style="max-width: 390px; border-top: 4px solid #ef4444;">
+            <div class="pos-modal-header" style="background: #dc2626; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="display: flex; align-items: center; gap: 5px;">
+                        <span>🧾</span> Struk Pembatalan (VOID)
+                    </span>
+                    <div style="display: flex; gap: 4px; background: rgba(0,0,0,0.25); padding: 2px 4px; border-radius: 4px;">
+                        <button type="button" id="btn-void-size-58mm" onclick="switchVoidReceiptPaperSize('58mm')" style="background: #fff; color: #991b1b; border: none; padding: 2px 6px; font-size: 10px; font-weight: 800; border-radius: 3px; cursor: pointer;">58mm</button>
+                        <button type="button" id="btn-void-size-80mm" onclick="switchVoidReceiptPaperSize('80mm')" style="background: transparent; color: #fff; border: none; padding: 2px 6px; font-size: 10px; font-weight: 800; border-radius: 3px; cursor: pointer;">80mm</button>
+                    </div>
+                </div>
+                <button type="button" onclick="closeVoidReceiptModal()" style="background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; line-height: 1;">✕</button>
+            </div>
+            <div style="padding: 16px; background: #f8fafc; text-align: center; max-height: 75vh; overflow-y: auto;">
+                <div id="printable-void-area" class="thermal-slip paper-58mm">
+                    <div class="thermal-center" style="font-weight: bold; font-size: 13px; letter-spacing: 0.5px;">MAYA GRAHA KENCANA</div>
+                    <div id="void-branch-name" class="thermal-center" style="font-size: 10px; font-weight: bold;">Cabang {{ $currentEmployee->branch->name ?? 'Pusat' }}</div>
+                    <div id="void-branch-address" class="thermal-center" style="font-size: 8.5px; color: #555;">{{ $currentEmployee->branch->address ?? 'MGK Internet Cafe Network' }}</div>
+                    <div class="thermal-divider"></div>
+                    <div class="thermal-center" style="margin: 3px 0 4px 0;">
+                        <div style="font-weight: 800; font-size: 11px; letter-spacing: 0.8px; border: 1.5px solid #000; padding: 2px 6px; display: inline-block;">
+                            *** STRUK PEMBATALAN (VOID) ***
+                        </div>
+                        <div style="font-size: 8.5px; font-weight: bold; margin-top: 2px;">
+                            BUKTI SAH RETUR FISIK KASIR
+                        </div>
+                    </div>
+                    <div class="thermal-divider"></div>
+                    <div class="thermal-row">
+                        <span>No. Invoice:</span>
+                        <span id="void-receipt-invoice-num" style="font-weight: bold; font-family: monospace; text-decoration: line-through;">-</span>
+                    </div>
+                    <div class="thermal-row">
+                        <span>Waktu Order:</span>
+                        <span id="void-receipt-order-date">-</span>
+                    </div>
+                    <div class="thermal-row">
+                        <span>Waktu Batal:</span>
+                        <span id="void-receipt-cancel-date" style="font-weight: bold;">-</span>
+                    </div>
+                    <div class="thermal-row">
+                        <span>Kasir:</span>
+                        <span id="void-receipt-cashier">-</span>
+                    </div>
+                    <div class="thermal-row">
+                        <span>Otorisator:</span>
+                        <span id="void-receipt-supervisor" style="font-weight: bold;">-</span>
+                    </div>
+                    <div class="thermal-row">
+                        <span>Pelanggan:</span>
+                        <span id="void-receipt-customer">Umum</span>
+                    </div>
+                    <div class="thermal-row">
+                        <span>Alasan:</span>
+                        <span id="void-receipt-reason" style="font-style: italic; max-width: 60%; text-align: right;">-</span>
+                    </div>
+                    <div class="thermal-divider"></div>
+                    <div style="font-size: 9px; font-weight: bold; margin-bottom: 2px; text-align: left;">RINCIAN ITEM BATAL:</div>
+                    <div id="void-receipt-items-list" style="margin: 4px 0;"></div>
+                    <div class="thermal-divider"></div>
+                    <div class="thermal-row" style="font-weight: bold; font-size: 12px; margin-top: 3px;">
+                        <span>TOTAL BATAL:</span>
+                        <span id="void-receipt-total" style="font-family: monospace;">-Rp 0</span>
+                    </div>
+                    <div class="thermal-row">
+                        <span>Metode Asal:</span>
+                        <span id="void-receipt-method">TUNAI</span>
+                    </div>
+                    <div class="thermal-row">
+                        <span>Pengembalian:</span>
+                        <span id="void-receipt-refund-status" style="font-weight: bold;">BATAL / REFUND KAS</span>
+                    </div>
+                    <div class="thermal-divider"></div>
+                    <div class="thermal-center" style="font-size: 8.5px; line-height: 1.35; margin: 4px 0;">
+                        Struk ini adalah bukti fisik sah retur stok inventaris.<br>
+                        <em>Wajib dilampirkan bersama uang laci saat Serah Terima Shift & Audit SoD.</em>
+                    </div>
+                    <div style="margin-top: 10px; display: flex; justify-content: space-between; text-align: center; font-size: 9px;">
+                        <div style="width: 46%;">
+                            <div>Kasir,</div>
+                            <div style="height: 28px;"></div>
+                            <div id="void-receipt-sign-cashier" style="border-top: 1px dotted #000; padding-top: 2px; font-size: 8.5px;">(..................)</div>
+                        </div>
+                        <div style="width: 46%;">
+                            <div>Supervisor/Admin,</div>
+                            <div style="height: 28px;"></div>
+                            <div id="void-receipt-sign-supervisor" style="border-top: 1px dotted #000; padding-top: 2px; font-size: 8.5px;">(..................)</div>
+                        </div>
+                    </div>
+                    <div class="thermal-divider" style="margin-top: 8px;"></div>
+                    <div class="thermal-center" style="font-size: 8px; color: #555;">
+                        *** MGK POS SECURITY AUDIT TRAIL ***
+                    </div>
+                </div>
+            </div>
+            <div style="padding: 10px 16px; background: #ffffff; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 11px; color: #64748b;" id="void-receipt-paper-label">Format: <strong>58mm Thermal</strong></span>
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" onclick="closeVoidReceiptModal()" style="padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 3px; font-size: 12px; cursor: pointer;">
+                        Tutup (Esc)
+                    </button>
+                    <button type="button" onclick="printVoidReceipt()" style="padding: 6px 16px; border: none; background: #dc2626; color: #fff; font-weight: 700; border-radius: 3px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;">
+                        <span>🖨️</span> Cetak Slip VOID (Enter)
                     </button>
                 </div>
             </div>
@@ -2395,7 +2517,143 @@
         }
 
         function printReceipt() {
+            document.querySelectorAll('.thermal-slip').forEach(el => {
+                el.classList.remove('printing-active');
+                el.classList.remove('not-printing');
+            });
+            const el = document.getElementById('printable-thermal-area');
+            if (el) el.classList.add('printing-active');
+            const voidEl = document.getElementById('printable-void-area');
+            if (voidEl) voidEl.classList.add('not-printing');
             window.print();
+        }
+
+        function printVoidReceipt() {
+            document.querySelectorAll('.thermal-slip').forEach(el => {
+                el.classList.remove('printing-active');
+                el.classList.remove('not-printing');
+            });
+            const el = document.getElementById('printable-void-area');
+            if (el) el.classList.add('printing-active');
+            const receiptEl = document.getElementById('printable-thermal-area');
+            if (receiptEl) receiptEl.classList.add('not-printing');
+            window.print();
+        }
+
+        function switchVoidReceiptPaperSize(size) {
+            const area = document.getElementById('printable-void-area');
+            const btn58 = document.getElementById('btn-void-size-58mm');
+            const btn80 = document.getElementById('btn-void-size-80mm');
+            const label = document.getElementById('void-receipt-paper-label');
+            if (!area) return;
+
+            if (size === '80mm') {
+                area.classList.remove('paper-58mm');
+                area.classList.add('paper-80mm');
+                if (btn80) { btn80.style.background = '#fff'; btn80.style.color = '#991b1b'; }
+                if (btn58) { btn58.style.background = 'transparent'; btn58.style.color = '#fff'; }
+                if (label) label.innerHTML = 'Format: <strong>80mm Thermal (Lebar)</strong>';
+                localStorage.setItem('pos_receipt_paper_size', '80mm');
+            } else {
+                area.classList.remove('paper-80mm');
+                area.classList.add('paper-58mm');
+                if (btn58) { btn58.style.background = '#fff'; btn58.style.color = '#991b1b'; }
+                if (btn80) { btn80.style.background = 'transparent'; btn80.style.color = '#fff'; }
+                if (label) label.innerHTML = 'Format: <strong>58mm Thermal (Kecil)</strong>';
+                localStorage.setItem('pos_receipt_paper_size', '58mm');
+            }
+        }
+
+        function showVoidReceiptModal(voidData) {
+            const modal = document.getElementById('modal-void-receipt');
+            if (!modal || !voidData) return;
+
+            const savedSize = localStorage.getItem('pos_receipt_paper_size') || '58mm';
+            switchVoidReceiptPaperSize(savedSize);
+
+            // Cabang
+            const branchName = voidData.branch_name || voidData.branch?.name || 'Pusat';
+            const branchAddr = voidData.branch_address || voidData.branch?.address || 'MGK Internet Cafe Network';
+            document.getElementById('void-branch-name').innerText = 'Cabang ' + branchName;
+            document.getElementById('void-branch-address').innerText = branchAddr;
+
+            // Invoice & Meta
+            const invNum = voidData.invoice_number || '-';
+            document.getElementById('void-receipt-invoice-num').innerText = invNum;
+            document.getElementById('void-receipt-order-date').innerText = voidData.created_at || (new Date()).toLocaleString('id-ID');
+            document.getElementById('void-receipt-cancel-date').innerText = voidData.void_at || (new Date()).toLocaleString('id-ID');
+
+            const cashierName = voidData.cashier_name || voidData.employee?.name || 'Kasir';
+            document.getElementById('void-receipt-cashier').innerText = cashierName;
+            document.getElementById('void-receipt-sign-cashier').innerText = `(${cashierName})`;
+
+            const supervisorName = voidData.supervisor_name || voidData.void_by?.name || voidData.void_by_name || 'Supervisor / Admin';
+            document.getElementById('void-receipt-supervisor').innerText = supervisorName;
+            document.getElementById('void-receipt-sign-supervisor').innerText = `(${supervisorName})`;
+
+            const custName = voidData.customer_name || voidData.customer?.name || 'Umum';
+            document.getElementById('void-receipt-customer').innerText = custName;
+
+            const reason = voidData.reason || voidData.void_reason || 'Pembatalan nota kasir';
+            document.getElementById('void-receipt-reason').innerText = reason;
+
+            // Total Batal
+            const netTotal = Number(voidData.net_amount > 0 ? voidData.net_amount : (voidData.total_fnb || 0));
+            document.getElementById('void-receipt-total').innerText = '-Rp ' + netTotal.toLocaleString('id-ID');
+            document.getElementById('void-receipt-method').innerText = (voidData.payment_method || 'CASH').toUpperCase();
+
+            // Items List
+            const itemsContainer = document.getElementById('void-receipt-items-list');
+            itemsContainer.innerHTML = '';
+            const items = voidData.items || [];
+            if (items.length > 0) {
+                items.forEach(it => {
+                    const div = document.createElement('div');
+                    div.style.marginBottom = '3px';
+                    const unitPrice = it.unit_price ? Number(it.unit_price).toLocaleString('id-ID') : '';
+                    div.innerHTML = `
+                        <div class="thermal-row">
+                            <span style="font-weight: 600; text-decoration: line-through;">${it.item_name || it.name}</span>
+                            <span style="font-weight: bold;">-Rp ${Number(it.subtotal || (it.qty * (it.unit_price || 0))).toLocaleString('id-ID')}</span>
+                        </div>
+                        <div class="thermal-item-detail" style="color: #666;">
+                            [BATAL] ${it.qty} pcs x Rp ${unitPrice}
+                        </div>
+                    `;
+                    itemsContainer.appendChild(div);
+                });
+            } else {
+                itemsContainer.innerHTML = '<div style="font-style: italic; color: #777;">(Rincian item dibatalkan)</div>';
+            }
+
+            modal.style.display = 'flex';
+        }
+
+        function closeVoidReceiptModal() {
+            const modal = document.getElementById('modal-void-receipt');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function printVoidSlipFromHistory(sale) {
+            if (!sale) return;
+            const voidData = {
+                id: sale.id,
+                invoice_number: sale.invoice_number,
+                branch_name: sale.branch?.name,
+                branch_address: sale.branch?.address,
+                created_at: sale.created_at ? new Date(sale.created_at).toLocaleString('id-ID') : '-',
+                void_at: sale.void_at ? new Date(sale.void_at).toLocaleString('id-ID') : (sale.updated_at ? new Date(sale.updated_at).toLocaleString('id-ID') : '-'),
+                cashier_name: sale.employee?.name || 'Kasir',
+                supervisor_name: sale.void_by?.name || 'Supervisor / Admin',
+                customer_name: sale.customer_name || sale.customer?.name || 'Umum',
+                reason: sale.void_reason || (sale.cashier_notes ? sale.cashier_notes.split('|').pop().trim() : 'Pembatalan nota kasir'),
+                payment_method: sale.payment_method || 'CASH',
+                net_amount: Number(sale.net_amount > 0 ? sale.net_amount : (sale.total_fnb || 0)),
+                gross_amount: Number(sale.gross_amount || sale.total_fnb || 0),
+                discount_amount: Number(sale.discount_amount || 0),
+                items: sale.items || []
+            };
+            showVoidReceiptModal(voidData);
         }
 
         function reprintFromHistory(sale) {
@@ -2480,8 +2738,21 @@
                 const data = await response.json();
                 if (response.ok && data.success) {
                     closeVoidModal();
-                    updateHistoryRowToVoid(saleId, invoiceNum);
-                    alert(`✅ Nota ${invoiceNum} berhasil dibatalkan (VOID).\nStok produk telah dikembalikan ke inventaris gudang.`);
+
+                    const voidPayload = data.void_data || {
+                        id: saleId,
+                        invoice_number: invoiceNum,
+                        reason: finalReason,
+                        void_at: (new Date()).toLocaleString('id-ID'),
+                        net_amount: Number(document.getElementById('void-total-amount')?.innerText?.replace(/[^0-9]/g, '') || 0),
+                        payment_method: 'CASH',
+                        cashier_name: '{{ $currentEmployee->name }}'
+                    };
+
+                    updateHistoryRowToVoid(saleId, invoiceNum, voidPayload);
+
+                    // Tampilkan pop-up preview Cetak Slip VOID langsung!
+                    showVoidReceiptModal(voidPayload);
                 } else {
                     alert('Gagal membatalkan transaksi: ' + (data.message || 'PIN Supervisor salah atau wewenang tidak mencukupi.'));
                 }
@@ -2494,7 +2765,7 @@
             }
         }
 
-        function updateHistoryRowToVoid(saleId, invoiceNum) {
+        function updateHistoryRowToVoid(saleId, invoiceNum, voidData) {
             let row = document.getElementById(`history-row-${saleId}`);
             if (!row) {
                 const rows = document.querySelectorAll('#pos-history-tbody tr');
@@ -2507,7 +2778,7 @@
 
             if (row) {
                 row.style.background = '#fff1f2';
-                row.style.opacity = '0.75';
+                row.style.opacity = '0.85';
 
                 const invCell = row.children[1];
                 if (invCell) {
@@ -2522,8 +2793,12 @@
 
                 const actionCell = row.children[7];
                 if (actionCell) {
-                    const btnCancel = actionCell.querySelector('.btn-cancel-sale') || actionCell.querySelectorAll('button')[1];
-                    if (btnCancel) btnCancel.remove();
+                    const voidPayloadJson = JSON.stringify(voidData || { id: saleId, invoice_number: invoiceNum }).replace(/"/g, '&quot;');
+                    actionCell.innerHTML = `
+                        <button type="button" onclick='printVoidSlipFromHistory(${JSON.stringify(voidData || { id: saleId, invoice_number: invoiceNum })})' style="padding: 3px 8px; font-size: 11px; background: #fee2e2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 3px; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 3px;" title="Cetak ulang slip bukti pembatalan (VOID)">
+                            <span>🖨️</span> Slip VOID
+                        </button>
+                    `;
                 }
             }
         }
@@ -2725,6 +3000,8 @@
             if (e.key === 'Escape') {
                 closePosShiftDrawer();
                 closeReceiptModal();
+                closeVoidReceiptModal();
+                closeVoidModal();
                 closeModalPenyesuaianBilling();
                 closeModalPenyesuaianPrint();
                 closeModal('modal-billing');
@@ -2734,6 +3011,11 @@
                 if (receiptModal && receiptModal.style.display === 'flex') {
                     e.preventDefault();
                     printReceipt();
+                }
+                const voidReceiptModal = document.getElementById('modal-void-receipt');
+                if (voidReceiptModal && voidReceiptModal.style.display === 'flex') {
+                    e.preventDefault();
+                    printVoidReceipt();
                 }
             } else if (e.key === 'F2') {
                 e.preventDefault();

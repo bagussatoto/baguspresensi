@@ -111,6 +111,7 @@ Route::prefix('presensi2')->name('presensi2.')->group(function () {
     Route::post('/penjualan/transaksi', [AttendanceWebV2Controller::class, 'penjualanStoreTransaction'])->name('penjualan.transaksi');
     Route::match(['get', 'post'], '/penjualan/{sale}/batal', [AttendanceWebV2Controller::class, 'penjualanCancelTransaction'])->name('penjualan.batal');
     Route::match(['get', 'post'], '/penjualan/transaksi/{sale}/cancel', [AttendanceWebV2Controller::class, 'penjualanCancelTransaction'])->name('penjualan.transaksi.cancel');
+    Route::get('/penjualan/{sale}/void-slip', [AttendanceWebV2Controller::class, 'penjualanVoidSlip'])->name('penjualan.void-slip');
     Route::post('/penjualan/permintaan-stok', [AttendanceWebV2Controller::class, 'penjualanStoreStockRequest'])->name('penjualan.permintaan-stok');
     Route::post('/penjualan/transfer/{id}/terima', [AttendanceWebV2Controller::class, 'confirmReceiveTransfer'])->name('penjualan.transfer.terima');
     Route::post('/transfer/{id}/terima', [AttendanceWebV2Controller::class, 'confirmReceiveTransfer'])->name('transfer.terima');
@@ -177,6 +178,8 @@ Route::prefix('presensi2')->name('presensi2.')->group(function () {
 // Route pembatalan penjualan fleksibel (GET & POST) yang langsung masuk ke Admin ERP
 Route::match(['get', 'post'], '/bagus/presensi2/penjualan/{sale}/batal', [AttendanceWebV2Controller::class, 'penjualanCancelTransaction']);
 Route::match(['get', 'post'], '/admin/penjualan/{sale}/batal', [AttendanceWebV2Controller::class, 'penjualanCancelTransaction'])->name('admin.penjualan.batal');
+Route::get('/bagus/presensi2/penjualan/{sale}/void-slip', [AttendanceWebV2Controller::class, 'penjualanVoidSlip']);
+Route::get('/admin/penjualan/{sale}/void-slip', [AttendanceWebV2Controller::class, 'penjualanVoidSlip'])->name('admin.penjualan.void-slip');
 Route::get('/pos', [AttendanceWebV2Controller::class, 'posDesktopIndex'])->name('pos');
 Route::get('/bagus/pos', [AttendanceWebV2Controller::class, 'posDesktopIndex'])->name('bagus.pos');
 Route::get('/presensi2/pos', [AttendanceWebV2Controller::class, 'posDesktopIndex'])->name('presensi2.pos');

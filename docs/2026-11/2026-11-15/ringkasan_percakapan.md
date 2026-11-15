@@ -109,6 +109,29 @@
 
 ---
 
+### 5. 🧾 Cetak Slip Struk Pembatalan Fisik (VOID) Kasir POS Thermal (58mm & 80mm)
+- **Konteks & Kebutuhan:**  
+  Mengacu pada rekomendasi dokumen operasional toko dan standar audit SoD, pembatalan pesanan/nota kasir (VOID) harus memiliki bukti fisik sah yang dicetak langsung di printer thermal kasir. Struk fisik ini wajib ditandatangani kasir & supervisor, serta disimpan di laci kasir untuk rekonsiliasi saat Serah Terima Shift.
+- **Implementasi:**
+  1. **Format Slip Struk Thermal Resmi VOID**:
+     - Header toko resmi PT Maya Graha Kencana & nama cabang.
+     - Banner mencolok: `*** STRUK PEMBATALAN (VOID) ***` & `BUKTI SAH RETUR FISIK KASIR`.
+     - Nomor invoice dicoret (*line-through*), waktu order, waktu batal, nama kasir, nama supervisor otorisator, nama pelanggan, dan alasan pembatalan.
+     - Daftar rincian barang retur bertanda `[BATAL]`, nominal total bertanda `-Rp X`, dan status pengembalian `BATAL / REFUND KAS`.
+     - Kolom tanda tangan fisik: `(Kasir)` dan `(Supervisor/Admin)` serta klausul audit ISO 27001.
+  2. **UX Interaktif di Layar POS Desktop**:
+     - Begitu transaksi berhasil dibatalkan via otorisasi PIN supervisor, sistem otomatis memunculkan pop-up modal **`🧾 Struk Pembatalan (VOID)`** yang siap dicetak langsung (cukup tekan `Enter` atau klik tombol cetak).
+     - Menambahkan tombol **`🖨️ Slip VOID`** warna merah di tabel riwayat transaksi (baik tab *Shift Saya* maupun *Shift Sebelumnya*) sehingga kasir/supervisor dapat mencetak ulang slip kapan saja.
+     - Tombol toggle ukuran kertas thermal **58mm (Kecil)** & **80mm (Lebar)** yang tersimpan di `localStorage`.
+  3. **Halaman & API Standalone Struk VOID**:
+     - Membuat route `GET /presensi2/penjualan/{sale}/void-slip` (alias `/admin/penjualan/{sale}/void-slip`).
+     - Membuat view mandiri `resources/views/presensi2/void_slip.blade.php` dengan fitur `?autoprint=1` yang juga terintegrasi pada tombol cetak di Admin ERP.
+  4. **Pengujian Fitur**:
+     - Dibuatkan automated feature test di `tests/Feature/PosThermalVoidSlipTest.php` (4 tests, 28 assertions lolos **100%**).
+     - Seluruh pengujian void sebelumnya di `PosDualControlAndBlindCashCountTest` dan `ShiftStockAndSalesFlowTest` tetap hijau.
+
+---
+
 ## ✅ Checklist Harian Pekerjaan (Daily Checklist)
 
 - [x] **Pusat Kendali ERP**:
@@ -141,6 +164,14 @@
   - [x] Ekspor CSV untuk Neraca Saldo dan Kartu Buku Besar.
   - [x] Tombol Cetak / PDF ramah cetak.
   - [x] Test `AdminAccountingTest` & `AdminAccountingPivotTest` lulus 100% (15 tests, 71 assertions).
+- [x] **Cetak Slip Struk Pembatalan Fisik (VOID) Kasir POS**:
+  - [x] Respon JSON pembatalan transaksi menyertakan data lengkap `void_data` (kasir, supervisor, alasan, jam, item retur, nominal).
+  - [x] Pop-up modal `#modal-void-receipt` muncul otomatis setelah form pembatalan berhasil disubmit.
+  - [x] Tombol pintas `🖨️ Slip VOID` pada tabel riwayat penjualan (Shift Saya & Shift Sebelumnya) untuk cetak ulang kapan saja.
+  - [x] Desain thermal slip resmi 58mm & 80mm dengan klausul kepatuhan & tanda tangan fisik Kasir + Supervisor.
+  - [x] Route & template mandiri `/presensi2/penjualan/{sale}/void-slip` dengan auto-print.
+  - [x] Integrasi tombol cetak slip VOID pada layar detail Penjualan Admin ERP.
+  - [x] Feature test `PosThermalVoidSlipTest` lulus 100% (4 tests, 28 assertions).
 - [x] **Standardisasi & Repositori**:
   - [x] Laravel Pint code formatter dijalankan pada seluruh file PHP yang dimodifikasi (`vendor/bin/pint --dirty --format agent`).
   - [x] Cache view Blade dibersihkan (`php artisan view:clear`).
@@ -156,6 +187,7 @@
 | `5183bd0` | `feat(sidebar): dynamically show pending queue count on 'Pusat Kendali ERP' badge` |
 | `cd817a7` | `feat(deposit): add upload proof photo for shift cash deposit and admin modal preview` |
 | `f8b5673` | `feat(accounting): enhance unified General Ledger & Trial Balance dashboard with drill-down, branch filter and CSV export` |
+| *(pending)* | `feat(pos): add physical thermal VOID receipt slip (58mm/80mm) with auto-print, dual-tab reprint and audit trail` |
 
 ---
 
@@ -163,7 +195,5 @@
 
 1. **Pembersihan Data Testing & Simulasi (*Simulation Data Purge*)**:
    - Modul khusus Super Admin untuk menghapus transaksi dummy uji coba (misal: simulasi Aqua, presensi dummy) dan mereset mutasi stok tanpa mengganggu Master Data SKU, Cabang, Karyawan, dan Akun COA.
-2. **Cetak Slip Fisik VOID Kasir POS**:
-   - Mencetak struk thermal tanda bukti pembatalan penjualan (`*** NOTA VOID / BATAL ***`) yang memuat alasan dan nama supervisor untuk diletakkan di laci kasir sebagai bukti fisik pengeluaran kas sah.
-3. **Notifikasi WhatsApp / Telegram Gateway**:
+2. **Notifikasi WhatsApp / Telegram Gateway**:
    - Pengiriman alert instan ke ponsel pimpinan saat kasir menyetorkan kas atau saat terdapat permohonan otorisasi darurat.
