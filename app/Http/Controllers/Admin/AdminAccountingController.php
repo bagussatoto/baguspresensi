@@ -92,7 +92,7 @@ class AdminAccountingController extends Controller
     /**
      * 2. Halaman Buku Besar (General Ledger).
      */
-    public function bukuBesarIndex(Request $request): View|JsonResponse
+    public function bukuBesarIndex(Request $request): View|JsonResponse|StreamedResponse
     {
         $startDate = $request->filled('start_date')
             ? Carbon::parse($request->input('start_date'))->toDateString()
@@ -100,6 +100,9 @@ class AdminAccountingController extends Controller
         $endDate = $request->filled('end_date')
             ? Carbon::parse($request->input('end_date'))->toDateString()
             : Carbon::now()->endOfMonth()->toDateString();
+
+        $branches = Branch::where('is_active', true)->orderBy('name')->get();
+        $selectedBranchId = $request->filled('branch_id') ? (int) $request->input('branch_id') : null;
 
         $accounts = ChartOfAccount::where('is_header', false)->where('is_active', true)->orderBy('account_code')->get();
 
@@ -120,8 +123,11 @@ class AdminAccountingController extends Controller
             $isDebit = ($selectedAccount->normal_balance === NormalBalance::DEBIT || $selectedAccount->normal_balance->value === 'debit');
 
             // 1. Hitung Saldo Awal sebelum tanggal start_date
-            $priorLines = JournalEntryLine::whereHas('journalEntry', function ($q) use ($startDate): void {
+            $priorLines = JournalEntryLine::whereHas('journalEntry', function ($q) use ($startDate, $selectedBranchId): void {
                 $q->where('status', 'posted')->where('entry_date', '<', $startDate);
+                if ($selectedBranchId) {
+                    $q->where('branch_id', $selectedBranchId);
+                }
             })->where('chart_of_account_id', $selectedAccount->id)->get();
 
             $priorDebit = (float) $priorLines->sum('debit');
@@ -136,8 +142,11 @@ class AdminAccountingController extends Controller
 
             // 2. Ambil baris mutasi dalam rentang tanggal
             $mutasiLines = JournalEntryLine::with(['journalEntry'])
-                ->whereHas('journalEntry', function ($q) use ($startDate, $endDate): void {
+                ->whereHas('journalEntry', function ($q) use ($startDate, $endDate, $selectedBranchId): void {
                     $q->where('status', 'posted')->whereBetween('entry_date', [$startDate, $endDate]);
+                    if ($selectedBranchId) {
+                        $q->where('branch_id', $selectedBranchId);
+                    }
                 })
                 ->where('chart_of_account_id', $selectedAccount->id)
                 ->join('journal_entries', 'journal_entry_lines.journal_entry_id', '=', 'journal_entries.id')
@@ -164,6 +173,34 @@ class AdminAccountingController extends Controller
             $endingBalance = $runningBalance;
         }
 
+        if ($request->query('export') === 'csv') {
+            $accCodeSafe = $selectedAccount ? str_replace([' ', '/', '\\'], '_', $selectedAccount->account_code) : 'all';
+            $filename = 'buku_besar_'.$accCodeSafe.'_'.date('Ymd').'.csv';
+
+            return response()->streamDownload(function () use ($selectedAccount, $startDate, $endDate, $openingBalance, $mutasiLines, $endingBalance, $totalDebitMutasi, $totalCreditMutasi) {
+                $handle = fopen('php://output', 'w');
+                fputcsv($handle, ['BUKU BESAR (GENERAL LEDGER) MAYA GRAHA KENCANA']);
+                fputcsv($handle, ['Akun', ($selectedAccount?->account_code ?? '').' - '.($selectedAccount?->account_name ?? '')]);
+                fputcsv($handle, ['Periode', $startDate.' s/d '.$endDate]);
+                fputcsv($handle, ['Saldo Awal', (string) $openingBalance]);
+                fputcsv($handle, []);
+                fputcsv($handle, ['Tanggal', 'No. Jurnal', 'Keterangan', 'Memo', 'Debit', 'Kredit', 'Saldo Berjalan']);
+                foreach ($mutasiLines as $line) {
+                    fputcsv($handle, [
+                        $line->journalEntry->entry_date->format('Y-m-d'),
+                        $line->journalEntry->entry_number,
+                        $line->journalEntry->description,
+                        $line->memo ?? '',
+                        (string) $line->debit,
+                        (string) $line->credit,
+                        (string) $line->running_balance,
+                    ]);
+                }
+                fputcsv($handle, ['TOTAL', '', '', '', (string) $totalDebitMutasi, (string) $totalCreditMutasi, (string) $endingBalance]);
+                fclose($handle);
+            }, $filename, ['Content-Type' => 'text/csv']);
+        }
+
         if ($request->wantsJson()) {
             return response()->json([
                 'success' => true,
@@ -178,6 +215,8 @@ class AdminAccountingController extends Controller
 
         return view('admin.accounting.buku_besar', compact(
             'accounts',
+            'branches',
+            'selectedBranchId',
             'selectedAccountId',
             'selectedAccount',
             'startDate',
@@ -193,7 +232,7 @@ class AdminAccountingController extends Controller
     /**
      * 3. Halaman Neraca Saldo (Trial Balance).
      */
-    public function neracaSaldoIndex(Request $request): View|JsonResponse
+    public function neracaSaldoIndex(Request $request): View|JsonResponse|StreamedResponse
     {
         $startDate = $request->filled('start_date')
             ? Carbon::parse($request->input('start_date'))->toDateString()
@@ -202,15 +241,29 @@ class AdminAccountingController extends Controller
             ? Carbon::parse($request->input('end_date'))->toDateString()
             : Carbon::now()->endOfMonth()->toDateString();
 
+        $branches = Branch::where('is_active', true)->orderBy('name')->get();
+        $selectedBranchId = $request->filled('branch_id') ? (int) $request->input('branch_id') : null;
+
         $accounts = ChartOfAccount::where('is_header', false)->orderBy('account_code')->get();
 
         $trialRows = [];
         $grandTotalDebit = 0.0;
         $grandTotalCredit = 0.0;
 
+        $categoryTotals = [
+            'asset' => 0.0,
+            'liability' => 0.0,
+            'equity' => 0.0,
+            'revenue' => 0.0,
+            'expense' => 0.0,
+        ];
+
         foreach ($accounts as $acc) {
-            $lines = JournalEntryLine::whereHas('journalEntry', function ($q) use ($startDate, $endDate): void {
+            $lines = JournalEntryLine::whereHas('journalEntry', function ($q) use ($startDate, $endDate, $selectedBranchId): void {
                 $q->where('status', 'posted')->whereBetween('entry_date', [$startDate, $endDate]);
+                if ($selectedBranchId) {
+                    $q->where('branch_id', $selectedBranchId);
+                }
             })->where('chart_of_account_id', $acc->id)->get();
 
             $sumDebit = (float) $lines->sum('debit');
@@ -237,6 +290,11 @@ class AdminAccountingController extends Controller
                 }
             }
 
+            $catKey = strtolower($acc->account_category->value ?? (string) $acc->account_category);
+            if (isset($categoryTotals[$catKey])) {
+                $categoryTotals[$catKey] += ($finalDebit > 0 ? $finalDebit : $finalCredit);
+            }
+
             $trialRows[] = [
                 'account' => $acc,
                 'mutation_debit' => $sumDebit,
@@ -251,6 +309,34 @@ class AdminAccountingController extends Controller
 
         $isBalanced = abs($grandTotalDebit - $grandTotalCredit) < 0.01;
 
+        if ($request->query('export') === 'csv') {
+            $filename = 'neraca_saldo_'.date('Ymd').'.csv';
+
+            return response()->streamDownload(function () use ($trialRows, $startDate, $endDate, $grandTotalDebit, $grandTotalCredit, $isBalanced) {
+                $handle = fopen('php://output', 'w');
+                fputcsv($handle, ['NERACA SALDO (TRIAL BALANCE) MAYA GRAHA KENCANA']);
+                fputcsv($handle, ['Periode', $startDate.' s/d '.$endDate]);
+                fputcsv($handle, ['Status Keseimbangan', $isBalanced ? 'SEIMBANG (BALANCED)' : 'SELISIH']);
+                fputcsv($handle, []);
+                fputcsv($handle, ['Kode Akun', 'Nama Akun', 'Kategori', 'Mutasi Debit', 'Mutasi Kredit', 'Saldo Akhir Debit', 'Saldo Akhir Kredit']);
+                foreach ($trialRows as $row) {
+                    if ($row['mutation_debit'] > 0 || $row['mutation_credit'] > 0 || $row['final_debit'] > 0 || $row['final_credit'] > 0) {
+                        fputcsv($handle, [
+                            $row['account']->account_code,
+                            $row['account']->account_name,
+                            strtoupper($row['account']->account_category->value ?? (string) $row['account']->account_category),
+                            (string) $row['mutation_debit'],
+                            (string) $row['mutation_credit'],
+                            (string) $row['final_debit'],
+                            (string) $row['final_credit'],
+                        ]);
+                    }
+                }
+                fputcsv($handle, ['TOTAL', '', '', '', '', (string) $grandTotalDebit, (string) $grandTotalCredit]);
+                fclose($handle);
+            }, $filename, ['Content-Type' => 'text/csv']);
+        }
+
         if ($request->wantsJson()) {
             return response()->json([
                 'success' => true,
@@ -264,7 +350,10 @@ class AdminAccountingController extends Controller
         return view('admin.accounting.neraca_saldo', compact(
             'startDate',
             'endDate',
+            'branches',
+            'selectedBranchId',
             'trialRows',
+            'categoryTotals',
             'grandTotalDebit',
             'grandTotalCredit',
             'isBalanced'

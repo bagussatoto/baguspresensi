@@ -67,6 +67,18 @@ class AdminAccountingTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('Buku Besar (General Ledger)');
         $response->assertSee('Kas Laci Kasir Utama');
+        $response->assertSee('Unduh CSV');
+    }
+
+    public function test_admin_can_export_buku_besar_csv(): void
+    {
+        $response = $this->get(route('admin.akuntansi.buku-besar', [
+            'account_id' => $this->cashAccount->id,
+            'export' => 'csv',
+        ]));
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
     }
 
     public function test_admin_can_access_neraca_saldo(): void
@@ -76,6 +88,18 @@ class AdminAccountingTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('Neraca Saldo (Trial Balance)');
         $response->assertSee('PEMBUKUAN DINYATAKAN SEIMBANG');
+        $response->assertSee('1. Total Aset &amp; Kas', false);
+        $response->assertSee('Unduh CSV');
+    }
+
+    public function test_admin_can_export_neraca_saldo_csv(): void
+    {
+        $response = $this->get(route('admin.akuntansi.neraca-saldo', [
+            'export' => 'csv',
+        ]));
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
     }
 
     public function test_admin_can_access_laba_rugi(): void
