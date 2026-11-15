@@ -152,8 +152,6 @@ class AdminDashboardController extends Controller
         $rekapOutletSummary = $rekapData['rekapOutletSummary'];
         $rekapKegiatanSummary = $rekapData['rekapKegiatanSummary'];
 
-        $sopList = $this->getSopList();
-
         $stockTransfersCount = DB::table('stock_transfer_dispatches')->where('status', '!=', 'received')->count();
         $stockStatsTotalSku = StockInventory::count();
 
@@ -169,7 +167,6 @@ class AdminDashboardController extends Controller
             'rekapBulanSummary',
             'rekapOutletSummary',
             'rekapKegiatanSummary',
-            'sopList',
             'stockTransfersCount',
             'stockStatsTotalSku'
         ));
@@ -1499,34 +1496,5 @@ class AdminDashboardController extends Controller
             'total_daily_billing' => $totalDailyBilling,
             'date_formatted' => $date->isoFormat('dddd, D MMMM Y'),
         ];
-    }
-
-    /**
-     * Daftar Standard Operating Procedure (SOP) Maya Graha Kencana.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    private function getSopList(): array
-    {
-        if (! Schema::hasTable('sops')) {
-            return [];
-        }
-
-        return Sop::query()
-            ->orderBy('sort_order')
-            ->orderBy('code')
-            ->get()
-            ->map(static fn (Sop $sop): array => [
-                'id' => $sop->id,
-                'code' => $sop->code,
-                'title' => $sop->title,
-                'category' => $sop->category,
-                'summary' => $sop->summary,
-                'steps' => is_array($sop->steps) ? $sop->steps : [],
-                'sort_order' => $sop->sort_order,
-                'is_active' => $sop->is_active,
-                'updated_at' => $sop->updated_at?->translatedFormat('d M Y') ?? '-',
-            ])
-            ->all();
     }
 }

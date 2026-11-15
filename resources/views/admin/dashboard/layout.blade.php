@@ -1062,7 +1062,6 @@
                         <li><a href="{{ route('admin.penjualan.penyesuaian-billing') }}" class="nav-sub-link {{ request()->routeIs('admin.penjualan.penyesuaian-billing*') ? 'active' : '' }}"><span>⚡</span> Persetujuan Penyesuaian Billing</a></li>
                         <li><a href="{{ route('admin.data', ['tab' => 'tab-presensi']) }}" class="nav-sub-link {{ request('tab') == 'tab-presensi' ? 'active' : '' }}"><span>👥</span> Presensi Karyawan</a></li>
                         <li><a href="{{ route('admin.presensi.approval') }}" class="nav-sub-link {{ request()->routeIs('admin.presensi.approval*') ? 'active' : '' }}"><span>📝</span> Approval Cuti & Tukar Shift</a></li>
-                        <li><a href="{{ route('admin.data', ['tab' => 'tab-sop']) }}" class="nav-sub-link {{ request('tab') == 'tab-sop' ? 'active' : '' }}"><span>📜</span> SOP Operasional</a></li>
                     </ul>
                 </li>
 

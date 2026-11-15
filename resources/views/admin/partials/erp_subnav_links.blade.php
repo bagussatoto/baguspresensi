@@ -224,13 +224,6 @@
     ⭐ rating
 </a>
 
-{{-- 20. SOP --}}
-<a href="{{ route('admin.data', ['tab' => 'tab-sop']) }}" 
-   class="subnav-item {{ request()->routeIs('admin.data') && request('tab') == 'tab-sop' ? 'active' : '' }}" 
-   title="Standard Operating Procedure (SOP)">
-    📋 sop
-</a>
-
 {{-- 21. HOME --}}
 <a href="{{ route('admin.index') }}" 
    class="subnav-item {{ request()->routeIs('admin.index') || (request()->routeIs('admin.data') && !request('tab')) || request()->routeIs('admin.distribusi') || (request()->routeIs('admin.stok') && !request()->routeIs('admin.stok-limit')) || request()->routeIs('admin.laporan') || request()->is('bagus/admin') || request()->is('admin') ? 'active' : '' }}" 

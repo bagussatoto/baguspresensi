@@ -167,14 +167,13 @@
                     1. Data Terpadu
                 </h3>
                 <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 16px;">
-                    Manajemen profil admin & cabang, pengelolaan data staf karyawan, pengaturan jadwal shift, data pendapatan billing, pemantauan presensi, rekap jam kerja, dan SOP.
+                    Manajemen profil admin & cabang, pengelolaan data staf karyawan, pengaturan jadwal shift, data pendapatan billing, dan pemantauan presensi.
                 </p>
                 <div style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px;">
                     <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; color: #cbd5e1;">👤 Profil</span>
                     <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; color: #cbd5e1;">📅 Jadwal Shift</span>
                     <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; color: #cbd5e1;">💰 Billing</span>
-                    <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; color: #cbd5e1;">⏱️ Jam Kerja</span>
-                    <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; color: #cbd5e1;">📜 SOP</span>
+                    <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; color: #cbd5e1;">👥 Presensi</span>
                 </div>
             </div>
             <div style="padding: 14px 22px; background: rgba(15, 23, 42, 0.4); border-top: 1px solid var(--border-glass);">

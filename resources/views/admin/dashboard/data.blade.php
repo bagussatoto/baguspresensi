@@ -1080,66 +1080,6 @@
         <!-- ============================================================== -->
         <!-- 1.5 JAM KERJA KARYAWAN (CRUD & MONITORING) -->
         <!-- ============================================================== -->
-        <!-- ============================================================== -->
-        <!-- 1.6 STANDARD OPERATING PROCEDURE (SOP) -->
-        <!-- ============================================================== -->
-        <div id="tab-sop" class="data-sub-tab" style="{{ $activeTab == 'tab-sop' ? 'display: block;' : 'display: none;' }}">
-            <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px;">
-                <div>
-                    <h3 style="font-size: 15px; font-weight: 700; color: #fff;">📜 Standard Operating Procedure (SOP) Maya Graha Kencana</h3>
-                    <span style="font-size: 12px; color: var(--text-muted);">Seluruh staff dan admin wajib mematuhi seluruh tahapan kerja di bawah ini.</span>
-                </div>
-                <button type="button" onclick="openCreateSopModal()" class="btn-action-sm btn-action-primary" style="padding: 8px 14px; font-size: 12px; font-weight: 700;">
-                    <span>➕</span> Tambah SOP
-                </button>
-            </div>
-
-            <div class="sop-grid-container">
-                @forelse($sopList as $sop)
-                <div class="sop-card-item" style="{{ !($sop['is_active'] ?? true) ? 'opacity: 0.65;' : '' }}">
-                    <div class="sop-card-header">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span class="sop-code-badge">{{ $sop['code'] }}</span>
-                            @if(!($sop['is_active'] ?? true))
-                                <span class="badge-status badge-rose" style="font-size: 10px;">Nonaktif</span>
-                            @endif
-                        </div>
-                        <span style="font-size: 11px; color: var(--text-sub);">{{ $sop['category'] }}</span>
-                    </div>
-                    <div class="sop-title-text">{{ $sop['title'] }}</div>
-                    @if(!empty($sop['summary']))
-                        <div class="sop-summary-text">{{ $sop['summary'] }}</div>
-                    @endif
-                    <div style="font-size: 11px; font-weight: 700; color: #38bdf8; margin-bottom: 6px; text-transform: uppercase;">Tahapan SOP:</div>
-                    <ol class="sop-step-list">
-                        @foreach($sop['steps'] as $st)
-                        <li>{{ $st }}</li>
-                        @endforeach
-                    </ol>
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-glass);">
-                        <span style="font-size: 11px; color: var(--text-sub);">Diperbarui: {{ $sop['updated_at'] ?? '-' }}</span>
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <button type="button" onclick="openEditSopModal({{ json_encode($sop) }})" class="btn-action-sm btn-action-primary" style="padding: 4px 10px; font-size: 11px;" title="Edit SOP">
-                                <span>✏️</span> Edit
-                            </button>
-                            <form action="{{ route('admin.sop.destroy', $sop['id']) }}" method="POST" style="display: inline;" onsubmit="return confirm('Hapus SOP {{ $sop['code'] }}?')">
-                                @csrf
-                                @method('DELETE')
-                                <input type="hidden" name="redirect_to" value="{{ url()->current() }}?tab=tab-sop">
-                                <button type="submit" class="btn-action-sm" style="background: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); padding: 4px 10px; font-size: 11px;" title="Hapus SOP">
-                                    <span>🗑️</span>
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-                @empty
-                <div style="grid-column: 1 / -1; text-align: center; padding: 36px; color: var(--text-muted); border: 1px dashed var(--border-glass); border-radius: 12px;">
-                    Belum ada data SOP. Klik tombol <strong>➕ Tambah SOP</strong> untuk menambahkan prosedur baru.
-                </div>
-                @endforelse
-            </div>
-        </div>
     </div>
 </div>
 @endsection
@@ -1309,69 +1249,6 @@
                 <button type="button" onclick="closeEditActivityModal()" class="btn-action-sm" style="background: rgba(255,255,255,0.08); color: #fff; padding: 10px 18px;">Batal</button>
                 <button type="submit" class="btn-action-sm btn-action-primary" style="padding: 10px 22px; font-weight: 700;">
                     <span>💾</span> Simpan Perubahan
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- MODAL TAMBAH / EDIT SOP -->
-<div id="sopModal" class="modal-overlay">
-    <div class="modal-box" style="max-width: 620px; text-align: left;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid var(--border-glass); padding-bottom: 10px;">
-            <h3 id="sopModalTitle" style="font-size: 16px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px;">
-                <span>📜</span> Tambah SOP Baru
-            </h3>
-            <button type="button" onclick="closeSopModal()" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px;">✕</button>
-        </div>
-
-        <form id="sopForm" action="{{ route('admin.sop.store') }}" method="POST">
-            @csrf
-            <input type="hidden" name="_method" id="sopFormMethod" value="POST">
-            <input type="hidden" name="redirect_to" value="{{ url()->current() }}?tab=tab-sop">
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
-                <div>
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Kode SOP</label>
-                    <input type="text" id="sop_code" name="code" required maxlength="32" placeholder="Contoh: SOP-06" style="width: 100%; padding: 8px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                </div>
-
-                <div>
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Kategori</label>
-                    <input type="text" id="sop_category" name="category" required maxlength="100" placeholder="Contoh: Keuangan & Kasir" style="width: 100%; padding: 8px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                </div>
-
-                <div style="grid-column: span 2;">
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Judul SOP</label>
-                    <input type="text" id="sop_title" name="title" required maxlength="255" placeholder="Contoh: Prosedur Tutup Kasir Shift" style="width: 100%; padding: 8px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                </div>
-
-                <div style="grid-column: span 2;">
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Ringkasan</label>
-                    <textarea id="sop_summary" name="summary" rows="2" placeholder="Penjelasan singkat tujuan SOP..." style="width: 100%; padding: 8px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px; resize: vertical;"></textarea>
-                </div>
-
-                <div style="grid-column: span 2;">
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Tahapan SOP (1 baris = 1 langkah)</label>
-                    <textarea id="sop_steps_text" name="steps_text" rows="5" required placeholder="Langkah 1&#10;Langkah 2&#10;Langkah 3" style="width: 100%; padding: 8px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px; resize: vertical;"></textarea>
-                </div>
-
-                <div>
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Urutan Tampil</label>
-                    <input type="number" id="sop_sort_order" name="sort_order" min="0" max="9999" value="0" style="width: 100%; padding: 8px 12px; background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-glass); border-radius: 8px; color: #fff; font-size: 13px;">
-                </div>
-
-                <div style="display: flex; align-items: center; gap: 8px; padding-top: 20px;">
-                    <input type="hidden" name="is_active" value="0">
-                    <input type="checkbox" id="sop_is_active" name="is_active" value="1" checked style="width: 16px; height: 16px; cursor: pointer;">
-                    <label for="sop_is_active" style="font-size: 13px; font-weight: 600; color: #cbd5e1; cursor: pointer;">SOP Aktif</label>
-                </div>
-            </div>
-
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button type="button" onclick="closeSopModal()" class="btn-action-sm" style="background: rgba(255,255,255,0.08); color: #fff; padding: 10px 18px;">Batal</button>
-                <button type="submit" class="btn-action-sm btn-action-primary" style="padding: 10px 22px; font-weight: 700;">
-                    <span>💾</span> Simpan SOP
                 </button>
             </div>
         </form>
@@ -1595,38 +1472,6 @@
             toast.style.opacity = '0';
             toast.style.transform = 'translateY(10px)';
         }, 3000);
-    }
-
-    function openCreateSopModal() {
-        document.getElementById('sopModalTitle').innerHTML = '<span>📜</span> Tambah SOP Baru';
-        document.getElementById('sopForm').action = "{{ route('admin.sop.store') }}";
-        document.getElementById('sopFormMethod').value = 'POST';
-        document.getElementById('sop_code').value = '';
-        document.getElementById('sop_category').value = '';
-        document.getElementById('sop_title').value = '';
-        document.getElementById('sop_summary').value = '';
-        document.getElementById('sop_steps_text').value = '';
-        document.getElementById('sop_sort_order').value = '0';
-        document.getElementById('sop_is_active').checked = true;
-        document.getElementById('sopModal').classList.add('active');
-    }
-
-    function openEditSopModal(sop) {
-        document.getElementById('sopModalTitle').innerHTML = '<span>✏️</span> Edit SOP ' + (sop.code || '');
-        document.getElementById('sopForm').action = "{{ url('/admin/sop') }}/" + sop.id;
-        document.getElementById('sopFormMethod').value = 'PUT';
-        document.getElementById('sop_code').value = sop.code || '';
-        document.getElementById('sop_category').value = sop.category || '';
-        document.getElementById('sop_title').value = sop.title || '';
-        document.getElementById('sop_summary').value = sop.summary || '';
-        document.getElementById('sop_steps_text').value = Array.isArray(sop.steps) ? sop.steps.join('\n') : '';
-        document.getElementById('sop_sort_order').value = sop.sort_order ?? 0;
-        document.getElementById('sop_is_active').checked = Boolean(sop.is_active ?? true);
-        document.getElementById('sopModal').classList.add('active');
-    }
-
-    function closeSopModal() {
-        document.getElementById('sopModal').classList.remove('active');
     }
 </script>
 
