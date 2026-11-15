@@ -229,6 +229,11 @@
   - [x] Rekonsiliasi matematis otomatis 100% (`Saldo Awal + Kenaikan/Penurunan Bersih = Saldo Akhir Buku Besar`).
   - [x] Filter Multi-Cabang, Preset Periode Cepat, Rincian Saldo per Akun Kas/Bank dengan *drill-down* ke Buku Besar, Ekspor CSV, dan Cetak PDF (`@media print`).
   - [x] Feature test `AdminAccountingTest` lulus 100% (21 tests, 86 assertions).
+- [x] **Manajemen Matriks Hak Akses RBAC Granular per Jabatan**:
+  - [x] Tabel & Model `RbacRolePermission` (`rbac_role_permissions`) serta `RbacMatrixService` untuk konfigurasi izin **Create, Read, Update, Delete, Approve** per jabatan (`AdminRole` & `EmployeeRole`) pada 8 modul inti ERP.
+  - [x] Proteksi otomatis **Segregation of Duties (SoD)** & penguncian **Auditor Read-Only** yang tidak dapat ditimpa dari antarmuka maupun payload request.
+  - [x] Antarmuka interaktif `/admin/ERP/rbac-matrix` terhubung dari modul `G-RBAC` di Pusat Kendali ERP, lengkap dengan filter tab jabatan, tombol preset per role, reset ke default SoD, ekspor CSV, dan pencatatan WORM Audit Log.
+  - [x] Feature test `AdminRbacMatrixTest` & `AdminErpHubTest` lulus 100% (9 tests, 88 assertions).
 - [x] **Standardisasi & Repositori**:
   - [x] Laravel Pint code formatter dijalankan pada seluruh file PHP yang dimodifikasi (`vendor/bin/pint --dirty --format agent`).
   - [x] Cache view Blade dibersihkan (`php artisan view:clear`).
@@ -250,7 +255,8 @@
 | `e0da9ea` | `feat(accounting): add multi-branch filtering, CSV export and drill-down to Neraca Keuangan (Balance Sheet)` |
 | `be6c6bd` | `feat(accounting): add accounting period closing, lock enforcement and automated closing journal entries` |
 | `6e313e4` | `docs: add project overview essay in Markdown format` |
-| *(pending)* | `feat(accounting): add Direct-Method Cash Flow Statement (Laporan Arus Kas) with branch filter, reconciliation and CSV export` |
+| `6eeb5e1` | `feat(accounting): add Direct-Method Cash Flow Statement (Laporan Arus Kas) with branch filter, reconciliation and CSV export` |
+| *(pending)* | `feat(rbac): add granular RBAC permissions matrix (CRUD + Approve) per role with SoD protection and audit log` |
 
 ---
 
