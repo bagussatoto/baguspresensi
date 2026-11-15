@@ -1,58 +1,185 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Maya Graha Kencana — Sistem ERP, POS Kasir & Presensi Terpadu
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Sistem manajemen operasional terintegrasi berbasis **Laravel 13** dan **PostgreSQL** untuk mengelola operasional multi-cabang **Maya Graha Kencana** (Presensi Karyawan, POS Kasir Desktop/Mobile, Distribusi & Stok, Billing Shift, Akuntansi SAK, serta Monitoring Sistem & Backup).
 
-## About Laravel
+![PHP](https://img.shields.io/badge/PHP-8.3%2B%20(8.5)-777BB4?style=flat-square&logo=php&logoColor=white)
+![Laravel](https://img.shields.io/badge/Laravel-13.x-FF2D20?style=flat-square&logo=laravel&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4.x-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
+![PHPUnit](https://img.shields.io/badge/PHPUnit-12.x-3C9CD7?style=flat-square)
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Daftar Isi
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- [1. Alur Diagram ERP](#1-alur-diagram-erp)
+- [2. Alur Database](#2-alur-database)
+- [3. Petunjuk di Dalam Dokumen (Modul & Navigasi)](#3-petunjuk-di-dalam-dokumen-modul--navigasi)
+- [4. Cara Instalasi](#4-cara-instalasi)
+- [5. Bio Pembuat Proyek](#5-bio-pembuat-proyek)
 
-## Learning Laravel
+---
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## 1. Alur Diagram ERP
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Aplikasi ini menggabungkan arsitektur modular (`Modules/*`) dan domain-driven (`app/Domains/*`) untuk menghubungkan operasional cabang secara *real-time* ke pusat admin dan pembukuan akuntansi.
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+```mermaid
+flowchart TD
+    A["Master Data (Cabang, Produk, Varian, Karyawan, Shift, CoA)"] --> B["Pembelian & Stok Pusat"]
+    B --> C["Distribusi Stok ke Cabang (Dispatch & Penerimaan)"]
+    C --> D["Operasional Cabang (Portal Presensi2)"]
 
-## Agentic Development
+    subgraph D_SUB ["Siklus Shift Harian Cabang"]
+        D1["1. Presensi Masuk (Clock-in)"] --> D2["2. Serah Terima Shift & Cek Stok"]
+        D2 --> D3["3. POS Kasir Desktop/Mobile & Billing"]
+        D3 --> D4["4. Tutup Kasir Shift & Rekap Setoran"]
+        D4 --> D5["5. Presensi Pulang (Clock-out)"]
+    end
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+    D --> D_SUB
+    D5 --> E["Verifikasi Admin: Penyesuaian Billing, Kas & Approval Cuti/Tukar Shift"]
+    E --> F["Laporan Penjualan, Z-Report & Akuntansi SAK (Jurnal, Buku Besar, CaLK, Tutup Buku)"]
+    F --> G["Audit Trail, RBAC & Monitoring Sistem (Cron, Queue, Backup PostgreSQL)"]
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+---
 
-## Contributing
+## 2. Alur Database
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Data operasional disimpan secara terpusat di **PostgreSQL** dengan pemisahan relasi untuk SDM/Presensi, Inventaris/Distribusi, Transaksi POS, dan Akuntansi/Sistem.
 
-## Code of Conduct
+```mermaid
+erDiagram
+    BRANCHES ||--o{ EMPLOYEES : "memiliki"
+    BRANCHES ||--o{ STOCK_INVENTORIES : "menyimpan_stok"
+    BRANCHES ||--o{ CAFE_SALES : "mencatat_transaksi"
+    BRANCHES ||--o{ SHIFT_SALES_SUMMARIES : "rekap_shift"
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+    EMPLOYEES ||--o{ ATTENDANCE_RECORDS : "clock_in_out"
+    SHIFTS ||--o{ ATTENDANCE_RECORDS : "jadwal_shift"
+    EMPLOYEES ||--o{ CAFE_SALES : "kasir"
 
-## Security Vulnerabilities
+    PRODUCT_VARIANTS ||--o{ STOCK_INVENTORIES : "kuantitas"
+    PRODUCT_VARIANTS ||--o{ CAFE_SALE_ITEMS : "item_terjual"
+    CAFE_SALES ||--|{ CAFE_SALE_ITEMS : "detail"
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+    STOCK_TRANSFER_DISPATCHES ||--|{ STOCK_INVENTORIES : "mutasi_distribusi"
+    SHIFT_SALES_SUMMARIES ||--o{ JOURNAL_ENTRIES : "posting_akuntansi"
+```
 
-## License
+### Ringkasan Struktur Modul & Domain
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+| Lokasi | Tanggung Jawab |
+| :--- | :--- |
+| `app/Domains/Attendance` | Presensi harian, koreksi absen, lembur, tukar shift, kehadiran kegiatan |
+| `app/Domains/Employee` | Data shift & penjadwalan karyawan |
+| `app/Domains/Leave` | Pengajuan dan persetujuan cuti/izin |
+| `Modules/MasterData` | Cabang (`Branch`), Karyawan (`Employee`), Produk/Varian, Merk, Kategori, Supplier, Konsumen, Stok, Penjualan F&B (`CafeSale`) |
+| `Modules/Pembelian` | Pengadaan & pembelian stok dari supplier |
+| `Modules/Distribusi` | Pengiriman (`Dispatch`) & penerimaan stok antar gudang/cabang |
+| `Modules/Penjualan` | Alur transaksi penjualan & POS |
+| `Modules/Kas` | Manajemen kas & rekonsiliasi |
+| `app/Http/Controllers/Admin` | Dashboard Admin, ERP Hub, Akuntansi SAK, RBAC, Audit Log, Backup & Cron Monitor |
+
+---
+
+## 3. Petunjuk di Dalam Dokumen (Modul & Navigasi)
+
+### A. Portal Admin & ERP (`/admin` / `/bagus/admin`)
+
+| Menu / Route | Fungsi Utama |
+| :--- | :--- |
+| **Dashboard Utama** (`/admin`) | Ringkasan operasional harian, status cabang, dan akses cepat modul |
+| **ERP Hub** (`/admin/erp`) | Peta modul terpadu seluruh divisi beserta kontrol RBAC |
+| **1. Data Terpadu** (`/admin/data`) | Profil cabang, manajemen karyawan, jadwal shift, data billing shift, dan rekap presensi |
+| **2. Penerimaan Distribusi** (`/admin/distribusi`) | Konfirmasi penerimaan pengiriman stok dari pusat ke cabang |
+| **3. Stok & Ketersediaan** (`/admin/stok`) | Pemantauan stok SKU per lokasi/cabang dan stok opname |
+| **4. Laporan & Z-Report** (`/admin/laporan`) | Rekapitulasi penjualan harian, per shift, dan laporan kasir |
+| **5. Akuntansi & Buku Besar** (`/admin/akuntansi/*`) | Bagan Akun (CoA), Jurnal Umum, Buku Besar, Neraca, Laba Rugi, CaLK, & Tutup Buku |
+| **6. Penyesuaian Billing & Kas** (`/admin/penjualan/penyesuaian-billing`) | Otorisasi selisih kas, void/batal transaksi, dan verifikasi setoran shift |
+| **7. Approval & Audit** (`/admin/presensi/*`) | Persetujuan cuti, tukar shift, reset password/PIN karyawan, dan Audit Trail |
+| **8. Sistem & Backup** (`/admin/system/*`) | Monitoring Cron Scheduler, Queue Worker, dan Backup/Restore PostgreSQL |
+
+### B. Portal Operasional Cabang (`/presensi2`)
+
+- **Presensi Karyawan (`/presensi2`)**: Clock-in/clock-out berbasis validasi cabang, pengajuan izin/koreksi, dan tukar shift.
+- **Serah Terima Shift (`/presensi2/serah-terima-v2`)**: Verifikasi saldo laci kasir dan kondisi operasional antar operator shift.
+- **POS Kasir Desktop (`/presensi2/pos`)**: Antarmuka kasir desktop untuk transaksi F&B, layanan, cetak struk, serta tutup kasir shift.
+
+---
+
+## 4. Cara Instalasi
+
+### Prasyarat Sistem
+- **PHP** `>= 8.3` (direkomendasikan PHP 8.5) dengan ekstensi `pgsql`, `pdo_pgsql`, `mbstring`, `xml`, `curl`, `zip`, `gd`
+- **Composer** `2.x`
+- **Node.js** `>= 20.x` & **NPM**
+- **PostgreSQL** `>= 15` (plus `pg_dump` & `gzip` untuk fitur backup otomatis)
+
+### Langkah Instalasi
+
+1. **Clone repository**
+   ```bash
+   git clone https://github.com/bagussatoto/baguspresensi.git
+   cd baguspresensi
+   ```
+
+2. **Install dependensi PHP & JavaScript**
+   ```bash
+   composer install
+   npm install
+   ```
+
+3. **Konfigurasi Environment (`.env`)**
+   ```bash
+   cp .env.example .env
+   php artisan key:generate
+   ```
+   Sesuaikan konfigurasi database PostgreSQL pada file `.env`:
+   ```env
+   DB_CONNECTION=pgsql
+   DB_HOST=127.0.0.1
+   DB_PORT=5432
+   DB_DATABASE=bagus
+   DB_USERNAME=postgres
+   DB_PASSWORD=your_password
+   ```
+
+4. **Migrasi Database & Build Aset Frontend**
+   ```bash
+   php artisan migrate
+   npm run build
+   ```
+
+5. **Menjalankan Aplikasi (Development)**
+   ```bash
+   php artisan serve
+   # atau jalankan bersama Vite dev server:
+   composer run dev
+   ```
+
+6. **Pengujian & Standar Kode**
+   ```bash
+   # Jalankan seluruh test PHPUnit
+   php artisan test
+
+   # Format kode PHP sesuai standar Laravel Pint
+   vendor/bin/pint --dirty
+   ```
+
+---
+
+## 5. Bio Pembuat Proyek
+
+| Informasi | Detail |
+| :--- | :--- |
+| **Nama** | Bagus Satoto |
+| **Peran** | Project Owner & Lead Developer |
+| **Organisasi** | Maya Graha Kencana / Mayanet |
+| **Email** | [bagus@mayanet.com](mailto:bagus@mayanet.com) |
+| **GitHub** | [github.com/bagussatoto/baguspresensi](https://github.com/bagussatoto/baguspresensi) |
+
+---
+
+> Dokumen ini dikelola sebagai panduan resmi pengembangan dan operasional sistem ERP **Maya Graha Kencana**.
