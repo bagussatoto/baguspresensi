@@ -145,6 +145,11 @@ Dokumentasi proyek **Bagus (Sistem Presensi, POS Kasir, & ERP MGK)** diorganisas
 
 ---
 
+### 📁 `docs/2026-11-15/` — Notifikasi Antrean ERP, Foto Bukti Setoran Kasir, & Dashboard Buku Besar & Neraca Saldo SAK
+* [`ringkasan_percakapan.md`](2026-11-15/ringkasan_percakapan.md) — Ringkasan pembaruan antrean `X Menunggu` pada Pusat Kendali ERP & Sidebar Admin, filter cepat `🚨 Perlu Tindakan`, fitur upload foto bukti transfer / amplop setoran kasir dan preview lightbox admin, serta dashboard terpadu Neraca Saldo & Buku Besar SAK (drill-down, multi-cabang & ekspor CSV).
+
+---
+
 ## 📌 Standar Konvensi Pembuatan Dokumen Baru
 
 Saat Anda membuat dokumen baru atau melakukan evaluasi teknis, ikuti konvensi berikut agar arsip selalu rapi dan mudah dicari:
