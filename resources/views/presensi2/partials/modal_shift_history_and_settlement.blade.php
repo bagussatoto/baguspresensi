@@ -298,16 +298,19 @@
                         @foreach($shiftsList as $sh)
                             <tr style="border-bottom: 1px solid #f1f5f9; {{ ($sh['is_current'] ?? false) ? 'background: #f0fdf4;' : '' }}">
                                 <td style="padding: 10px 12px; font-weight: 700; color: #0f172a;">
-                                    {{ $sh['name'] ?? 'Shift' }}
+                                    <div>{{ $sh['name'] ?? 'Shift' }}</div>
+                                    <div style="font-size: 10.5px; font-weight: 600; color: #64748b;">
+                                        Kasir: {{ $sh['operator_name'] ?? 'Belum Ditugaskan' }}
+                                    </div>
                                     @if($sh['is_current'] ?? false)
-                                        <span style="font-size: 10px; background: #22c55e; color: #fff; padding: 2px 6px; border-radius: 4px; margin-left: 4px;">Shift Aktif Anda</span>
+                                        <span style="display: inline-block; margin-top: 2px; font-size: 10px; background: #22c55e; color: #fff; padding: 2px 6px; border-radius: 4px;">Shift Aktif Anda</span>
                                     @endif
                                 </td>
                                 <td style="padding: 10px 12px; color: #64748b;">
-                                    {{ substr((string) ($sh['shift']->start_time ?? '00:00'), 0, 5) }} - {{ substr((string) ($sh['shift']->end_time ?? '00:00'), 0, 5) }}
+                                    {{ $sh['time_range'] ?? (substr((string) ($sh['shift']->start_time ?? '00:00'), 0, 5) . ' - ' . substr((string) ($sh['shift']->end_time ?? '00:00'), 0, 5)) }}
                                 </td>
                                 <td style="padding: 10px 12px; text-align: right; font-weight: 800; font-family: monospace; color: #0f172a;">
-                                    Rp {{ number_format((float) ($sh['sales'] ?? 0), 0, ',', '.') }}
+                                    Rp {{ number_format((float) ($sh['amount'] ?? $sh['sales'] ?? 0), 0, ',', '.') }}
                                 </td>
                                 <td style="padding: 10px 12px; text-align: center;">
                                     <span style="font-size: 11px; font-weight: 700; color: {{ $sh['status_color'] ?? '#64748b' }};">

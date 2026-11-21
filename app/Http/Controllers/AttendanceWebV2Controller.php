@@ -1906,7 +1906,7 @@ class AttendanceWebV2Controller extends Controller
         } catch (AlreadyClockedInException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Anda sudah melakukan presensi masuk untuk shift hari ini.',
+                'message' => $e->getMessage(),
                 'redirect_url' => route('presensi2.scan'),
             ], 409);
         } catch (\Throwable $e) {
@@ -2029,10 +2029,17 @@ class AttendanceWebV2Controller extends Controller
             $record = $this->clockOutAction->execute($dto);
 
             $durationDisplay = round($record->duration_minutes / 60, 1);
+            $logoutMsg = 'Presensi pulang berhasil! Total durasi kerja: '.$durationDisplay.' jam. Sesi Anda telah keluar otomatis.';
+
+            // Otomatis logout dari sesi presensi2 setelah berhasil Check-Out pulang
+            $request->session()->forget('presensi2_employee_id');
+            $request->session()->flash('success', $logoutMsg);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Presensi pulang berhasil! Total durasi kerja: '.$durationDisplay.' jam.',
+                'logged_out' => true,
+                'redirect_url' => route('presensi2.login'),
+                'message' => $logoutMsg,
                 'clock_out_at' => $record->clock_out_at?->format('H:i:s'),
                 'duration_minutes' => $record->duration_minutes,
             ]);
@@ -2400,23 +2407,15 @@ class AttendanceWebV2Controller extends Controller
         $totalSettledCash = 0.0;
 
         foreach ($shifts as $s) {
-            $shiftSales = CafeSale::whereDate('created_at', $dateStr)
+            // Cari AttendanceRecord kasir yang bertugas pada shift ini di database
+            $shiftAttendance = AttendanceRecord::with('employee')
+                ->where('shift_id', $s->id)
+                ->whereDate('work_date', $dateStr)
                 ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-                ->whereTime('created_at', '>=', $s->start_time)
-                ->whereTime('created_at', '<=', $s->end_time)
-                ->sum('total_billing');
+                ->latest('id')
+                ->first();
 
-            if ($shiftSales <= 0) {
-                $defaultIncomes = [
-                    'SHIFT-1' => 85000.0,
-                    'SHIFT-2' => 240000.0,
-                    'SHIFT-3' => 380000.0,
-                    'SHIFT-4' => 420000.0,
-                ];
-                $shiftSales = $defaultIncomes[$s->code] ?? 150000.0;
-            }
-
-            // Cari ShiftSalesSummary untuk status settlement shift ini
+            // Cari ShiftSalesSummary untuk status settlement shift ini di database
             $summary = ShiftSalesSummary::with('employee')
                 ->where('shift_id', $s->id)
                 ->whereDate('work_date', $dateStr)
@@ -2424,58 +2423,97 @@ class AttendanceWebV2Controller extends Controller
                 ->latest('id')
                 ->first();
 
-            $isSettled = $summary !== null;
+            $shiftEmployeeId = $summary?->employee_id ?? $shiftAttendance?->employee_id;
+
+            // Hitung omset aktual dari tabel cafe_sales di database untuk shift ini
+            $shiftSalesQuery = CafeSale::whereDate('created_at', $dateStr)
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+                ->where('payment_status', '!=', 'cancelled')
+                ->when(
+                    $shiftEmployeeId,
+                    fn ($q) => $q->where('employee_id', $shiftEmployeeId),
+                    fn ($q) => $q->whereTime('created_at', '>=', $s->start_time)
+                        ->whereTime('created_at', '<=', $s->end_time)
+                );
+
+            $liveShiftRevenue = (float) $shiftSalesQuery
+                ->get()
+                ->sum(fn ($sale) => (float) ($sale->net_amount > 0 || $sale->discount_amount > 0
+                    ? $sale->net_amount
+                    : ($sale->total_fnb + $sale->total_billing)));
+
+            $isSettled = $summary !== null && (
+                $summary->status === 'closed'
+                || $summary->handover_status === 'completed'
+                || (bool) $summary->is_sales_locked
+            );
             $isCurrent = $activeShift && ($s->id === $activeShift->id || $s->code === $activeShift->code);
 
             $statusKey = 'upcoming';
             $statusLabel = '⚪ Belum Mulai';
             $statusColor = '#94a3b8';
 
+            $revenue = $summary && (float) $summary->total_revenue > 0
+                ? (float) $summary->total_revenue
+                : $liveShiftRevenue;
+
             if ($isSettled) {
                 $settledCount++;
                 $statusKey = 'completed';
                 $statusLabel = '✅ Settlement Selesai';
                 $statusColor = '#34d399';
-                $deposited = (float) ($summary->deposited_amount ?? $summary->blind_cash_count ?? $summary->cash_in_drawer ?? $shiftSales);
+                $deposited = (float) ($summary->deposited_amount ?? $summary->handover_amount ?? $summary->blind_cash_count ?? $summary->cash_in_drawer ?? $revenue);
                 $totalSettledCash += $deposited;
-            } elseif ($isCurrent) {
+            } elseif ($isCurrent || $shiftAttendance !== null || $summary !== null) {
                 $statusKey = 'in_progress';
-                $statusLabel = '🟢 Shift Anda (Aktif)';
-                $statusColor = '#38bdf8';
+                $statusLabel = $isCurrent ? '🟢 Shift Anda (Aktif)' : '🟡 Sedang Berjalan';
+                $statusColor = $isCurrent ? '#38bdf8' : '#fbbf24';
             } else {
                 $nowTime = Carbon::now()->format('H:i:s');
                 if ($nowTime > (string) $s->end_time && $workDate->isToday()) {
                     $statusKey = 'pending';
-                    $statusLabel = '🟡 Menunggu Closing';
-                    $statusColor = '#fbbf24';
+                    $statusLabel = '⚪ Tidak Ada Shift';
+                    $statusColor = '#64748b';
                 }
             }
 
-            $revenue = $summary ? (float) ($summary->total_revenue ?? $summary->total_internet_sales ?? $shiftSales) : (float) $shiftSales;
             $totalBilling += $revenue;
+            $operatorName = $summary?->employee?->name
+                ?? $shiftAttendance?->employee?->name
+                ?? 'Belum Ditugaskan';
+            $depositedVal = $summary
+                ? (float) ($summary->deposited_amount ?? $summary->handover_amount ?? $summary->blind_cash_count ?? $summary->cash_in_drawer ?? 0)
+                : null;
 
             $shiftResults[] = [
                 'id' => $s->id,
+                'shift' => $s,
                 'code' => $s->code,
                 'name' => $s->name,
                 'time_range' => substr((string) $s->start_time, 0, 5).' - '.substr((string) $s->end_time, 0, 5),
                 'amount' => $revenue,
+                'sales' => $revenue,
                 'is_settled' => $isSettled,
                 'is_current' => $isCurrent,
                 'status_key' => $statusKey,
                 'status_label' => $statusLabel,
                 'status_color' => $statusColor,
-                'operator_name' => $summary?->employee?->name ?? ($isCurrent ? 'Kasir Shift Ini' : 'Belum Ditugaskan'),
+                'operator_name' => $operatorName,
                 'cash_diff' => $summary ? (float) ($summary->cash_difference ?? 0) : null,
-                'deposited_amount' => $summary ? (float) ($summary->deposited_amount ?? $summary->blind_cash_count ?? 0) : null,
+                'deposited_amount' => $depositedVal,
             ];
         }
+
+        $totalShiftsCount = count($shifts);
 
         return [
             'shifts' => $shiftResults,
             'total_income' => $totalBilling,
+            'total_billing' => $totalBilling,
             'settled_count' => $settledCount,
-            'total_shifts' => count($shifts),
+            'total_shifts' => $totalShiftsCount,
+            'total_shift_count' => $totalShiftsCount,
+            'all_settled' => $totalShiftsCount > 0 && $settledCount >= $totalShiftsCount,
             'total_settled_cash' => $totalSettledCash,
         ];
     }
@@ -3289,6 +3327,35 @@ class AttendanceWebV2Controller extends Controller
             ->latest('id')
             ->get();
 
+        // Petakan Shift (Shift 1 / 2 / 3 / 4) untuk setiap transaksi berdasarkan presensi kasir atau jam transaksi
+        $empShiftMap = AttendanceRecord::with('shift')
+            ->whereDate('work_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->get()
+            ->mapWithKeys(function ($att) {
+                $code = (string) ($att->shift?->code ?? $att->shift?->name ?? '');
+                if (preg_match('/(\d+)/', $code, $m)) {
+                    return [$att->employee_id => (int) $m[1]];
+                }
+
+                return [$att->employee_id => (int) ($att->shift_id ?: 1)];
+            });
+
+        foreach ($fnbSales as $saleItem) {
+            $sNum = $empShiftMap->get($saleItem->employee_id);
+            if (! $sNum) {
+                $resolved = $this->shiftResolverService->resolveShift(
+                    null,
+                    $saleItem->created_at ? Carbon::parse($saleItem->created_at) : $now
+                );
+                $code = (string) ($resolved?->code ?? $resolved?->name ?? '');
+                $sNum = preg_match('/(\d+)/', $code, $m) ? (int) $m[1] : (int) ($resolved?->id ?: 1);
+            }
+            $sNum = max(1, min(4, (int) $sNum));
+            $saleItem->setAttribute('shift_number', $sNum);
+            $saleItem->setAttribute('shift_label', 'Shift '.$sNum);
+        }
+
         $validFnbSales = $fnbSales->where('payment_status', '!=', 'cancelled');
         $totalFnbIncome = (float) $validFnbSales->sum(fn ($s) => (float) ($s->net_amount > 0 || $s->discount_amount > 0 ? $s->net_amount : $s->total_fnb));
         $totalDiscountAmount = (float) $validFnbSales->sum('discount_amount');
@@ -3717,7 +3784,7 @@ class AttendanceWebV2Controller extends Controller
             return $data;
         }
 
-        return view('presensi2.penjualan', $data);
+        return view('presensi2.pos_desktop', $data);
     }
 
     /**
@@ -6387,7 +6454,7 @@ BAT;
             }
         }
 
-        $viewName = $useDesktop ? 'presensi2.rekap_desktop' : 'presensi2.rekap';
+        $viewName = 'presensi2.rekap_desktop';
 
         return view($viewName, [
             'currentEmployee' => $employee,
@@ -6897,6 +6964,8 @@ BAT;
             }
         }
 
+        $summaryEmployeeId = $salesSummary?->employee_id;
+
         $isBillingLocked = (bool) ($salesSummary?->is_billing_locked);
         $lockedBillingAmount = (float) ($salesSummary?->locked_billing_amount ?? $salesSummary?->total_internet_sales ?? 0);
 
@@ -6904,22 +6973,26 @@ BAT;
         $lockedPrintPages = (int) ($salesSummary?->locked_print_pages ?? 0);
         $lockedPrintAmount = (float) ($salesSummary?->locked_print_amount ?? 0);
 
-        $totalFnbSales = (float) ($salesSummary?->total_fnb_sales ?? 0);
+        // Hitung F&B aktual dari tabel cafe_sales sesuai kasir/shift pada summary agar sinkron dengan database
+        $liveFnbSalesQuery = CafeSale::where('total_fnb', '>', 0)
+            ->whereDate('created_at', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->when($summaryEmployeeId, fn ($q) => $q->where('employee_id', $summaryEmployeeId))
+            ->where('payment_status', '!=', 'cancelled');
 
-        // Fallback hitung otomatis dari transaksi kasir jika salesSummary belum ditutup
-        if ($totalFnbSales <= 0) {
-            $totalFnbSales = (float) CafeSale::where('total_fnb', '>', 0)
-                ->whereDate('created_at', $workDate->toDateString())
-                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-                ->where('payment_status', '!=', 'cancelled')
-                ->get()
-                ->sum(fn ($s) => (float) ($s->net_amount > 0 || $s->discount_amount > 0 ? $s->net_amount : $s->total_fnb));
-        }
+        $calculatedFnbSales = (float) (clone $liveFnbSalesQuery)
+            ->get()
+            ->sum(fn ($s) => (float) ($s->net_amount > 0 || $s->discount_amount > 0 ? $s->net_amount : $s->total_fnb));
+
+        $totalFnbSales = (float) ($salesSummary && $salesSummary->total_fnb_sales > 0
+            ? $salesSummary->total_fnb_sales
+            : $calculatedFnbSales);
 
         if (! $isBillingLocked && $lockedBillingAmount <= 0) {
             $recordedBilling = (float) CafeSale::where('total_billing', '>', 0)
                 ->whereDate('created_at', $workDate->toDateString())
                 ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+                ->when($summaryEmployeeId, fn ($q) => $q->where('employee_id', $summaryEmployeeId))
                 ->where('payment_status', '!=', 'cancelled')
                 ->sum('total_billing');
             $activePcBilling = (float) PcStation::where('status', 'occupied')
@@ -6929,10 +7002,11 @@ BAT;
         }
 
         if (! $isPrintLocked && $lockedPrintAmount <= 0) {
-            $printSalesItems = CafeSaleItem::whereHas('sale', function ($q) use ($workDate, $branchId) {
+            $printSalesItems = CafeSaleItem::whereHas('sale', function ($q) use ($workDate, $branchId, $summaryEmployeeId) {
                 $q->whereDate('created_at', $workDate->toDateString())
                     ->where('payment_status', '!=', 'cancelled')
-                    ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId));
+                    ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId))
+                    ->when($summaryEmployeeId, fn ($sq) => $sq->where('employee_id', $summaryEmployeeId));
             })->whereHas('variant.product.category', function ($q) {
                 $q->where('code', 'CAT-PAPER');
             })->get();
@@ -6954,6 +7028,7 @@ BAT;
             ->where('payment_status', '!=', 'cancelled')
             ->where('payment_method', '!=', 'cash')
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->when($summaryEmployeeId, fn ($q) => $q->where('employee_id', $summaryEmployeeId))
             ->get()
             ->sum(fn ($s) => (float) ($s->net_amount > 0 || $s->discount_amount > 0 ? $s->net_amount : ($s->total_fnb + $s->total_billing)));
 
@@ -6961,18 +7036,26 @@ BAT;
             ? (float) $salesSummary->non_cash_amount
             : $calculatedNonCash;
 
-        $totalRevenue = (float) ($salesSummary?->total_revenue ?: ($lockedBillingAmount + $lockedPrintAmount + $totalFnbSales));
-        $openingCash = 100000.0;
-        // Pada rekap dan serah terima, murni kas tunai (CASH) fisik di laci (Non-cash/QRIS dikecualikan dari fisik kas)
-        $systemExpectedCash = (float) ($salesSummary?->system_expected_cash ?: max(0.0, ($totalRevenue - $nonCashAmount) + $openingCash));
-        $blindCashCount = (float) ($salesSummary?->blind_cash_count ?? $cashInDrawer);
-        $cashDifference = (float) ($salesSummary?->cash_difference ?? ($blindCashCount - $systemExpectedCash));
+        $calculatedTotalRevenue = $lockedBillingAmount + $lockedPrintAmount + $totalFnbSales;
+        $totalRevenue = (float) ($salesSummary && $salesSummary->total_revenue > 0
+            ? $salesSummary->total_revenue
+            : $calculatedTotalRevenue);
+        $openingCash = (float) ($salesSummary?->opening_cash ?? 0.0);
+        // Sinkron dengan database shift_sales_summaries & halaman Rekap Desktop
+        $systemExpectedCash = ($salesSummary && $salesSummary->system_expected_cash !== null && (float) $salesSummary->system_expected_cash > 0)
+            ? (float) $salesSummary->system_expected_cash
+            : max(0.0, ($totalRevenue - $nonCashAmount) + $openingCash);
+        $blindCashCount = (float) ($salesSummary?->blind_cash_count ?? $salesSummary?->cash_in_drawer ?? $systemExpectedCash);
+        $cashDifference = ($salesSummary && $salesSummary->cash_difference !== null)
+            ? (float) $salesSummary->cash_difference
+            : ($blindCashCount - $systemExpectedCash);
         $cashDenominations = $salesSummary?->cash_denominations ?? [];
 
-        // Rincian produk F&B yang terjual hari ini
+        // Rincian produk F&B yang terjual pada shift/summary ini (sinkron dengan database)
         $fnbItemSummary = CafeSaleItem::whereDate('created_at', $workDate->toDateString())
             ->whereHas('sale', fn ($q) => $q->where('payment_status', '!=', 'cancelled')
-                ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId)))
+                ->when($branchId, fn ($sq) => $sq->where('branch_id', $branchId))
+                ->when($summaryEmployeeId, fn ($sq) => $sq->where('employee_id', $summaryEmployeeId)))
             ->whereHas('variant.product.category', fn ($q) => $q->whereIn('code', ['CAT-DRINK', 'CAT-FOOD', 'CAT-SNACK']))
             ->select(
                 'item_name',
@@ -6984,16 +7067,8 @@ BAT;
             ->orderByDesc('total_qty')
             ->get();
 
-        $isMobile = preg_match('/(android|iphone|ipad|mobile|phone|ipod)/i', (string) $request->userAgent());
-        $requestedView = $request->input('view');
-
-        if ($requestedView === 'mobile') {
-            $viewName = 'presensi2.serah_terima';
-            $useDesktop = false;
-        } else {
-            $useDesktop = ! $isMobile;
-            $viewName = $useDesktop ? 'presensi2.serah_terima_desktop' : 'presensi2.serah_terima';
-        }
+        $useDesktop = true;
+        $viewName = 'presensi2.serah_terima_desktop';
 
         $branchEmployees = Employee::where('is_active', true)
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))

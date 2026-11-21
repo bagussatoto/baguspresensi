@@ -418,7 +418,7 @@
                             Minimal durasi kerja adalah <strong>{{ $minCheckoutMinutes ?? 30 }} menit</strong> setelah Check-In.
                         @else
                             <strong>🔒 Mode Ketat: Wajib Rekap &amp; Serah Terima Shift Terlebih Dahulu</strong><br>
-                            Selesaikan <a href="{{ route('presensi2.rekap') }}" style="color: #93c5fd; font-weight: 700; text-decoration: underline;">Rekap</a> dan <a href="{{ route('presensi2.serah-terima') }}" style="color: #93c5fd; font-weight: 700; text-decoration: underline;">Serah Terima Shift</a> terlebih dahulu.
+                            Selesaikan <a href="{{ route('presensi2.rekap.desktop') }}" style="color: #93c5fd; font-weight: 700; text-decoration: underline;">Rekap</a> dan <a href="{{ route('presensi2.serah-terima.desktop') }}" style="color: #93c5fd; font-weight: 700; text-decoration: underline;">Serah Terima Shift</a> terlebih dahulu.
                         @endif
                     </div>
                 @endif

@@ -79,9 +79,6 @@
         </a>
 
         <div style="display: flex; gap: 10px; margin-top: 4px;">
-            <a href="{{ route('presensi2.penjualan') }}" class="btn" style="flex: 1; padding: 12px 14px; font-size: 12px; font-weight: 600; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--border-glass); color: var(--text-muted); border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none;" title="Gunakan hanya jika PC Kasir mati lampu atau dalam kondisi darurat">
-                <span>📱</span> POS Versi HP (Cadangan)
-            </a>
             <a href="{{ route('presensi2.logout') }}" class="btn" style="flex: 1; padding: 12px 14px; font-size: 12px; font-weight: 600; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); color: #fca5a5; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none;" onclick="return confirm('Keluar dari sesi HP?')">
                 <span>🚪</span> Keluar Sesi HP
             </a>

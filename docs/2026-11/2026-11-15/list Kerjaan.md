@@ -29,11 +29,11 @@ kalau english pakai english
 
 --
 
-kobnfirmasi pembatan csft ,masih eror
+kobnfirmasi pembatan csft ,masih eror										selesai
 ketika penjualan selesai langsung rekap desktop bukan serah terima
 
 
-demo diperbarui
+demo diperbarui																	selesai
 halaman stock 
 
 
@@ -62,7 +62,7 @@ Penjaualan - Rekonsiliasi
 Admin
 11. Pilar ERP Pengecekan atau penyelarasan pada modul logistik, stok opname, atau master data.					Selesai
 12. Perbaikan Akses Sub-Modul Akuntansi																			Selesai
-13. Penambahan notifikasi antrean di Pusat Kendali ERP
+13. Penambahan notifikasi antrean di Pusat Kendali ERP															Selesai
 	Notifikasi Audio Chime + Floating Badge Lonceng
 
 -------------------------------------------------------------------------------------
@@ -75,7 +75,7 @@ admin
 	& COA agar pimpinan/owner dapat melihat posisi kas masuk
 4. Menambahkan fitur Cetak Slip Struk Void pada POS Kasir														Selesai
 5. Pembersihan Otomatis Data Simulasi / Testing Sebelum Go-Live Cabang											Selesai
-6. Standarisasi Multi-Cabang & Ekspor CSV pada Laba Rugi &  
+6. Standarisasi Multi-Cabang & Ekspor CSV pada Laba Rugi &  													Selesai
 	membandingkan laba bersih antar cabang secara akurat dan mengunduh laporan keuangan formal bulanan.
 7. Sinkronisasi Filter Cabang pada Neraca Keuangan																selesai
 8. Manajemen Matriks Hak Akses RBAC Granular per Jabatan														selesai
@@ -89,8 +89,14 @@ admin
 
 21/11/26
 
-1. 
 
-
+1. Sinkronisasi Status Antrean Badge & Lonceng Notifikasi Antrean Void											selesai
+2. Memperbaiki pada penerapkan mekanisme Auto-Lock & Blokir Penjualan Shift Sebelumnya							selesai
+3. Menerapkan Auto-Logout & Redirect ke Halaman Login otomatis begitu kasir selesai melakukan Presensi Keluar	Selesai 
+4. Menerapkan pembatasan 1 Hari 1 Shift (1 Kali Presensi Sehari per Karyawan) 									selesai
+5. Menerapkan aturan 1 Shift Maksimal 1 Karyawan per Cabang (Tidak Bisa Presensi Shift yang Sama Bersamaan)   	selesai
+6. Menambahkan Badge Shift & Filter Shift 1 / Shift 2 / Shift 3 / Shift 4 pada History Penjualan POS			seelsai
+7. Menambahkan Jam Digital Live & Badge Shift Aktif pada header POS												selesai
+	
 
 

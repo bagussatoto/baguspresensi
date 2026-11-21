@@ -646,9 +646,6 @@
                     </span>
                 @endif
             </button>
-            <a href="{{ route('presensi2.penjualan') }}" class="btn-nav-pill" title="Buka Versi Tampilan Mobile / HP">
-                <span>📱</span> Versi HP
-            </a>
             <a href="{{ route('presensi2.stok') }}" class="btn-nav-pill" title="Cek Stok Fisik Shift">
                 <span>📦</span> Cek Stok
             </a>
@@ -661,10 +658,28 @@
 
         <h1 class="pos-top-title">Orderan POS</h1>
 
-        <div class="pos-header-right">
-            <span>👤</span>
-            <span>penjualan &gt; {{ $activeShift?->id ?? '1' }};</span>
-            <span style="color: #059669; font-weight: bold;">({{ $currentEmployee->name }})</span>
+        <div class="pos-header-right" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            @php
+                $headerShiftName = $activeShift?->name ?? ('Shift ' . ($activeShift?->id ?? '1'));
+                $headerShiftRange = ($activeShift?->start_time && $activeShift?->end_time)
+                    ? substr((string) $activeShift->start_time, 0, 5) . ' - ' . substr((string) $activeShift->end_time, 0, 5)
+                    : null;
+            @endphp
+            <span style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px;" title="Shift Aktif Saat Ini">
+                <span>🕒</span>
+                <span>{{ $headerShiftName }}</span>
+                @if($headerShiftRange)
+                    <span style="font-weight: 600; color: #0284c7; font-size: 10.5px;">({{ $headerShiftRange }})</span>
+                @endif
+            </span>
+            <span style="background: #0f172a; color: #38bdf8; border: 1px solid #334155; padding: 3px 9px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px;" title="Jam Server / Kasir Realtime">
+                <span>⏰</span>
+                <span id="pos-live-clock">{{ now()->format('H:i:s') }} WIB</span>
+            </span>
+            <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 12px;">
+                <span>👤</span>
+                <span style="color: #059669; font-weight: bold;">{{ $currentEmployee->name }}</span>
+            </span>
             <a href="{{ route('presensi2.logout', ['mode' => 'pos']) }}" class="btn-nav-pill" style="color: #dc2626; border-color: #fca5a5; background: #fff5f5; padding: 3px 8px; font-size: 11px;" title="Keluar / Ganti Kasir POS" onclick="return confirm('Keluar dari sesi POS kasir?')">
                 <span>🚪</span> Keluar
             </a>
@@ -985,14 +1000,37 @@
         </div>
         
         <div id="history-accordion-content" class="history-accordion-body" style="display: none; padding: 14px 20px 20px 20px; background: #ffffff; border-top: 1px solid #f1f5f9;">
-            {{-- TAB SWITCHER DUAL-TAB: SHIFT SAYA (AKTIF) VS SHIFT SEBELUMNYA --}}
-            <div style="display: flex; gap: 8px; margin-bottom: 12px; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 10px;">
-                <button type="button" id="tab-btn-my-shift" onclick="switchPosHistoryTab('my-shift')" class="btn-pos-hist-tab active" style="padding: 6px 14px; font-size: 12px; font-weight: 700; border-radius: 6px; border: 1px solid #0284c7; background: #0284c7; color: #ffffff; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease;">
-                    <span>👤</span> Shift Saya (Aktif) (<span id="my-shift-sales-count">{{ count($myShiftFnbSales ?? $fnbSales) }}</span>)
-                </button>
-                <button type="button" id="tab-btn-prev-shift" onclick="switchPosHistoryTab('prev-shift')" class="btn-pos-hist-tab" style="padding: 6px 14px; font-size: 12px; font-weight: 700; border-radius: 6px; border: 1px solid #cbd5e1; background: #f8fafc; color: #475569; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease;">
-                    <span>🕒</span> Shift Sebelumnya / Hari Ini (<span id="prev-shift-sales-count">{{ count($prevShiftFnbSales ?? collect()) }}</span>)
-                </button>
+            {{-- TAB SWITCHER DUAL-TAB: SHIFT SAYA (AKTIF) VS SHIFT SEBELUMNYA & FILTER SHIFT 1-4 --}}
+            @php
+                $allTodaySales = $fnbSales ?? collect();
+                $shiftCounts = [
+                    1 => $allTodaySales->where('shift_number', 1)->count(),
+                    2 => $allTodaySales->where('shift_number', 2)->count(),
+                    3 => $allTodaySales->where('shift_number', 3)->count(),
+                    4 => $allTodaySales->where('shift_number', 4)->count(),
+                ];
+            @endphp
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 10px;">
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button type="button" id="tab-btn-my-shift" onclick="switchPosHistoryTab('my-shift')" class="btn-pos-hist-tab active" style="padding: 6px 14px; font-size: 12px; font-weight: 700; border-radius: 6px; border: 1px solid #0284c7; background: #0284c7; color: #ffffff; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease;">
+                        <span>👤</span> Shift Saya (Aktif) (<span id="my-shift-sales-count">{{ count($myShiftFnbSales ?? $fnbSales) }}</span>)
+                    </button>
+                    <button type="button" id="tab-btn-prev-shift" onclick="switchPosHistoryTab('prev-shift')" class="btn-pos-hist-tab" style="padding: 6px 14px; font-size: 12px; font-weight: 700; border-radius: 6px; border: 1px solid #cbd5e1; background: #f8fafc; color: #475569; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease;">
+                        <span>🕒</span> Shift Sebelumnya / Hari Ini (<span id="prev-shift-sales-count">{{ count($prevShiftFnbSales ?? collect()) }}</span>)
+                    </button>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
+                    <span style="font-size: 11px; font-weight: 700; color: #64748b; margin-right: 2px;">Filter Shift:</span>
+                    <button type="button" onclick="filterPosHistoryByShift('all', this)" class="btn-pos-shift-filter active" style="padding: 4px 10px; font-size: 11px; font-weight: 700; border-radius: 20px; border: 1px solid #0284c7; background: #e0f2fe; color: #0369a1; cursor: pointer;">
+                        Semua ({{ $allTodaySales->count() }})
+                    </button>
+                    @foreach([1, 2, 3, 4] as $sIdx)
+                        <button type="button" onclick="filterPosHistoryByShift('{{ $sIdx }}', this)" class="btn-pos-shift-filter" style="padding: 4px 10px; font-size: 11px; font-weight: 700; border-radius: 20px; border: 1px solid #cbd5e1; background: #ffffff; color: #475569; cursor: pointer;">
+                            Shift {{ $sIdx }} ({{ $shiftCounts[$sIdx] ?? 0 }})
+                        </button>
+                    @endforeach
+                </div>
             </div>
 
             {{-- TAB PANE 1: SHIFT SAYA (AKTIF KASIR SAAT INI) --}}
@@ -1000,7 +1038,7 @@
                 <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
                     <thead>
                         <tr style="border-bottom: 2px solid #e2e8f0; color: #475569; background: #f8fafc;">
-                            <th style="padding: 7px 10px;">Jam</th>
+                            <th style="padding: 7px 10px;">Jam &amp; Shift</th>
                             <th style="padding: 7px 10px;">No. Invoice</th>
                             <th style="padding: 7px 10px;">Item Pesanan</th>
                             <th style="padding: 7px 10px;">Pelanggan</th>
@@ -1017,10 +1055,14 @@
                                 $isVoidPending = ! $isCancelled && $sale->void_status === 'pending_approval';
                                 $isVoidRejected = ! $isCancelled && $sale->void_status === 'rejected';
                                 $saleTotal = (float) ($sale->net_amount > 0 ? $sale->net_amount : $sale->total_fnb);
+                                $sNum = (int) ($sale->shift_number ?? 1);
                             @endphp
-                            <tr style="border-bottom: 1px solid #f1f5f9; {{ $isCancelled ? 'background: #fff1f2; opacity: 0.7;' : ($isVoidPending ? 'background: #fffbeb;' : '') }}">
+                            <tr class="pos-history-row" data-shift="{{ $sNum }}" style="border-bottom: 1px solid #f1f5f9; {{ $isCancelled ? 'background: #fff1f2; opacity: 0.7;' : ($isVoidPending ? 'background: #fffbeb;' : '') }}">
                                 <td style="padding: 8px 10px; color: #64748b;">
-                                    {{ $sale->created_at ? $sale->created_at->format('H:i') : '-' }}
+                                    <div style="font-weight: 700; color: #334155;">{{ $sale->created_at ? $sale->created_at->format('H:i') : '-' }}</div>
+                                    <span style="display: inline-block; margin-top: 2px; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; font-size: 9.5px; font-weight: 700; padding: 1px 6px; border-radius: 4px;">
+                                        Shift {{ $sNum }}
+                                    </span>
                                 </td>
                                 <td style="padding: 8px 10px; font-family: monospace; font-weight: bold; color: {{ $isCancelled ? '#ef4444' : '#0284c7' }};">
                                     <span style="{{ $isCancelled ? 'text-decoration: line-through;' : '' }}">{{ $sale->invoice_number }}</span>
@@ -1091,7 +1133,7 @@
                 <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
                     <thead>
                         <tr style="border-bottom: 2px solid #e2e8f0; color: #475569; background: #f8fafc;">
-                            <th style="padding: 7px 10px;">Jam</th>
+                            <th style="padding: 7px 10px;">Jam &amp; Shift</th>
                             <th style="padding: 7px 10px;">No. Invoice</th>
                             <th style="padding: 7px 10px;">Item Pesanan</th>
                             <th style="padding: 7px 10px;">Kasir</th>
@@ -1106,10 +1148,14 @@
                             @php
                                 $isCancelled = $sale->payment_status === 'cancelled';
                                 $saleTotal = (float) ($sale->net_amount > 0 ? $sale->net_amount : $sale->total_fnb);
+                                $sNum = (int) ($sale->shift_number ?? 1);
                             @endphp
-                            <tr style="border-bottom: 1px solid #f1f5f9; {{ $isCancelled ? 'background: #fff1f2; opacity: 0.7;' : '' }}">
+                            <tr class="pos-history-row" data-shift="{{ $sNum }}" style="border-bottom: 1px solid #f1f5f9; {{ $isCancelled ? 'background: #fff1f2; opacity: 0.7;' : '' }}">
                                 <td style="padding: 8px 10px; color: #64748b;">
-                                    {{ $sale->created_at ? $sale->created_at->format('H:i') : '-' }}
+                                    <div style="font-weight: 700; color: #334155;">{{ $sale->created_at ? $sale->created_at->format('H:i') : '-' }}</div>
+                                    <span style="display: inline-block; margin-top: 2px; background: #e0e7ff; color: #4338ca; border: 1px solid #c7d2fe; font-size: 9.5px; font-weight: 700; padding: 1px 6px; border-radius: 4px;">
+                                        Shift {{ $sNum }}
+                                    </span>
                                 </td>
                                 <td style="padding: 8px 10px; font-family: monospace; font-weight: bold; color: {{ $isCancelled ? '#ef4444' : '#0284c7' }};">
                                     <span style="{{ $isCancelled ? 'text-decoration: line-through;' : '' }}">{{ $sale->invoice_number }}</span>
@@ -2021,6 +2067,35 @@
                     btnMy.style.color = '#475569';
                 }
             }
+        }
+
+        function filterPosHistoryByShift(shiftVal, btnEl) {
+            document.querySelectorAll('.btn-pos-shift-filter').forEach(btn => {
+                btn.style.background = '#ffffff';
+                btn.style.borderColor = '#cbd5e1';
+                btn.style.color = '#475569';
+            });
+            if (btnEl) {
+                btnEl.style.background = '#e0f2fe';
+                btnEl.style.borderColor = '#0284c7';
+                btnEl.style.color = '#0369a1';
+            }
+
+            const paneMy = document.getElementById('pane-my-shift');
+            const panePrev = document.getElementById('pane-prev-shift');
+
+            if (shiftVal !== 'all') {
+                if (paneMy) paneMy.style.display = 'block';
+                if (panePrev) panePrev.style.display = 'block';
+            }
+
+            document.querySelectorAll('.pos-history-row').forEach(row => {
+                if (shiftVal === 'all' || row.getAttribute('data-shift') === String(shiftVal)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
         }
 
         function toggleCartBody() {
@@ -2994,6 +3069,19 @@
             if (drawer) drawer.classList.remove('active');
             if (backdrop) backdrop.classList.remove('active');
         }
+
+        // LIVE DIGITAL CLOCK POS HEADER
+        function updatePosLiveClock() {
+            const clockEl = document.getElementById('pos-live-clock');
+            if (!clockEl) return;
+            const now = new Date();
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mm = String(now.getMinutes()).padStart(2, '0');
+            const ss = String(now.getSeconds()).padStart(2, '0');
+            clockEl.textContent = `${hh}:${mm}:${ss} WIB`;
+        }
+        setInterval(updatePosLiveClock, 1000);
+        updatePosLiveClock();
 
         // KEYBOARD SHORTCUTS
         window.addEventListener('keydown', function(e) {

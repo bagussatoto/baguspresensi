@@ -124,11 +124,33 @@ class ClockInAction
 
             $alreadyClocked = AttendanceRecord::where('employee_id', $employee->id)
                 ->whereDate('work_date', $workDateString)
-                ->where('shift_id', $shift->id)
+                ->where(function ($q) {
+                    $q->where('work_type', 'shift')
+                        ->orWhereNull('work_type');
+                })
                 ->exists();
 
             if ($alreadyClocked) {
-                throw new AlreadyClockedInException;
+                throw new AlreadyClockedInException('Anda sudah melakukan presensi masuk untuk shift hari ini (maksimal 1 shift per hari).');
+            }
+
+            $existingShiftOccupant = AttendanceRecord::with('employee')
+                ->where('branch_id', $branch->id)
+                ->whereDate('work_date', $workDateString)
+                ->where('shift_id', $shift->id)
+                ->where('employee_id', '!=', $employee->id)
+                ->where(function ($q) {
+                    $q->where('work_type', 'shift')
+                        ->orWhereNull('work_type');
+                })
+                ->first();
+
+            if ($existingShiftOccupant) {
+                $occupantName = $existingShiftOccupant->employee?->name ?? 'petugas lain';
+
+                throw new AlreadyClockedInException(
+                    "Shift {$shift->name} pada cabang ini sudah diisi oleh {$occupantName}. Satu shift tidak dapat diisi oleh dua karyawan secara bersamaan."
+                );
             }
 
             $shiftStart = $this->shiftResolverService->getShiftStartTimestamp($shift, $workDate);

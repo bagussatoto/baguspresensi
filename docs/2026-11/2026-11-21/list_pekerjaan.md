@@ -1,0 +1,26 @@
+# ✅ Daftar Pekerjaan Harian: 21 November 2026
+
+**Tanggal:** Sabtu, 21 November 2026  
+**Proyek:** ERP & POS Kasir PT Maya Graha Kencana (MGK)  
+**Status Progres:** 100% (14 dari 14 Pekerjaan Selesai & Terverifikasi)
+
+---
+
+## Daftar Pekerjaan yang Dikerjakan Hari Ini
+
+| No | Kategori | Deskripsi Pekerjaan | File Utama | Status |
+| :-: | :--- | :--- | :--- | :-: |
+| 1 | **Admin ERP & Dashboard** | Sinkronisasi badge & penghitung notifikasi antrean pengajuan pembatalan transaksi (**Void** `pending_approval`) ke Pusat Kendali ERP (`/admin/ERP`) dan Dashboard Admin. | `AdminErpHubController.php`, `AdminDashboardController.php` | ✅ Selesai |
+| 2 | **POS Kasir Desktop** | Penambahan indikator status antrean Void (**`⏳ ANTREAN VOID`**, **`⏳ Menunggu Admin`**, dan **`❌ Void Ditolak`**) pada tabel riwayat transaksi untuk mencegah pengajuan Void berulang. | `pos_desktop.blade.php` | ✅ Selesai |
+| 3 | **Keamanan Shift & Handover** | Implementasi **Auto-Lock & Blokir Penjualan Shift Sebelumnya** secara otomatis ketika kasir Shift berikutnya sudah masuk Presensi dan menyelesaikan Cek Stok (`stokStore`), meskipun kasir Shift sebelumnya lupa menekan tombol *Kunci Billing*. | `AttendanceWebV2Controller.php`, `ShiftSalesLockingAndPreviousShiftTest.php` | ✅ Selesai |
+| 4 | **UI/UX Serah Terima Desktop** | Perapian tombol header atas pada halaman `/presensi2/serah-terima` dan pembuatan **Sidebar Toggle (`☰ Menu Operasional`)** untuk menampung menu operasional shift. | `serah_terima_desktop.blade.php` | ✅ Selesai |
+| 5 | **UI/UX Rekap Desktop** | Pembuatan **Sidebar Toggle (`☰ Menu Operasional`)** yang seragam pada halaman `/presensi2/rekap-desktop` agar tampilan header atas ringkas dan konsisten. | `rekap_desktop.blade.php` | ✅ Selesai |
+| 6 | **Keamanan Sesi Presensi** | Implementasi **Auto-Logout & Redirect ke Halaman Login** otomatis begitu kasir menyelesaikan **Presensi Keluar (Clock-Out)** agar sesi akun tidak tetap terbuka di perangkat. | `AttendanceWebV2Controller.php`, `scan.blade.php`, `rekap_desktop.blade.php` | ✅ Selesai |
+| 7 | **Aturan Presensi (1 Hari 1 Shift)** | Pembatasan **1 Hari 1 Shift per Karyawan**: karyawan yang sudah selesai Presensi Masuk s/d Presensi Keluar pada Shift 1 tidak dapat melakukan Presensi Masuk lagi di Shift 2, 3, atau 4 pada hari yang sama (`HTTP 409`). | `ClockInAction.php`, `AttendanceWebV2Controller.php`, `AttendanceWebV2PortalTest.php` | ✅ Selesai |
+| 8 | **Aturan Presensi (1 Shift 1 Petugas)** | Pembatasan **1 Shift Maksimal 1 Karyawan per Cabang**: mencegah dua karyawan berbeda (misal Andra & Vio) melakukan Presensi Masuk pada shift dan cabang yang sama secara bersamaan (`HTTP 409`). | `ClockInAction.php`, `AttendanceWebV2Controller.php`, `AttendanceWebV2PortalTest.php` | ✅ Selesai |
+| 9 | **History Penjualan POS per Shift** | Penambahan pemetaan **`Shift 1` s/d `Shift 4`** pada setiap nota penjualan POS beserta tombol pill filter cepat per Shift di tabel History Penjualan POS Desktop. | `AttendanceWebV2Controller.php`, `pos_desktop.blade.php` | ✅ Selesai |
+| 10 | **Header POS Desktop (Jam & Shift)** | Penambahan **Badge Shift Aktif (`🕒 Shift + Jam Operasional`)** dan **Jam Digital Live (`⏰ HH:MM:SS WIB`)** di header kanan `/bagus/pos`. | `pos_desktop.blade.php` | ✅ Selesai |
+| 11 | **Standarisasi Full Desktop** | Penghapusan tombol/tautan **Penjualan & Rekap Versi HP (`📱 Versi HP` / `Versi Mobile`)** serta pengarahan rute `/presensi2/penjualan`, `/presensi2/rekap`, dan `/presensi2/serah-terima` langsung ke tampilan Desktop. | `AttendanceWebV2Controller.php`, `pos_desktop.blade.php`, `rekap_desktop.blade.php`, `serah_terima_desktop.blade.php`, `index.blade.php`, `scan.blade.php`, `stok_selesai.blade.php` | ✅ Selesai |
+| 12 | **Sinkronisasi DB Slip Serah Terima** | Perbaikan sinkronisasi database pada slip cetak **`🖨️ Bukti Serah Terima Kasir (Tabel Summary)`**: menghapus hardcode modal awal `+ Rp 100.000`, memfilter rincian item F&B murni per kasir shift (`summary_id`), dan menyelaraskan nama Kasir Penyerah & Penerima dari database. | `AttendanceWebV2Controller.php`, `serah_terima_desktop.blade.php` | ✅ Selesai |
+| 13 | **Sinkronisasi DB Settlement 4 Shift** | Perbaikan **`Status Settlement 4 Shift Hari Ini`**: menghapus angka omzet dummy hardcoded (`Rp 85.000` - `Rp 420.000`), menyelaraskan key array modal Settlement Harian, memvalidasi status `✅ Settlement Selesai`, dan menampilkan nama kasir dari database `attendance_records` / `shift_sales_summaries`. | `AttendanceWebV2Controller.php`, `modal_shift_history_and_settlement.blade.php` | ✅ Selesai |
+| 14 | **Dokumentasi & Blueprint Master v3.0** | Penyusunan dokumen **Blueprint Master v3.0 (21 November 2026)** pada folder khusus `docs/2026-11/2026-11-21/blueprint/` yang merangkum arsitektur ERP, POS Desktop, dan Presensi v2 beserta seluruh aturan baru. | `BLUEPRINT_MASTER_ERP_POS_PRESENSI_V3.md`, `ringkasan_percakapan.md`, `list_pekerjaan.md` | ✅ Selesai |

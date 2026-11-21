@@ -15,7 +15,6 @@
      - **Shift 2:** `07:00 - 13:00`
      - **Shift 3:** `13:00 - 19:00`
      - **Shift 4 (Lintas Malam):** `19:00 - 01:00`
-     - **Shift BO (Back Office):** `08:30 - 17:30`
    - *Penting:* Karyawan Shift 4 yang masuk pukul 19:05 dan pulang pukul 01:15 dini hari keesokan harinya, catatan pulangnya **tetap terikat pada `work_date` tanggal masuk**. Hal ini mencegah tanggal presensi terbelah dua.
 
 2. **Validasi Geofencing (GPS Radius):**

@@ -368,10 +368,116 @@ class AttendanceWebV2PortalTest extends TestCase
         $outResponse->assertOk();
         $outResponse->assertJson([
             'success' => true,
+            'logged_out' => true,
+            'redirect_url' => route('presensi2.login'),
         ]);
+        $outResponse->assertSessionMissing('presensi2_employee_id');
 
         $record->refresh();
         $this->assertNotNull($record->clock_out_at);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_employee_cannot_clock_in_to_second_shift_on_same_day_after_completing_first_shift(): void
+    {
+        $shift2 = Shift::create([
+            'code' => 'SHIFT-2',
+            'name' => 'Shift 2 Siang',
+            'start_time' => '15:00:00',
+            'end_time' => '23:00:00',
+            'grace_period_minutes' => 15,
+            'is_overnight' => false,
+            'is_active' => true,
+        ]);
+
+        // 1. Shift 1 Clock-In pukul 07:05
+        Carbon::setTestNow('2026-10-13 07:05:00');
+        $inShift1 = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.clock-in'), [
+                'shift_id' => $this->shift->id,
+            ]);
+        $inShift1->assertOk();
+
+        // 2. Shift 1 selesai & Clock-Out pukul 15:02
+        Carbon::setTestNow('2026-10-13 15:02:00');
+        $outShift1 = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.clock-out'), [
+                'shift_id' => $this->shift->id,
+            ]);
+        $outShift1->assertOk();
+
+        // 3. Karyawan yang sama mencoba Clock-In lagi untuk Shift 2 di hari yang sama -> wajib ditolak 409
+        Carbon::setTestNow('2026-10-13 15:10:00');
+        $inShift2 = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.clock-in'), [
+                'shift_id' => $shift2->id,
+            ]);
+
+        $inShift2->assertStatus(409);
+        $inShift2->assertJson([
+            'success' => false,
+        ]);
+        $this->assertEquals(
+            1,
+            AttendanceRecord::where('employee_id', $this->employee->id)
+                ->whereDate('work_date', '2026-10-13')
+                ->count()
+        );
+
+        Carbon::setTestNow();
+    }
+
+    public function test_two_employees_cannot_clock_in_to_same_shift_on_same_day_and_branch(): void
+    {
+        $shift2 = Shift::create([
+            'code' => 'SHIFT-2',
+            'name' => 'Shift 2 Siang',
+            'start_time' => '15:00:00',
+            'end_time' => '23:00:00',
+            'grace_period_minutes' => 15,
+            'is_overnight' => false,
+            'is_active' => true,
+        ]);
+
+        $andra = $this->employee;
+        $vio = Employee::create([
+            'branch_id' => $this->branch->id,
+            'code' => 'EMP-VIO-02',
+            'nik' => '3171000000000099',
+            'name' => 'Vio Kasir',
+            'email' => 'vio@mgk.test',
+            'phone' => '081299998888',
+            'password' => bcrypt('secret123'),
+            'pin' => bcrypt('123456'),
+            'is_active' => true,
+        ]);
+
+        Carbon::setTestNow('2026-10-13 15:05:00');
+
+        // 1. Andra melakukan Presensi Masuk di Shift 2 -> Berhasil
+        $andraIn = $this->withSession(['presensi2_employee_id' => $andra->id])
+            ->postJson(route('presensi2.clock-in'), [
+                'shift_id' => $shift2->id,
+            ]);
+        $andraIn->assertOk();
+        $andraIn->assertJson(['success' => true]);
+
+        // 2. Vio mencoba melakukan Presensi Masuk di Shift 2 pada cabang & hari yang sama -> Wajib ditolak 409
+        $vioIn = $this->withSession(['presensi2_employee_id' => $vio->id])
+            ->postJson(route('presensi2.clock-in'), [
+                'shift_id' => $shift2->id,
+            ]);
+
+        $vioIn->assertStatus(409);
+        $vioIn->assertJson([
+            'success' => false,
+        ]);
+        $this->assertStringContainsString('sudah diisi oleh', (string) $vioIn->json('message'));
+        $this->assertDatabaseMissing('attendance_records', [
+            'employee_id' => $vio->id,
+            'shift_id' => $shift2->id,
+        ]);
 
         Carbon::setTestNow();
     }
@@ -861,10 +967,10 @@ class AttendanceWebV2PortalTest extends TestCase
             ->get(route('presensi2.rekap'));
 
         $response->assertOk();
-        $response->assertSee('Laporan Rekapitulasi Penjualan');
+        $response->assertSee('REKAPITULASI PENJUALAN & SHIFT', false);
         $response->assertSee('Total Omset Kotor Shift');
         $response->assertSee('Rekonsiliasi Kas Laci');
-        $response->assertSee('Buka Kasir Penjualan Shift');
+        $response->assertSee('POS Kasir Desktop');
     }
 
     public function test_mock_time_can_simulate_shift_1_presensi(): void

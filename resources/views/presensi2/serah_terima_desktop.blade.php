@@ -501,6 +501,82 @@
                 color: #000000;
                 background: #ffffff;
             }
+            #pos-shift-drawer, #pos-shift-drawer-backdrop {
+                display: none !important;
+            }
+        }
+
+        /* SIDEBAR DRAWER OPERASIONAL SHIFT */
+        .pos-shift-drawer-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            z-index: 9990;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.25s ease;
+        }
+        .pos-shift-drawer-backdrop.active {
+            display: block;
+            opacity: 1;
+        }
+        .pos-shift-drawer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 340px;
+            max-width: 90vw;
+            background: #ffffff;
+            z-index: 9995;
+            box-shadow: 4px 0 25px rgba(0, 0, 0, 0.25);
+            display: flex;
+            flex-direction: column;
+            transform: translateX(-100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .pos-shift-drawer.active {
+            transform: translateX(0);
+        }
+        .pos-shift-drawer-header {
+            padding: 16px 20px;
+            background: #0284c7;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .pos-shift-drawer-body {
+            padding: 16px;
+            overflow-y: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: #f8fafc;
+        }
+        .drawer-action-btn {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            padding: 12px 14px;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.15s ease;
+        }
+        .drawer-action-btn:hover {
+            background: #f1f5f9;
+            border-color: #94a3b8;
+            transform: translateX(2px);
         }
     </style>
 </head>
@@ -511,39 +587,44 @@
         $shiftNameUpper = strtoupper((string) ($activeShift?->name ?? ''));
         $isShift4 = in_array($shiftIdStr, ['4', 'SHIFT-4'], true) || str_contains($shiftNameUpper, 'SHIFT 4') || str_contains($shiftNameUpper, 'MALAM');
 
-        $handoverAmountVal = (float) ($salesSummary?->handoverAmount() ?? $cashInDrawer);
-        $retainedDrawerVal = (float) ($salesSummary?->retained_drawer_cash ?? ($isShift4 ? 150000 : 100000));
+        $expectedCash = (float) ($systemExpectedCash ?? max(0.0, $totalRevenue - ($nonCashAmount ?? 0)));
+        $dbPhysicalCash = (float) ($salesSummary?->blind_cash_count ?? $salesSummary?->cash_in_drawer ?? $cashInDrawer ?: $expectedCash);
+
+        if ($salesSummary && ($salesSummary->retained_drawer_cash !== null || $salesSummary->handover_amount !== null)) {
+            $retainedDrawerVal = (float) ($salesSummary->retained_drawer_cash ?? 0);
+            $handoverAmountVal = $salesSummary->handover_amount !== null
+                ? (float) $salesSummary->handover_amount
+                : max(0.0, $dbPhysicalCash - $retainedDrawerVal);
+            // Jika handover_amount di DB masih menyimpan total fisik laci penuh sedangkan retained_drawer_cash = 0
+            $totalPhysicalDrawerVal = ($handoverAmountVal + $retainedDrawerVal) > 0
+                ? ($handoverAmountVal + $retainedDrawerVal)
+                : $dbPhysicalCash;
+        } else {
+            $retainedDrawerVal = (float) ($isShift4 ? 150000 : 100000);
+            $totalPhysicalDrawerVal = $dbPhysicalCash > 0 ? $dbPhysicalCash : $expectedCash;
+            $handoverAmountVal = max(0.0, $totalPhysicalDrawerVal - $retainedDrawerVal);
+        }
+
         $isAlreadyDeposited = $salesSummary?->hasBeenDeposited() ?? false;
+        $handoverSenderName = $salesSummary?->handover_by ?: ($salesSummary?->employee?->name ?? $currentEmployee->name);
         $currentShiftLoginStr = ($activeShift ? $activeShift->name : 'Shift Aktif') . ' — ' . $currentEmployee->name;
-        $defaultDepositRecipient = $salesSummary?->handoverRecipientName() ?: $currentShiftLoginStr;
-        $expectedCash = (float) ($systemExpectedCash ?? max(0.0, ($totalRevenue - ($nonCashAmount ?? 0)) + 100000));
-        $diffVal = $handoverAmountVal + $retainedDrawerVal - $expectedCash;
+        $defaultDepositRecipient = $salesSummary?->handoverRecipientName() ?: ($nextShiftLabel ?? $currentShiftLoginStr);
+        $diffVal = $salesSummary && $salesSummary->cash_difference !== null
+            ? (float) $salesSummary->cash_difference
+            : ($totalPhysicalDrawerVal - $expectedCash);
     @endphp
 
     {{-- TOP DESKTOP HEADER --}}
     <header class="pos-top-header">
         <div class="pos-header-left">
+            <button type="button" onclick="openPosShiftDrawer()" class="btn-nav-pill" style="color: #0284c7; border-color: #7dd3fc; background: #e0f2fe; font-weight: 700;" title="Buka Menu Operasional Shift (Checklist, Penjualan Shift Lalu, Settlement & Navigasi)">
+                <span>☰</span> Menu Operasional
+            </button>
             <a href="{{ route('pos') }}" class="btn-nav-pill" title="Kembali ke Layar Penjualan POS Desktop">
                 <span>←</span> <strong>POS Desktop</strong>
             </a>
-            <button type="button" onclick="openPrevChecklistModal()" class="btn-nav-pill" style="color: #0369a1; border-color: #bae6fd; background: #f0f9ff;" title="Lihat Checklist Serah Terima Shift Sebelumnya">
-                <span>📋</span> Checklist Shift Lalu
-            </button>
-            <button type="button" onclick="openPrevSalesModal()" class="btn-nav-pill" style="color: #4338ca; border-color: #c7d2fe; background: #eef2ff;" title="Lihat Riwayat & Rincian Penjualan Shift Sebelumnya">
-                <span>🔍</span> Penjualan Shift Lalu
-            </button>
-            <button type="button" onclick="openDailySettlementModal()" class="btn-nav-pill" style="color: #0f766e; border-color: #99f6e4; background: #f0fdfa;" title="Lihat Closing Statement & Settlement Setoran Harian">
-                <span>📊</span> Settlement Harian ({{ $dailySettlement['settled_count'] ?? 0 }}/{{ $dailySettlement['total_shift_count'] ?? 4 }})
-            </button>
-
             <a href="{{ Route::has('presensi2.rekap.desktop') ? route('presensi2.rekap.desktop', ['summary_id' => $salesSummary?->id]) : route('presensi2.rekap', ['summary_id' => $salesSummary?->id]) }}" class="btn-nav-pill" style="color: #0369a1; border-color: #bae6fd; background: #e0f2fe;" title="Buka Detail Rekapitulasi Lengkap">
                 <span>📊</span> Rekap Pendapatan
-            </a>
-            <a href="{{ route('presensi2.serah-terima', array_merge(request()->query(), ['view' => 'mobile'])) }}" class="btn-nav-pill" title="Buka Mode Tampilan HP">
-                <span>📱</span> Versi HP
-            </a>
-            <a href="{{ route('presensi2.stok') }}" class="btn-nav-pill" title="Cek Stok Fisik Shift">
-                <span>📦</span> Cek Stok
             </a>
         </div>
 
@@ -886,7 +967,7 @@
                         <input type="hidden" name="summary_id" value="{{ $salesSummary?->id }}">
                         <input type="hidden" name="action_type" value="handover">
                         <input type="hidden" name="cash_denominations" id="form-cash-denominations" value="{{ json_encode($cashDenominations ?? []) }}">
-                        <input type="hidden" name="blind_cash_count" id="form-blind-cash-count" value="{{ (int) ($handoverAmountVal + $retainedDrawerVal) }}">
+                        <input type="hidden" name="blind_cash_count" id="form-blind-cash-count" value="{{ (int) $totalPhysicalDrawerVal }}">
 
                         {{-- TOTAL FISIK KAS LACI --}}
                         <div class="form-group">
@@ -894,7 +975,7 @@
                             <input type="number" id="input-total-physical" required min="0" step="100"
                                    class="form-control form-control-money"
                                    style="background: #f8fafc; border-color: #94a3b8; color: #0f172a;"
-                                   value="{{ (int) ($handoverAmountVal + $retainedDrawerVal) }}"
+                                   value="{{ (int) $totalPhysicalDrawerVal }}"
                                    oninput="updateHandoverDistribution()">
                             <small style="color: #64748b; font-size: 11px;">Murni uang cash fisik di laci kasir (QRIS tidak dihitung karena langsung masuk rekening)</small>
                         </div>
@@ -942,13 +1023,13 @@
                             <small style="color: #64748b; font-size: 11px; margin-top: 3px; display: block;">Murni estafet fisik uang cash laci kasir secara tatap muka langsung.</small>
                         </div>
 
-                        {{-- KASIR / SHIFT PENERIMA (SESUAI JADWAL LOGIN SHIFT KARYAWAN SAAT INI) --}}
+                        {{-- KASIR / SHIFT PENERIMA (SESUAI DATABASE SUMMARY ATAU SHIFT SELANJUTNYA) --}}
                         <div class="form-group">
                             <label class="form-label">Shift / Kasir Penerima *</label>
-                            <input type="hidden" name="deposit_recipient" id="input-recipient" value="{{ $currentShiftLoginStr }}">
+                            <input type="hidden" name="deposit_recipient" id="input-recipient" value="{{ $defaultDepositRecipient }}">
                             <div style="padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; font-size: 13px; font-weight: 700; color: #0369a1; display: flex; align-items: center; gap: 8px;">
                                 <span style="font-size: 16px;">👤</span>
-                                <span>{{ $currentShiftLoginStr }}</span>
+                                <span>{{ $defaultDepositRecipient }}</span>
                             </div>
                             <small style="color: #64748b; font-size: 11px; margin-top: 3px; display: block;">Otomatis sesuai nama kasir &amp; jadwal shift yang login saat ini</small>
                         </div>
@@ -1044,7 +1125,7 @@
                                         @endif
                                     </td>
                                     <td style="text-align: center;">
-                                        <a href="{{ route('presensi2.rekap', ['summary_id' => $hs->id, 'auto_print' => 1, 'print_type' => 'rekap']) }}" title="Cetak Bukti Slip Rekap" class="btn-nav-pill" style="padding: 3px 8px; font-size: 11px;">
+                                        <a href="{{ route('presensi2.rekap.desktop', ['summary_id' => $hs->id, 'auto_print' => 1, 'print_type' => 'rekap']) }}" title="Cetak Bukti Slip Rekap" class="btn-nav-pill" style="padding: 3px 8px; font-size: 11px;">
                                             🖨️ Struk
                                         </a>
                                     </td>
@@ -1132,7 +1213,7 @@
                                         Rp {{ number_format((float)$hs->deposited_amount, 0, ',', '.') }}
                                     </td>
                                     <td style="text-align: center;">
-                                        <a href="{{ route('presensi2.rekap', ['summary_id' => $hs->id, 'auto_print' => 1, 'print_type' => 'rekap']) }}" title="Cetak Bukti Setor" class="btn-nav-pill" style="padding: 3px 8px; font-size: 11px;">
+                                        <a href="{{ route('presensi2.rekap.desktop', ['summary_id' => $hs->id, 'auto_print' => 1, 'print_type' => 'rekap']) }}" title="Cetak Bukti Setor" class="btn-nav-pill" style="padding: 3px 8px; font-size: 11px;">
                                             🖨️ Cetak
                                         </a>
                                     </td>
@@ -1337,7 +1418,7 @@
                                 <tr>
                                     <td>Kasir Penyerah</td>
                                     <td>:</td>
-                                    <td><strong>{{ $currentEmployee->name }}</strong></td>
+                                    <td><strong>{{ $handoverSenderName }}</strong></td>
                                 </tr>
                                 <tr>
                                     <td>Kasir Penerima</td>
@@ -1419,7 +1500,7 @@
                             </tr>
                             <tr>
                                 <td>Modal Awal Kas Laci</td>
-                                <td style="text-align: right;">Rp {{ number_format($openingCash ?? 100000, 0, ',', '.') }}</td>
+                                <td style="text-align: right;">Rp {{ number_format($openingCash ?? 0, 0, ',', '.') }}</td>
                             </tr>
                             <tr style="background: #f1f5f9; font-weight: 700;">
                                 <td>Target Fisik Kas Tunai Laci (Cash Only)</td>
@@ -1427,7 +1508,7 @@
                             </tr>
                             <tr>
                                 <td>Total Fisik Uang di Laci</td>
-                                <td style="text-align: right; font-weight: 700;"><span id="slip-physical">Rp {{ number_format($handoverAmountVal + $retainedDrawerVal, 0, ',', '.') }}</span></td>
+                                <td style="text-align: right; font-weight: 700;"><span id="slip-physical">Rp {{ number_format($totalPhysicalDrawerVal, 0, ',', '.') }}</span></td>
                             </tr>
                             <tr>
                                 <td>Modal Laci Ditinggal Kasir</td>
@@ -1484,7 +1565,7 @@
                             </tr>
                             <tr>
                                 <td>
-                                    <strong>( {{ $currentEmployee->name }} )</strong>
+                                    <strong>( {{ $handoverSenderName }} )</strong>
                                 </td>
                                 <td>
                                     <strong>( <span id="slip-sign-recipient">{{ $defaultDepositRecipient }}</span> )</strong>
@@ -1757,7 +1838,117 @@
             var savedModal = document.getElementById('modal-handover-saved');
             if (savedModal) savedModal.style.display = 'none';
         }
+
+        function openPosShiftDrawer() {
+            var drawer = document.getElementById('pos-shift-drawer');
+            var backdrop = document.getElementById('pos-shift-drawer-backdrop');
+            if (drawer) drawer.classList.add('active');
+            if (backdrop) backdrop.classList.add('active');
+        }
+
+        function closePosShiftDrawer() {
+            var drawer = document.getElementById('pos-shift-drawer');
+            var backdrop = document.getElementById('pos-shift-drawer-backdrop');
+            if (drawer) drawer.classList.remove('active');
+            if (backdrop) backdrop.classList.remove('active');
+        }
+
+        window.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closePosShiftDrawer();
+            }
+        });
     </script>
+
+    <!-- BACKDROP & DRAWER OPERASIONAL SHIFT KASIR -->
+    <div id="pos-shift-drawer-backdrop" class="pos-shift-drawer-backdrop" onclick="closePosShiftDrawer()"></div>
+    <aside id="pos-shift-drawer" class="pos-shift-drawer">
+        <div class="pos-shift-drawer-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 20px;">📋</span>
+                <div>
+                    <h3 style="font-size: 15px; font-weight: 700; margin: 0; line-height: 1.2;">Menu Operasional Shift</h3>
+                    <div style="font-size: 11px; opacity: 0.9; margin-top: 2px;">Serah terima, audit &amp; navigasi kasir</div>
+                </div>
+            </div>
+            <button type="button" onclick="closePosShiftDrawer()" style="background: rgba(255,255,255,0.2); border: none; color: #ffffff; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 14px; font-weight: bold;">✕</button>
+        </div>
+        <div class="pos-shift-drawer-body">
+            <!-- 1. Kembali ke POS Desktop -->
+            <a href="{{ route('pos') }}" class="drawer-action-btn" style="color: #0284c7; border-left: 4px solid #0284c7;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 18px;">🛒</span>
+                    <div>
+                        <div>← POS Desktop</div>
+                        <div style="font-size: 11px; font-weight: normal; color: #64748b;">Kembali ke layar penjualan kasir</div>
+                    </div>
+                </div>
+                <span style="color: #94a3b8; font-size: 14px;">➔</span>
+            </a>
+
+            <!-- 2. Checklist Shift Lalu -->
+            <button type="button" onclick="closePosShiftDrawer(); openPrevChecklistModal();" class="drawer-action-btn" style="color: #0369a1; border-left: 4px solid #0369a1;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 18px;">📋</span>
+                    <div>
+                        <div>Checklist Shift Lalu</div>
+                        <div style="font-size: 11px; font-weight: normal; color: #64748b;">Verifikasi fisik kertas, F&amp;B &amp; PC</div>
+                    </div>
+                </div>
+                <span style="color: #94a3b8; font-size: 14px;">➔</span>
+            </button>
+
+            <!-- 3. Penjualan Shift Lalu -->
+            <button type="button" onclick="closePosShiftDrawer(); openPrevSalesModal();" class="drawer-action-btn" style="color: #4338ca; border-left: 4px solid #4338ca;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 18px;">🔍</span>
+                    <div>
+                        <div>Penjualan Shift Lalu</div>
+                        <div style="font-size: 11px; font-weight: normal; color: #64748b;">Omset, rincian nota &amp; transaksi kasir</div>
+                    </div>
+                </div>
+                <span style="color: #94a3b8; font-size: 14px;">➔</span>
+            </button>
+
+            <!-- 4. Settlement Harian -->
+            <button type="button" onclick="closePosShiftDrawer(); openDailySettlementModal();" class="drawer-action-btn" style="color: #0f766e; border-left: 4px solid #0f766e;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 18px;">📊</span>
+                    <div>
+                        <div>Settlement Harian ({{ $dailySettlement['settled_count'] ?? 0 }}/{{ $dailySettlement['total_shift_count'] ?? 4 }})</div>
+                        <div style="font-size: 11px; font-weight: normal; color: #64748b;">Closing statement shift 1 s/d 4</div>
+                    </div>
+                </div>
+                <span style="background: #ccfbf1; color: #0f766e; border-radius: 6px; padding: 2px 7px; font-size: 11px; font-weight: 700;">
+                    {{ $dailySettlement['settled_count'] ?? 0 }}/{{ $dailySettlement['total_shift_count'] ?? 4 }}
+                </span>
+            </button>
+
+            <!-- 5. Rekap Pendapatan -->
+            <a href="{{ Route::has('presensi2.rekap.desktop') ? route('presensi2.rekap.desktop', ['summary_id' => $salesSummary?->id]) : route('presensi2.rekap', ['summary_id' => $salesSummary?->id]) }}" class="drawer-action-btn" style="color: #b45309; border-left: 4px solid #f59e0b; background: #fffbeb;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 18px;">📊</span>
+                    <div>
+                        <div>Rekap Pendapatan</div>
+                        <div style="font-size: 11px; font-weight: normal; color: #64748b;">Buka detail rekapitulasi penjualan &amp; shift</div>
+                    </div>
+                </div>
+                <span style="color: #94a3b8; font-size: 14px;">➔</span>
+            </a>
+
+            <!-- 6. Cek Stok -->
+            <a href="{{ route('presensi2.stok') }}" class="drawer-action-btn" style="color: #334155; border-left: 4px solid #64748b;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 18px;">📦</span>
+                    <div>
+                        <div>Cek Stok</div>
+                        <div style="font-size: 11px; font-weight: normal; color: #64748b;">Pemeriksaan stok fisik awal/akhir shift</div>
+                    </div>
+                </div>
+                <span style="color: #94a3b8; font-size: 14px;">➔</span>
+            </a>
+        </div>
+    </aside>
 
     @if(session('success'))
         {{-- MODAL KONFIRMASI SETELAH SIMPAN SERAH TERIMA --}}

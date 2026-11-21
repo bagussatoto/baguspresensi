@@ -100,11 +100,11 @@
         </div>
     @elseif(!$attendanceToday->clock_out_at)
         <div style="display: flex; flex-direction: column; gap: 10px;">
-            <a href="{{ route('presensi2.penjualan') }}" class="btn btn-emerald" style="padding: 14px; font-size: 14px; width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;">
-                <span>🛒</span> Buka Halaman Penjualan & Kasir Shift
+            <a href="{{ route('pos') }}" class="btn btn-emerald" style="padding: 14px; font-size: 14px; width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;">
+                <span>🛒</span> Buka Halaman Penjualan & Kasir Shift (Desktop)
             </a>
-            <a href="{{ route('presensi2.rekap') }}" class="btn" style="padding: 14px; font-size: 14px; width: 100%; background: linear-gradient(135deg, #0284c7, #0ea5e9); color: #fff; box-shadow: 0 4px 14px rgba(14, 165, 233, 0.4); display: flex; justify-content: center; align-items: center; gap: 8px;">
-                <span>📊</span> Buka Rekap Penjualan & Setor Kas Shift
+            <a href="{{ route('presensi2.rekap.desktop') }}" class="btn" style="padding: 14px; font-size: 14px; width: 100%; background: linear-gradient(135deg, #0284c7, #0ea5e9); color: #fff; box-shadow: 0 4px 14px rgba(14, 165, 233, 0.4); display: flex; justify-content: center; align-items: center; gap: 8px;">
+                <span>📊</span> Buka Rekap Penjualan & Setor Kas Shift (Desktop)
             </a>
             <a href="{{ route('presensi2.scan') }}" class="btn btn-rose" style="padding: 12px; font-size: 13px; width: 100%; opacity: 0.85;">
                 <span>🏁</span> Check Out Presensi (Ganti Shift)
@@ -119,10 +119,10 @@
                 <a href="{{ route('presensi2.stok') }}" class="btn" style="padding: 8px 14px; font-size: 12px; background: rgba(139, 92, 246, 0.15); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.3); width: auto;">
                     📦 Lihat Stok Barang
                 </a>
-                <a href="{{ route('presensi2.penjualan') }}" class="btn" style="padding: 8px 14px; font-size: 12px; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); width: auto;">
-                    🛒 Penjualan
+                <a href="{{ route('pos') }}" class="btn" style="padding: 8px 14px; font-size: 12px; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); width: auto;">
+                    🛒 Penjualan Desktop
                 </a>
-                <a href="{{ route('presensi2.rekap') }}" class="btn" style="padding: 8px 14px; font-size: 12px; background: rgba(14, 165, 233, 0.15); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.3); width: auto;">
+                <a href="{{ route('presensi2.rekap.desktop') }}" class="btn" style="padding: 8px 14px; font-size: 12px; background: rgba(14, 165, 233, 0.15); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.3); width: auto;">
                     📊 Rekap & Setor Kas
                 </a>
             </div>
