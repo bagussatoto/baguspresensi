@@ -608,7 +608,10 @@
         $isAlreadyDeposited = $salesSummary?->hasBeenDeposited() ?? false;
         $handoverSenderName = $salesSummary?->handover_by ?: ($salesSummary?->employee?->name ?? $currentEmployee->name);
         $currentShiftLoginStr = ($activeShift ? $activeShift->name : 'Shift Aktif') . ' — ' . $currentEmployee->name;
-        $defaultDepositRecipient = $salesSummary?->handoverRecipientName() ?: ($nextShiftLabel ?? $currentShiftLoginStr);
+        $savedRecipient = $salesSummary?->handoverRecipientName();
+        $defaultDepositRecipient = ($savedRecipient && ! str_starts_with($savedRecipient, 'Kasir '))
+            ? $savedRecipient
+            : ($nextShiftLabel ?? $savedRecipient ?? $currentShiftLoginStr);
         $diffVal = $salesSummary && $salesSummary->cash_difference !== null
             ? (float) $salesSummary->cash_difference
             : ($totalPhysicalDrawerVal - $expectedCash);
@@ -1023,14 +1026,33 @@
                             <small style="color: #64748b; font-size: 11px; margin-top: 3px; display: block;">Murni estafet fisik uang cash laci kasir secara tatap muka langsung.</small>
                         </div>
 
-                        {{-- KASIR / SHIFT PENERIMA (SESUAI DATABASE SUMMARY ATAU SHIFT SELANJUTNYA) --}}
+                        {{-- KASIR / SHIFT PENERIMA (NAMA KARYAWAN SHIFT SESUDAHNYA) --}}
                         <div class="form-group">
-                            <label class="form-label">Shift / Kasir Penerima *</label>
-                            <input type="hidden" name="deposit_recipient" id="input-recipient" value="{{ $defaultDepositRecipient }}">
-                            <div style="padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; font-size: 13px; font-weight: 700; color: #0369a1; display: flex; align-items: center; gap: 8px;">
-                                <span style="font-size: 16px;">👤</span>
-                                <span>{{ $defaultDepositRecipient }}</span>
-                            </div>
+                            <label class="form-label">Karyawan Penerima Shift Selanjutnya *</label>
+                            @php
+                                $nextShiftPrefix = $nextShiftObj?->name ?? 'Shift Selanjutnya';
+                                $recipientOptions = collect();
+                                if (!empty($defaultDepositRecipient)) {
+                                    $recipientOptions->push($defaultDepositRecipient);
+                                }
+                                foreach ($branchEmployees ?? collect() as $empItem) {
+                                    if ($empItem->name !== $handoverSenderName) {
+                                        $optLabel = $nextShiftPrefix . ' — ' . $empItem->name;
+                                        if (!$recipientOptions->contains($optLabel)) {
+                                            $recipientOptions->push($optLabel);
+                                        }
+                                    }
+                                }
+                            @endphp
+                            <select name="deposit_recipient" id="input-recipient" class="form-control" style="font-weight: 700; color: #0369a1; background: #f0f9ff; border-color: #bae6fd;" onchange="var s1=document.getElementById('slip-recipient'); var s2=document.getElementById('slip-sign-recipient'); if(s1) s1.innerText=this.value; if(s2) s2.innerText=this.value;">
+                                @foreach($recipientOptions as $recOpt)
+                                    <option value="{{ $recOpt }}" {{ $recOpt === $defaultDepositRecipient ? 'selected' : '' }}>
+                                        👤 {{ $recOpt }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            <small style="color: #64748b; font-size: 11px; margin-top: 3px; display: block;">Otomatis mendeteksi karyawan shift sesudahnya yang presensi, atau pilih manual nama karyawan penerima shift.</small>
+                        </div>
                             <small style="color: #64748b; font-size: 11px; margin-top: 3px; display: block;">Otomatis sesuai nama kasir &amp; jadwal shift yang login saat ini</small>
                         </div>
 

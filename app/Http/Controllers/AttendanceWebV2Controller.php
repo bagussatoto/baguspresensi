@@ -2867,6 +2867,11 @@ class AttendanceWebV2Controller extends Controller
                 $summary->locked_sales_at = $now;
             }
 
+            $incomingRecipientLabel = ($incomingAttendance?->shift?->name ?? 'Shift Berikutnya').' — '.$incomingEmployee->name;
+            if (empty($summary->handover_recipient) || str_starts_with((string) $summary->handover_recipient, 'Kasir ')) {
+                $summary->handover_recipient = $incomingRecipientLabel;
+            }
+
             $summary->total_revenue = (float) $summary->total_fnb_sales + (float) $summary->total_internet_sales;
             $summary->save();
 
@@ -6395,19 +6400,29 @@ BAT;
         $cashInDrawer = $salesSummary ? (float) ($salesSummary->blind_cash_count ?? $salesSummary->cash_in_drawer) : $systemExpectedCash;
         $cashDifference = $salesSummary?->cash_difference !== null ? (float) $salesSummary->cash_difference : ($cashInDrawer - $systemExpectedCash);
 
-        $nextShiftLabel = $this->resolveNextShiftRecipient($activeShift);
+        $nextShiftLabel = $this->resolveNextShiftRecipient(
+            $activeShift,
+            $workDate,
+            $branchId,
+            $salesSummary?->employee_id ?? $employee->id
+        );
 
         // Otomatis serah terima ke shift selanjutnya (langsung ke serah terima, jangan langsung ke setor)
         if ($salesSummary && empty($salesSummary->handover_at)) {
             $salesSummary->update([
                 'handover_status' => 'completed',
                 'handover_amount' => $salesSummary->handover_amount !== null ? (float) $salesSummary->handover_amount : $cashInDrawer,
-                'handover_recipient' => $salesSummary->handover_recipient ?: $nextShiftLabel,
-                'handover_by' => $salesSummary->handover_by ?: $employee->name,
+                'handover_recipient' => ($salesSummary->handover_recipient && ! str_starts_with($salesSummary->handover_recipient, 'Kasir '))
+                    ? $salesSummary->handover_recipient
+                    : $nextShiftLabel,
+                'handover_by' => $salesSummary->handover_by ?: ($salesSummary->employee?->name ?? $employee->name),
                 'handover_at' => $salesSummary->handover_at ?? $now,
                 'handover_notes' => $salesSummary->handover_notes ?: 'Serah terima langsung ke shift selanjutnya',
                 'retained_drawer_cash' => (float) ($salesSummary->retained_drawer_cash ?? 0),
             ]);
+            $salesSummary->refresh();
+        } elseif ($salesSummary && str_starts_with((string) $salesSummary->handover_recipient, 'Kasir ') && str_contains($nextShiftLabel, '—')) {
+            $salesSummary->update(['handover_recipient' => $nextShiftLabel]);
             $salesSummary->refresh();
         }
 
@@ -6705,26 +6720,88 @@ BAT;
     /**
      * Helper: Menentukan label Shift Selanjutnya secara otomatis untuk serah terima kas antar shift.
      */
-    protected function resolveNextShiftRecipient(?Shift $currentShift): string
-    {
+    protected function resolveNextShiftRecipient(
+        ?Shift $currentShift,
+        ?Carbon $workDate = null,
+        ?int $branchId = null,
+        ?int $excludeEmployeeId = null
+    ): string {
         $shifts = Shift::where('is_active', true)->orderBy('start_time')->get();
         if ($shifts->isEmpty()) {
             return 'Kasir Shift Selanjutnya';
         }
 
-        if (! $currentShift) {
-            return 'Shift Selanjutnya ('.$shifts->first()->name.')';
+        $nextShift = $shifts->first();
+        $isOvernightToNextDay = false;
+
+        if ($currentShift) {
+            $currentIndex = $shifts->search(fn (Shift $s) => $s->id === $currentShift->id);
+            if ($currentIndex !== false) {
+                $nextIndex = ($currentIndex + 1) % $shifts->count();
+                $nextShift = $shifts->get($nextIndex);
+                $isOvernightToNextDay = ($nextIndex === 0 && $shifts->count() > 1);
+            }
         }
 
-        $currentIndex = $shifts->search(fn (Shift $s) => $s->id === $currentShift->id);
-        if ($currentIndex === false) {
-            return 'Shift Selanjutnya';
+        $shiftTitle = $nextShift?->name ?? 'Shift Selanjutnya';
+        $targetDate = ($workDate ? $workDate->copy() : Carbon::now());
+        if ($isOvernightToNextDay) {
+            $targetDate->addDay();
+        }
+        $dateStr = $targetDate->toDateString();
+
+        // 1. Cari karyawan shift sesudahnya dari Checklist Cek Stok, Presensi (AttendanceRecord), atau Summary Shift Berikutnya
+        $nextEmployeeName = null;
+
+        if ($nextShift) {
+            $nextChecklist = ShiftHandoverChecklist::with('employee')
+                ->whereDate('check_date', $dateStr)
+                ->where('shift_id', $nextShift->id)
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+                ->when($excludeEmployeeId, fn ($q) => $q->where('employee_id', '!=', $excludeEmployeeId))
+                ->latest('id')
+                ->first();
+            $nextEmployeeName = $nextChecklist?->employee?->name;
+
+            if (! $nextEmployeeName) {
+                $nextAttendance = AttendanceRecord::with('employee')
+                    ->whereDate('work_date', $dateStr)
+                    ->where('shift_id', $nextShift->id)
+                    ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+                    ->when($excludeEmployeeId, fn ($q) => $q->where('employee_id', '!=', $excludeEmployeeId))
+                    ->latest('id')
+                    ->first();
+                $nextEmployeeName = $nextAttendance?->employee?->name;
+            }
+
+            if (! $nextEmployeeName) {
+                $nextSummary = ShiftSalesSummary::with('employee')
+                    ->whereDate('work_date', $dateStr)
+                    ->where('shift_id', $nextShift->id)
+                    ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+                    ->when($excludeEmployeeId, fn ($q) => $q->where('employee_id', '!=', $excludeEmployeeId))
+                    ->latest('id')
+                    ->first();
+                $nextEmployeeName = $nextSummary?->employee?->name;
+            }
         }
 
-        $nextIndex = ($currentIndex + 1) % $shifts->count();
-        $nextShift = $shifts->get($nextIndex);
+        // 2. Fallback: cari karyawan lain yang presensi setelah kasir shift ini pada tanggal kerja yang sama
+        if (! $nextEmployeeName && $excludeEmployeeId) {
+            $laterAttendance = AttendanceRecord::with('employee')
+                ->whereDate('work_date', ($workDate ?? Carbon::now())->toDateString())
+                ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+                ->where('employee_id', '!=', $excludeEmployeeId)
+                ->latest('id')
+                ->first();
+            $nextEmployeeName = $laterAttendance?->employee?->name;
+        }
 
-        return 'Kasir '.($nextShift->name ?? 'Shift Selanjutnya');
+        if ($nextEmployeeName) {
+            return $shiftTitle.' — '.$nextEmployeeName;
+        }
+
+        return 'Kasir '.$shiftTitle;
     }
 
     /**
@@ -6862,7 +6939,12 @@ BAT;
                 ->with('success', 'Simulasi serah terima kas hari ini berhasil di-reset! Formulir kembali bersih (Status: Belum Serah Terima) untuk pengujian baru.');
         }
 
-        $nextShiftLabel = $this->resolveNextShiftRecipient($activeShift);
+        $nextShiftLabel = $this->resolveNextShiftRecipient(
+            $activeShift,
+            $workDate,
+            $branchId,
+            $salesSummary?->employee_id ?? $employee->id
+        );
         $cashInDrawer = $salesSummary ? (float) ($salesSummary->blind_cash_count ?? $salesSummary->cash_in_drawer ?? $salesSummary->total_revenue) : 0.0;
 
         // Pastikan serah terima shift tercatat default jika sales summary sudah closed sebelumnya
@@ -6870,12 +6952,17 @@ BAT;
             $salesSummary->update([
                 'handover_status' => 'completed',
                 'handover_amount' => $salesSummary->handover_amount !== null ? (float) $salesSummary->handover_amount : $cashInDrawer,
-                'handover_recipient' => $salesSummary->handover_recipient ?: $nextShiftLabel,
-                'handover_by' => $salesSummary->handover_by ?: $employee->name,
+                'handover_recipient' => ($salesSummary->handover_recipient && ! str_starts_with($salesSummary->handover_recipient, 'Kasir '))
+                    ? $salesSummary->handover_recipient
+                    : $nextShiftLabel,
+                'handover_by' => $salesSummary->handover_by ?: ($salesSummary->employee?->name ?? $employee->name),
                 'handover_at' => $salesSummary->handover_at ?? $now,
                 'handover_notes' => $salesSummary->handover_notes ?: 'Serah terima langsung ke shift selanjutnya',
                 'retained_drawer_cash' => (float) ($salesSummary->retained_drawer_cash ?? 0),
             ]);
+            $salesSummary->refresh();
+        } elseif ($salesSummary && str_starts_with((string) $salesSummary->handover_recipient, 'Kasir ') && str_contains($nextShiftLabel, '—')) {
+            $salesSummary->update(['handover_recipient' => $nextShiftLabel]);
             $salesSummary->refresh();
         }
 
