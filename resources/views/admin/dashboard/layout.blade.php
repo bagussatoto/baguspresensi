@@ -913,6 +913,88 @@
         .erp-modal-body { padding: 18px; font-size: 13px; color: #334155; line-height: 1.5; }
         .erp-modal-footer { padding: 12px 18px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 8px; }
         .erp-modal-btn { padding: 7px 14px; border-radius: 4px; font-size: 12.5px; font-weight: 600; cursor: pointer; border: 1px solid transparent; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+
+        /* PAGINATION NAVIGATION (FIX GIANT SVG & CLEAN DARK GLASS STYLE) */
+        nav[role="navigation"][aria-label*="Pagination"] svg {
+            width: 16px !important;
+            height: 16px !important;
+            max-width: 16px !important;
+            max-height: 16px !important;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .admin-pagination-nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .admin-pagination-info {
+            font-size: 12.5px;
+            color: #94a3b8;
+        }
+        .admin-pagination-info strong {
+            color: #f8fafc;
+            font-weight: 700;
+        }
+        .admin-pagination-controls {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .admin-page-numbers {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+        .admin-page-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            min-width: 34px;
+            height: 34px;
+            padding: 0 11px;
+            border-radius: 8px;
+            font-size: 12.5px;
+            font-weight: 600;
+            color: #cbd5e1;
+            background: rgba(15, 23, 42, 0.75);
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            text-decoration: none;
+            transition: all 0.15s ease;
+            cursor: pointer;
+            user-select: none;
+        }
+        .admin-page-btn:hover:not(.disabled):not(.active):not(.dots) {
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+            border-color: rgba(56, 189, 248, 0.45);
+            transform: translateY(-1px);
+        }
+        .admin-page-btn.active {
+            background: linear-gradient(135deg, #0284c7, #38bdf8);
+            color: #0b1120;
+            font-weight: 800;
+            border-color: #38bdf8;
+            box-shadow: 0 4px 12px rgba(56, 189, 248, 0.35);
+            cursor: default;
+        }
+        .admin-page-btn.disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            background: rgba(15, 23, 42, 0.4);
+        }
+        .admin-page-btn.dots {
+            border-color: transparent;
+            background: transparent;
+            cursor: default;
+            min-width: 24px;
+            padding: 0 4px;
+        }
     </style>
     @yield('extra-styles')
 </head>
