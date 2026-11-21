@@ -91,10 +91,15 @@ class AdminErpHubController extends Controller
         // 3. STATISTIK PENJUALAN & TRANSAKSI HARI INI
         $todaySalesCount = CafeSale::whereDate('created_at', $today)->count();
         $todaySalesAmount = (float) CafeSale::whereDate('created_at', $today)->sum('net_amount');
+        $pendingVoidRequestsCount = Schema::hasColumn('cafe_sales', 'void_status')
+            ? CafeSale::where('void_status', 'pending_approval')
+                ->where('payment_status', '!=', 'cancelled')
+                ->count()
+            : 0;
         $pendingBillingAdjustments = ShiftSalesSummary::where(function ($q): void {
             $q->where('billing_adjustment_status', 'pending_approval')
                 ->orWhere('print_adjustment_status', 'pending_approval');
-        })->count();
+        })->count() + $pendingVoidRequestsCount;
 
         // 4. STATISTIK LOGISTIK & STOK
         $totalPhysicalStock = (int) StockInventory::sum('qty_on_hand');
@@ -159,6 +164,7 @@ class AdminErpHubController extends Controller
                     'pending_stock_transfers' => $pendingStockTransfers,
                     'pending_stock_requests' => $pendingStockRequestsCount,
                     'pending_billing_adjustments' => $pendingBillingAdjustments,
+                    'pending_void_requests' => $pendingVoidRequestsCount,
                     'pending_registrations' => $pendingRegistrations,
                     'pending_password_resets' => $pendingPasswordResets,
                 ],

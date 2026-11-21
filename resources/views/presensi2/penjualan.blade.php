@@ -497,8 +497,10 @@
                             @forelse($fnbSales as $sale)
                             @php
                                 $isCancelled = $sale->payment_status === 'cancelled';
+                                $isVoidPending = ! $isCancelled && $sale->void_status === 'pending_approval';
+                                $isVoidRejected = ! $isCancelled && $sale->void_status === 'rejected';
                             @endphp
-                            <tr id="sale-row-{{ $sale->id }}" style="border-bottom: 1px solid #f1f5f9; {{ $isCancelled ? 'opacity: 0.65; background: #fff1f2;' : '' }}">
+                            <tr id="sale-row-{{ $sale->id }}" style="border-bottom: 1px solid #f1f5f9; {{ $isCancelled ? 'opacity: 0.65; background: #fff1f2;' : ($isVoidPending ? 'background: #fffbeb;' : '') }}">
                                 <td style="padding: 9px 10px; color: #64748b; white-space: nowrap;">
                                     {{ $sale->created_at->format('H:i') }}
                                 </td>
@@ -534,16 +536,29 @@
                                         <span class="badge" style="background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; font-size: 10px; font-weight: 700; padding: 2px 7px;">
                                             DIBATALKAN
                                         </span>
+                                    @elseif($isVoidPending)
+                                        <span class="badge" style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a; font-size: 10px; font-weight: 700; padding: 2px 7px;" title="Alasan: {{ $sale->void_reason }}">
+                                            ⏳ ANTREAN VOID
+                                        </span>
                                     @else
                                         <span class="badge" style="background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; font-size: 10px; text-transform: uppercase; padding: 2px 7px; font-weight: 700;">
                                             {{ $sale->payment_method }}
                                         </span>
+                                        @if($isVoidRejected)
+                                            <div style="font-size: 9.5px; color: #dc2626; font-weight: 700; margin-top: 2px;" title="{{ $sale->void_rejected_reason }}">
+                                                ❌ Void Ditolak
+                                            </div>
+                                        @endif
                                     @endif
                                 </td>
                                 <td style="padding: 9px 10px; text-align: center;">
                                     @if($isCancelled)
                                         <button type="button" onclick='openInvoiceModal(@json($sale))' class="btn" style="padding: 3px 8px; font-size: 11px; background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; border-radius: 4px;">
                                             Rincian
+                                        </button>
+                                    @elseif($isVoidPending)
+                                        <button type="button" onclick='openInvoiceModal(@json($sale))' class="btn" style="padding: 3px 8px; font-size: 10.5px; background: #fef3c7; color: #b45309; border: 1px solid #fde68a; border-radius: 4px; font-weight: 700;">
+                                            ⏳ Menunggu Admin
                                         </button>
                                     @else
                                         <button type="button" onclick='openInvoiceModal(@json($sale))' class="btn" style="padding: 3px 8px; font-size: 11px; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 4px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;">
@@ -2923,6 +2938,21 @@
                 adminLink.href = '{{ route("admin.penjualan") }}?q=' + encodeURIComponent(sale.invoice_number);
             }
             
+            cancelSection.style.display = 'none';
+        } else if (sale.void_status === 'pending_approval') {
+            banner.style.background = 'rgba(245, 158, 11, 0.15)';
+            banner.style.border = '1px solid rgba(245, 158, 11, 0.35)';
+            banner.style.color = '#fbbf24';
+            banner.innerHTML = '<span>⏳</span> <strong>Status: MENUNGGU PERSETUJUAN VOID ADMIN</strong>';
+
+            cancelledInfo.style.display = 'block';
+            document.getElementById('modal-cancelled-notes').innerText = 'Alasan pengajuan: ' + (sale.void_reason || 'Menunggu persetujuan Admin.');
+
+            const adminLink = document.getElementById('modal-cancelled-admin-link');
+            if (adminLink) {
+                adminLink.href = '{{ route("admin.penjualan.penyesuaian-billing") }}';
+            }
+
             cancelSection.style.display = 'none';
         } else {
             banner.style.background = 'rgba(16, 185, 129, 0.15)';

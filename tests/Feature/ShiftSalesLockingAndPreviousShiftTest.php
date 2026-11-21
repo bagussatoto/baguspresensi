@@ -302,4 +302,104 @@ class ShiftSalesLockingAndPreviousShiftTest extends TestCase
         $response->assertSee('INV-SHIFT1-999');
         $response->assertSee('Budi Kasir Shift 1');
     }
+
+    public function test_shift1_cannot_sell_after_shift2_clocks_in_and_completes_stock_checklist_even_if_shift1_forgot_to_lock_billing(): void
+    {
+        // 1. Shift 1 (this->employee) clock-in dan melakukan transaksi penjualan tanpa mengunci billing / rekap
+        AttendanceRecord::create([
+            'employee_id' => $this->employee->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift1->id,
+            'work_date' => Carbon::today()->toDateString(),
+            'clock_in_at' => Carbon::now()->subHour(),
+            'status' => 'present',
+        ]);
+
+        $saleShift1 = CafeSale::create([
+            'invoice_number' => 'INV-SHIFT1-FORGOT-LOCK',
+            'branch_id' => $this->branch->id,
+            'employee_id' => $this->employee->id,
+            'total_fnb' => 15000,
+            'net_amount' => 15000,
+            'payment_method' => 'cash',
+            'payment_status' => 'paid',
+            'is_locked' => false,
+        ]);
+
+        // 2. Kasir Shift 2 masuk presensi (Clock-In) dan menyelesaikan Cek Stok (stokStore)
+        $cashierShift2 = Employee::create([
+            'branch_id' => $this->branch->id,
+            'code' => 'EMP-SHIFT2-002',
+            'name' => 'Andi Kasir Shift 2',
+            'email' => 'andi_shift2@example.com',
+            'is_active' => true,
+        ]);
+
+        AttendanceRecord::create([
+            'employee_id' => $cashierShift2->id,
+            'branch_id' => $this->branch->id,
+            'shift_id' => $this->shift1->id,
+            'work_date' => Carbon::today()->toDateString(),
+            'clock_in_at' => Carbon::now()->addMinute(),
+            'status' => 'present',
+        ]);
+
+        $stokResponse = $this->withSession(['presensi2_employee_id' => $cashierShift2->id])
+            ->post(route('presensi2.stok.store'), [
+                'billing_verified' => '1',
+                'hardware_checklist' => ['pc_kasir', 'printer_thermal'],
+                'hardware_status' => 'normal',
+                'paper_a4_qty' => 500,
+                'paper_f4_qty' => 500,
+                'drink_free_checked' => '1',
+                'food_free_checked' => '1',
+            ]);
+
+        $stokResponse->assertRedirect(route('presensi2.login'));
+
+        // 3. Pastikan nota Shift 1 dan ShiftSalesSummary Shift 1 otomatis terkunci
+        $this->assertTrue((bool) $saleShift1->fresh()->is_locked);
+
+        $shift1Summary = ShiftSalesSummary::where('employee_id', $this->employee->id)
+            ->whereDate('work_date', Carbon::today()->toDateString())
+            ->first();
+        $this->assertNotNull($shift1Summary);
+        $this->assertTrue((bool) $shift1Summary->is_sales_locked);
+        $this->assertTrue((bool) $shift1Summary->is_billing_locked);
+
+        // 4. Ketika Kasir Shift 1 mencoba melakukan penjualan lagi, wajib ditolak (422)
+        $blockedResponse = $this->withSession(['presensi2_employee_id' => $this->employee->id])
+            ->postJson(route('presensi2.penjualan.transaksi'), [
+                'transaction_type' => 'fnb',
+                'customer_name' => 'Pelanggan Susulan',
+                'payment_method' => 'cash',
+                'cart_items' => [
+                    [
+                        'variant_id' => $this->variant->id,
+                        'qty' => 1,
+                    ],
+                ],
+            ]);
+
+        $blockedResponse->assertStatus(422);
+        $blockedResponse->assertJson(['success' => false]);
+        $this->assertStringContainsString('DIKUNCI', (string) $blockedResponse->json('message'));
+
+        // 5. Sedangkan Kasir Shift 2 dapat bertransaksi secara normal
+        $shift2SaleResponse = $this->withSession(['presensi2_employee_id' => $cashierShift2->id])
+            ->postJson(route('presensi2.penjualan.transaksi'), [
+                'transaction_type' => 'fnb',
+                'customer_name' => 'Pelanggan Shift 2',
+                'payment_method' => 'cash',
+                'cart_items' => [
+                    [
+                        'variant_id' => $this->variant->id,
+                        'qty' => 1,
+                    ],
+                ],
+            ]);
+
+        $shift2SaleResponse->assertStatus(200);
+        $shift2SaleResponse->assertJson(['success' => true]);
+    }
 }

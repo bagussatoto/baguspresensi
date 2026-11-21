@@ -78,10 +78,16 @@ class AdminDashboardController extends Controller
             ->take(8)
             ->get();
 
+        $pendingVoidRequestsCount = Schema::hasColumn('cafe_sales', 'void_status')
+            ? CafeSale::where('void_status', 'pending_approval')
+                ->where('payment_status', '!=', 'cancelled')
+                ->count()
+            : 0;
+
         $billingPendingCount = ShiftSalesSummary::where(function ($q) {
             $q->where('billing_adjustment_status', 'pending_approval')
                 ->orWhere('print_adjustment_status', 'pending_approval');
-        })->count();
+        })->count() + $pendingVoidRequestsCount;
 
         $pendingShiftDepositsCount = ShiftSalesSummary::where('deposit_status', 'pending_verification')->count();
 

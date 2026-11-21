@@ -1014,9 +1014,11 @@
                         @forelse($myShiftFnbSales ?? $fnbSales as $sale)
                             @php
                                 $isCancelled = $sale->payment_status === 'cancelled';
+                                $isVoidPending = ! $isCancelled && $sale->void_status === 'pending_approval';
+                                $isVoidRejected = ! $isCancelled && $sale->void_status === 'rejected';
                                 $saleTotal = (float) ($sale->net_amount > 0 ? $sale->net_amount : $sale->total_fnb);
                             @endphp
-                            <tr style="border-bottom: 1px solid #f1f5f9; {{ $isCancelled ? 'background: #fff1f2; opacity: 0.7;' : '' }}">
+                            <tr style="border-bottom: 1px solid #f1f5f9; {{ $isCancelled ? 'background: #fff1f2; opacity: 0.7;' : ($isVoidPending ? 'background: #fffbeb;' : '') }}">
                                 <td style="padding: 8px 10px; color: #64748b;">
                                     {{ $sale->created_at ? $sale->created_at->format('H:i') : '-' }}
                                 </td>
@@ -1042,8 +1044,13 @@
                                 <td style="padding: 8px 10px; text-align: center;">
                                     @if($isCancelled)
                                         <span style="background: #fee2e2; color: #dc2626; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px;">VOID</span>
+                                    @elseif($isVoidPending)
+                                        <span style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px;" title="Alasan: {{ $sale->void_reason }}">⏳ ANTREAN VOID</span>
                                     @else
                                         <span style="background: #dcfce7; color: #15803d; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px;">LUNAS</span>
+                                        @if($isVoidRejected)
+                                            <div style="font-size: 9.5px; color: #dc2626; font-weight: 700; margin-top: 2px;" title="{{ $sale->void_rejected_reason }}">❌ Void Ditolak</div>
+                                        @endif
                                     @endif
                                 </td>
                                 <td style="padding: 8px 10px; text-align: center;">
@@ -1051,11 +1058,18 @@
                                         <button type="button" onclick='printVoidSlipFromHistory(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #fee2e2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 3px; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 3px;" title="Cetak ulang slip bukti pembatalan (VOID)">
                                             <span>🖨️</span> Slip VOID
                                         </button>
+                                    @elseif($isVoidPending)
+                                        <button type="button" onclick='reprintFromHistory(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #e0f2fe; border: 1px solid #bae6fd; color: #0369a1; border-radius: 3px; cursor: pointer;" title="Cetak ulang struk pelanggan">
+                                            🖨️ Cetak
+                                        </button>
+                                        <span style="padding: 3px 8px; font-size: 10.5px; background: #fef3c7; border: 1px solid #fde68a; color: #b45309; border-radius: 3px; font-weight: 700; margin-left: 4px; display: inline-block;" title="Sedang menunggu persetujuan Admin">
+                                            ⏳ Menunggu Admin
+                                        </span>
                                     @else
                                         <button type="button" onclick='reprintFromHistory(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #e0f2fe; border: 1px solid #bae6fd; color: #0369a1; border-radius: 3px; cursor: pointer;" title="Cetak ulang struk pelanggan">
                                             🖨️ Cetak
                                         </button>
-                                        <button type="button" onclick='openVoidModal(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #fee2e2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 3px; cursor: pointer; margin-left: 4px;" title="Batalkan transaksi (VOID) dengan otorisasi supervisor">
+                                        <button type="button" onclick='openVoidModal(@json($sale))' style="padding: 3px 8px; font-size: 11px; background: #fee2e2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 3px; cursor: pointer; margin-left: 4px;" title="Ajukan pembatalan transaksi (VOID) ke antrean Admin">
                                             ✕ Batal
                                         </button>
                                     @endif

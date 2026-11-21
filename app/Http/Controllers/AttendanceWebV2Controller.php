@@ -2701,6 +2701,16 @@ class AttendanceWebV2Controller extends Controller
             ]
         );
 
+        // Otomatis kunci penjualan & billing shift sebelumnya jika kasir shift sebelumnya lupa mengunci
+        $this->autoLockPreviousShiftOnHandover(
+            $employee,
+            $workDate,
+            $now,
+            $attendanceToday,
+            $prevShiftBilling,
+            (float) $actualCashReceived
+        );
+
         $employeeId = session('presensi2_employee_id');
         if ($employeeId) {
             rescue(fn () => AuditLog::create([
@@ -2725,6 +2735,174 @@ class AttendanceWebV2Controller extends Controller
 
         return redirect()->route('presensi2.login')
             ->with('stok_selesai_notice', $noticeMsg);
+    }
+
+    /**
+     * Otomatis kunci penjualan & billing kasir shift sebelumnya ketika kasir shift baru selesai Presensi & Cek Stok.
+     *
+     * @param  array<string, mixed>  $prevShiftBilling
+     */
+    protected function autoLockPreviousShiftOnHandover(
+        Employee $incomingEmployee,
+        Carbon $workDate,
+        Carbon $now,
+        ?AttendanceRecord $incomingAttendance,
+        array $prevShiftBilling,
+        float $verifiedBillingIncome
+    ): void {
+        $branchId = $incomingEmployee->branch_id;
+
+        // 1. Kunci semua nota CafeSale milik kasir lain di cabang ini pada tanggal kerja yang sama
+        CafeSale::whereDate('created_at', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->where('employee_id', '!=', $incomingEmployee->id)
+            ->where('is_locked', false)
+            ->update([
+                'is_locked' => true,
+                'locked_at' => $now,
+            ]);
+
+        // 2. Cari seluruh kasir sebelumnya (dari AttendanceRecord maupun CafeSale) pada tanggal kerja & cabang yang sama
+        $prevAttendancesByEmp = AttendanceRecord::whereDate('work_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->where('employee_id', '!=', $incomingEmployee->id)
+            ->when($incomingAttendance?->id, fn ($q) => $q->where('id', '<', $incomingAttendance->id))
+            ->get()
+            ->keyBy('employee_id');
+
+        $prevSaleEmpIds = CafeSale::whereDate('created_at', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->where('employee_id', '!=', $incomingEmployee->id)
+            ->whereNotNull('employee_id')
+            ->pluck('employee_id')
+            ->unique();
+
+        $prevEmployeeIds = $prevAttendancesByEmp->keys()->merge($prevSaleEmpIds)->unique();
+        $prevShiftId = $prevShiftBilling['shift']?->id;
+
+        foreach ($prevEmployeeIds as $prevEmpId) {
+            $prevAtt = $prevAttendancesByEmp->get($prevEmpId);
+            $summary = ShiftSalesSummary::whereDate('work_date', $workDate->toDateString())
+                ->where('employee_id', $prevEmpId)
+                ->latest('id')
+                ->first();
+
+            if (! $summary) {
+                $fnbTotal = (float) CafeSale::whereDate('created_at', $workDate->toDateString())
+                    ->where('employee_id', $prevEmpId)
+                    ->where('payment_status', '!=', 'cancelled')
+                    ->sum('total_fnb');
+
+                $summary = new ShiftSalesSummary([
+                    'employee_id' => $prevEmpId,
+                    'branch_id' => $branchId ?? $prevAtt?->branch_id ?? 3,
+                    'shift_id' => $prevAtt?->shift_id ?? $prevShiftId,
+                    'attendance_record_id' => $prevAtt?->id,
+                    'work_date' => $workDate->toDateString(),
+                    'total_fnb_sales' => $fnbTotal,
+                    'total_internet_sales' => $verifiedBillingIncome,
+                    'total_revenue' => $fnbTotal + $verifiedBillingIncome,
+                    'cash_in_drawer' => $fnbTotal + $verifiedBillingIncome,
+                    'status' => 'open',
+                ]);
+            }
+
+            if (! $summary->is_billing_locked) {
+                $summary->is_billing_locked = true;
+                $summary->locked_billing_amount = $summary->locked_billing_amount ?? $verifiedBillingIncome;
+                $summary->locked_billing_at = $now;
+                $summary->total_internet_sales = (float) $summary->locked_billing_amount;
+            }
+
+            if (! $summary->is_print_locked) {
+                $summary->is_print_locked = true;
+                $summary->locked_print_at = $now;
+            }
+
+            if (! $summary->is_sales_locked) {
+                $fnbAmount = (float) ($summary->total_fnb_sales ?: CafeSale::whereDate('created_at', $workDate->toDateString())
+                    ->where('employee_id', $prevEmpId)
+                    ->where('payment_status', '!=', 'cancelled')
+                    ->sum('net_amount'));
+                $summary->is_sales_locked = true;
+                $summary->locked_sales_amount = $summary->locked_sales_amount ?? $fnbAmount;
+                $summary->locked_sales_at = $now;
+            }
+
+            $summary->total_revenue = (float) $summary->total_fnb_sales + (float) $summary->total_internet_sales;
+            $summary->save();
+
+            rescue(fn () => AuditLog::create([
+                'user_id' => Auth::id(),
+                'auditable_type' => ShiftSalesSummary::class,
+                'auditable_id' => $summary->id,
+                'action' => 'prev_shift_auto_locked_by_next_shift_handover',
+                'new_values' => [
+                    'prev_employee_id' => $prevEmpId,
+                    'taken_over_by_employee_id' => $incomingEmployee->id,
+                    'taken_over_by_name' => $incomingEmployee->name,
+                    'locked_billing_amount' => $summary->locked_billing_amount,
+                    'locked_at' => $now->toDateTimeString(),
+                ],
+                'ip_address' => request()->ip() ?? '127.0.0.1',
+                'user_agent' => request()->userAgent() ?? 'Web Portal Presensi v2',
+                'created_at' => $now,
+            ]));
+        }
+
+        // 3. Kunci juga ShiftSalesSummary milik kasir lain pada tanggal kerja ini yang belum terkunci
+        ShiftSalesSummary::whereDate('work_date', $workDate->toDateString())
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->where('employee_id', '!=', $incomingEmployee->id)
+            ->where('is_sales_locked', false)
+            ->update([
+                'is_sales_locked' => true,
+                'locked_sales_at' => $now,
+                'is_billing_locked' => true,
+                'locked_billing_at' => $now,
+                'is_print_locked' => true,
+                'locked_print_at' => $now,
+            ]);
+    }
+
+    /**
+     * Cek apakah shift kasir saat ini sudah diambil alih oleh kasir shift berikutnya yang telah Presensi & Cek Stok.
+     */
+    protected function isEmployeeShiftTakenOverByNextShift(
+        Employee $employee,
+        Carbon $workDate,
+        ?AttendanceRecord $attendanceToday
+    ): bool {
+        $hasLockedSummary = ShiftSalesSummary::whereDate('work_date', $workDate->toDateString())
+            ->where('employee_id', $employee->id)
+            ->where(function ($q) {
+                $q->where('is_sales_locked', true)
+                    ->orWhere('status', 'closed');
+            })
+            ->exists();
+
+        if ($hasLockedSummary) {
+            return true;
+        }
+
+        if (! $attendanceToday) {
+            return false;
+        }
+
+        return ShiftHandoverChecklist::whereDate('check_date', $workDate->toDateString())
+            ->when($employee->branch_id, fn ($q) => $q->where('branch_id', $employee->branch_id))
+            ->where('employee_id', '!=', $employee->id)
+            ->where('status', 'completed')
+            ->where(function ($q) use ($attendanceToday) {
+                $q->where('attendance_record_id', '>', $attendanceToday->id)
+                    ->orWhere(function ($sq) use ($attendanceToday) {
+                        if ($attendanceToday->clock_in_at) {
+                            $sq->whereNull('attendance_record_id')
+                                ->where('completed_at', '>', $attendanceToday->clock_in_at);
+                        }
+                    });
+            })
+            ->exists();
     }
 
     /**
@@ -3369,17 +3547,17 @@ class AttendanceWebV2Controller extends Controller
             ->latest('id')
             ->get();
 
-        // Rekapitulasi penjualan shift saat ini di cabang ini jika sudah tersimpan (filter per shift aktif)
+        // Rekapitulasi penjualan shift saat ini di cabang ini jika sudah tersimpan (filter per kasir & shift aktif)
         $currentShiftId = $attendanceToday?->shift_id ?? $activeShift?->id;
         $salesSummary = ShiftSalesSummary::whereDate('work_date', $workDate->toDateString())
-            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+            ->where('employee_id', $employee->id)
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->when(
                 $currentShiftId,
-                fn ($q) => $q->where(function ($sq) use ($currentShiftId, $employee) {
+                fn ($q) => $q->where(function ($sq) use ($currentShiftId) {
                     $sq->where('shift_id', $currentShiftId)
-                        ->orWhere(fn ($nq) => $nq->whereNull('shift_id')->where('employee_id', $employee->id));
-                }),
-                fn ($q) => $q->where('employee_id', $employee->id)
+                        ->orWhereNull('shift_id');
+                })
             )
             ->latest('id')
             ->first();
@@ -3477,6 +3655,8 @@ class AttendanceWebV2Controller extends Controller
             ->latest('id')
             ->get();
 
+        $isTakenOver = $this->isEmployeeShiftTakenOverByNextShift($employee, $workDate, $attendanceToday);
+
         return [
             'currentEmployee' => $employee,
             'activeShift' => $activeShift,
@@ -3501,8 +3681,8 @@ class AttendanceWebV2Controller extends Controller
             'stockRequests' => $stockRequests,
             'salesSummary' => $salesSummary,
             'stockComparisons' => $stockComparisons,
-            'isBillingLocked' => $isBillingLocked,
-            'isPrintLocked' => $isPrintLocked,
+            'isBillingLocked' => (bool) ($isBillingLocked || $isTakenOver),
+            'isPrintLocked' => (bool) ($isPrintLocked || $isTakenOver),
             'autoPrintPages' => $autoPrintPages,
             'autoPrintAmount' => $autoPrintAmount,
             'realHardwarePages' => $realHardwarePages,
@@ -3515,7 +3695,7 @@ class AttendanceWebV2Controller extends Controller
             'totalPrintPages' => $totalPrintPages,
             'totalPrintIncome' => $totalPrintIncome,
             'customers' => $customers,
-            'isSalesLocked' => (bool) ($salesSummary?->is_sales_locked || $salesSummary?->status === 'closed'),
+            'isSalesLocked' => (bool) ($salesSummary?->is_sales_locked || $salesSummary?->status === 'closed' || $isTakenOver),
             'prevShiftBilling' => $this->getPreviousShiftBillingData($now, $activeShift, $branchId),
             'dailySettlement' => $this->getBillingIncomePerShift($workDate, $branchId, $activeShift),
             'pendingStoreTransfers' => $pendingStoreTransfers,
@@ -3861,23 +4041,27 @@ class AttendanceWebV2Controller extends Controller
         $type = (string) $request->input('transaction_type', 'fnb');
         $branchId = (int) ($employee->branch_id ?? Branch::value('id') ?? 1);
 
-        // Validasi Status Penguncian Penjualan Saat Rekap Shift (Freeze Closed Shift Sales per Shift Aktif)
+        // Validasi Status Penguncian Penjualan Saat Rekap Shift (Freeze Closed Shift Sales per Kasir & Shift Aktif)
         $currentShiftId = $attendanceToday?->shift_id ?? $activeShift?->id;
         $salesSummary = ShiftSalesSummary::whereDate('work_date', $workDate->toDateString())
-            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId), fn ($q) => $q->where('employee_id', $employee->id))
+            ->where('employee_id', $employee->id)
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->when(
                 $currentShiftId,
-                fn ($q) => $q->where(function ($sq) use ($currentShiftId, $employee) {
+                fn ($q) => $q->where(function ($sq) use ($currentShiftId) {
                     $sq->where('shift_id', $currentShiftId)
-                        ->orWhere(fn ($nq) => $nq->whereNull('shift_id')->where('employee_id', $employee->id));
-                }),
-                fn ($q) => $q->where('employee_id', $employee->id)
+                        ->orWhereNull('shift_id');
+                })
             )
             ->latest('id')
             ->first();
 
-        if ($salesSummary && ($salesSummary->is_sales_locked || $salesSummary->status === 'closed')) {
-            $lockMsg = 'Shift ini sudah direkapitulasi dan transaksi penjualan telah DIKUNCI. Buka shift baru untuk melanjutkan transaksi kasir.';
+        $isTakenOver = $this->isEmployeeShiftTakenOverByNextShift($employee, $workDate, $attendanceToday);
+
+        if (($salesSummary && ($salesSummary->is_sales_locked || $salesSummary->status === 'closed')) || $isTakenOver) {
+            $lockMsg = $isTakenOver
+                ? 'Shift ini sudah direkapitulasi atau telah diambil alih oleh Shift berikutnya (Presensi & Cek Stok selesai), sehingga transaksi penjualan telah DIKUNCI. Buka shift baru untuk melanjutkan transaksi kasir.'
+                : 'Shift ini sudah direkapitulasi dan transaksi penjualan telah DIKUNCI. Buka shift baru untuk melanjutkan transaksi kasir.';
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
                     'success' => false,
