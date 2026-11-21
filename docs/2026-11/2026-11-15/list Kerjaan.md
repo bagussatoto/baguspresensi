@@ -97,6 +97,6 @@ admin
 5. Menerapkan aturan 1 Shift Maksimal 1 Karyawan per Cabang (Tidak Bisa Presensi Shift yang Sama Bersamaan)   	selesai
 6. Menambahkan Badge Shift & Filter Shift 1 / Shift 2 / Shift 3 / Shift 4 pada History Penjualan POS			seelsai
 7. Menambahkan Jam Digital Live & Badge Shift Aktif pada header POS												selesai
-	
+8. Menambahkan tombol Lihat Jadwal Shift Terbaru																selesai
 
 

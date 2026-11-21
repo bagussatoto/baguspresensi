@@ -124,13 +124,13 @@
 @section('content')
     <div class="erp-legacy-surface">
     <div class="container">
-        <div style="display: flex; gap: 8px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 4px;">
+        <!-- <div style="display: flex; gap: 8px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 4px;">
             <a href="{{ route('admin.presensi') }}" style="padding: 7px 14px; background: #e0f2fe; color: #0369a1; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: 600;">📅 Presensi Hari Ini</a>
             <a href="{{ route('admin.presensi.rekap') }}" style="padding: 7px 14px; background: #e0f2fe; color: #0369a1; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: 600;">📊 Rekapitulasi Bulanan</a>
             <a href="{{ route('admin.presensi.approval') }}" style="padding: 7px 14px; background: #e0f2fe; color: #0369a1; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: 600;">📝 Approval Cuti & Lembur</a>
             <a href="{{ route('admin.presensi.audit-logs') }}" style="padding: 7px 14px; background: #0284c7; color: #ffffff; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: 700;">🛡️ Audit Trail (ISO 27001)</a>
             <a href="{{ route('admin.presensi.pengaturan') }}" style="padding: 7px 14px; background: #e0f2fe; color: #0369a1; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: 600;">⚙️ Pengaturan Presensi</a>
-        </div>
+        </div> -->
 
         <div class="card">
             <div class="card-header">

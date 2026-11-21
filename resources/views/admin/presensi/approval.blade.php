@@ -364,11 +364,11 @@
 
             <!-- INTERNAL TABS -->
             <div class="internal-nav-tabs">
-                <a href="{{ route('admin.presensi') }}" class="internal-tab-link">📅 Presensi Harian</a>
+                <!-- <a href="{{ route('admin.presensi') }}" class="internal-tab-link">📅 Presensi Harian</a>
                 <a href="{{ route('admin.presensi.rekap') }}" class="internal-tab-link">📊 Rekapitulasi Bulanan</a>
                 <a href="{{ route('admin.presensi.approval') }}" class="internal-tab-link active">
                     📝 Persetujuan Cuti & Lembur
-                </a>
+                </a> -->
             </div>
 
             @php

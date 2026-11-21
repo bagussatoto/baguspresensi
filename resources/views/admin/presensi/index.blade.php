@@ -437,9 +437,9 @@
     <div class="erp-legacy-surface">
             <!-- INTERNAL TABS -->
             <div class="internal-nav-tabs">
-                <a href="{{ route('admin.presensi') }}" class="internal-tab-link active">📅 Presensi Harian (SoT)</a>
-                <a href="{{ route('admin.presensi.rekap') }}" class="internal-tab-link">📊 Rekapitulasi Bulanan</a>
-                <a href="{{ route('admin.presensi.approval') }}" class="internal-tab-link">
+                <!-- <a href="{{ route('admin.presensi') }}" class="internal-tab-link active">📅 Presensi Harian (SoT)</a>
+                <a href="{{ route('admin.presensi.rekap') }}" class="internal-tab-link">📊 Rekapitulasi Bulanan</a> -->
+                <!-- <a href="{{ route('admin.presensi.approval') }}" class="internal-tab-link">
                     📝 Persetujuan Cuti & Lembur
                     @if($pendingLeaves + $pendingOvertimes > 0)
                         <span style="background:#e11d48;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;">{{ $pendingLeaves + $pendingOvertimes }}</span>
@@ -450,7 +450,7 @@
                     @if($todayLockouts > 0)
                         <span style="background:#ef4444;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:bold;">🚨 {{ $todayLockouts }} Alert</span>
                     @endif
-                </a>
+                </a> -->
             </div>
 
             @if($todayLockouts > 0)

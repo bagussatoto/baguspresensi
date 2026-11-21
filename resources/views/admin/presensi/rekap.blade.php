@@ -84,11 +84,11 @@
 
 @section('content')
     <div class="erp-legacy-surface">
-            <div class="internal-nav-tabs">
+            <!-- <div class="internal-nav-tabs">
                 <a href="{{ route('admin.presensi') }}" class="internal-tab-link">📅 Presensi Harian</a>
                 <a href="{{ route('admin.presensi.rekap') }}" class="internal-tab-link active">📊 Rekapitulasi Bulanan</a>
                 <a href="{{ route('admin.presensi.approval') }}" class="internal-tab-link">📝 Persetujuan Cuti & Lembur</a>
-            </div>
+            </div> -->
 
             <!-- FILTER BULANAN -->
             <form method="GET" action="{{ route('admin.presensi.rekap') }}" class="filter-box">
