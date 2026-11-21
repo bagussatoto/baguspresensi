@@ -82,6 +82,21 @@
     </div>
     @endif
 
+    {{-- Shortcut Lihat Jadwal Shift Terbaru --}}
+    <div style="margin-bottom: 12px;">
+        <button type="button"
+                onclick="openJadwalShiftModal()"
+                style="width: 100%; padding: 10px 14px; border-radius: 10px; background: rgba(14, 165, 233, 0.14); border: 1px solid rgba(56, 189, 248, 0.35); color: #bae6fd; font-size: 12.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <span style="display: inline-flex; align-items: center; gap: 8px;">
+                <span>📅</span>
+                <span>Lihat Jadwal Shift Terbaru</span>
+            </span>
+            <span style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; font-size: 10.5px; padding: 2px 8px; border-radius: 999px; font-weight: 800;">
+                Buka Jadwal ➔
+            </span>
+        </button>
+    </div>
+
     {{-- CTA Buttons --}}
     @if(!$attendanceToday)
         <div style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">

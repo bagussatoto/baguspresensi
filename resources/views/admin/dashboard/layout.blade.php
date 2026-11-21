@@ -606,13 +606,13 @@
         /* TAB NAVIGATION PILLS */
         .tab-nav-pills {
             display: flex;
+            flex-wrap: wrap;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
             background: rgba(15, 23, 42, 0.6);
             border: 1px solid var(--border-glass);
-            padding: 4px;
-            border-radius: 10px;
-            overflow-x: auto;
+            padding: 8px 10px;
+            border-radius: 12px;
             margin-bottom: 20px;
         }
 

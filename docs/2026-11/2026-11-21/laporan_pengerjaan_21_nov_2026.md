@@ -1,15 +1,15 @@
 # 📄 LAPORAN STATUS PENGERJAAN HARIAN — 21 NOVEMBER 2026
 
 **Proyek:** Sistem Presensi Karyawan v2, POS Kasir Desktop, & ERP PT Maya Graha Kencana (MGK)  
-**Tanggal Laporan:** Sabtu, 21 November 2026 (14:20 WIB)  
-**Total Progres & Kesesuaian:** **100% (14 dari 14 Tugas Selesai & Terverifikasi)**  
-**Commit Git Terkait:** `687e171`, `65dd42a` (`branch: main`)
+**Tanggal Laporan:** Sabtu, 21 November 2026 (17:25 WIB)  
+**Total Progres & Kesesuaian:** **100% (17 dari 17 Tugas Selesai & Terverifikasi)**  
+**Commit Git Terkait:** `687e171`, `65dd42a`, `652dc28` (`branch: main`)
 
 ---
 
 ## 1. Ringkasan Eksekutif
 
-Pada sesi pengerjaan Sabtu, **21 November 2026**, telah diselesaikan **14 peningkatan fitur, penguatan keamanan operasional shift, sinkronisasi database, serta standarisasi antarmuka Desktop** pada modul Presensi v2, POS Kasir Desktop, Rekapitulasi Shift, Serah Terima Kas, dan Pusat Kendali Admin ERP.
+Pada sesi pengerjaan Sabtu, **21 November 2026**, telah diselesaikan **17 peningkatan fitur, penguatan keamanan operasional shift, sinkronisasi database, perapian navigasi akuntansi, perbaikan upload jadwal shift, penambahan fitur lihat jadwal shift terbaru bagi karyawan, serta standarisasi antarmuka Desktop** pada modul Presensi v2, POS Kasir Desktop, Rekapitulasi Shift, Serah Terima Kas, dan Pusat Kendali Admin ERP.
 
 Seluruh perubahan telah diformat menggunakan **Laravel Pint** dan diverifikasi melalui **Automated Feature Test (PHPUnit)** dengan hasil **100% lulus (*passed*)**.
 
@@ -62,5 +62,14 @@ Seluruh perubahan telah diformat menggunakan **Laravel Pint** dan diverifikasi m
 12. **Sinkronisasi Database pada `Status Settlement 4 Shift Hari Ini`**
     - Menghapus angka omzet dummy hardcoded (`Rp 85.000`, `Rp 240.000`, `Rp 380.000`, `Rp 420.000`), menyelaraskan key array modal Settlement Harian, memvalidasi status `✅ Settlement Selesai`, dan menampilkan nama kasir dari database `attendance_records` / `shift_sales_summaries`.
     - File: [AttendanceWebV2Controller.php](file:///var/www/laravel_apps/bagus/app/Http/Controllers/AttendanceWebV2Controller.php#L2409-L2519), [modal_shift_history_and_settlement.blade.php](file:///var/www/laravel_apps/bagus/resources/views/presensi2/partials/modal_shift_history_and_settlement.blade.php#L300-L316).
-13. **Dokumentasi Harian & Blueprint Master v3.0**
-    - Pembuatan folder dan dokumen [BLUEPRINT_MASTER_ERP_POS_PRESENSI_V3.md](file:///var/www/laravel_apps/bagus/docs/2026-11/2026-11-21/blueprint/BLUEPRINT_MASTER_ERP_POS_PRESENSI_V3.md), [ringkasan_percakapan.md](file:///var/www/laravel_apps/bagus/docs/2026-11/2026-11-21/ringkasan_percakapan.md), dan [list_pekerjaan.md](file:///var/www/laravel_apps/bagus/docs/2026-11/2026-11-21/list_pekerjaan.md).
+13. **Perapian Sub-Navigasi Akuntansi (`flex-wrap: wrap`)**
+    - Merapikan bar tab navigasi Akuntansi (`/admin/akuntansi/jurnal`, dll.) agar otomatis turun rapi ke baris bawah apabila layar tidak cukup lebar, tanpa memanjang ke samping.
+    - File: [nav.blade.php](file:///var/www/laravel_apps/bagus/resources/views/admin/accounting/nav.blade.php#L1-L40), [layout.blade.php](file:///var/www/laravel_apps/bagus/resources/views/admin/dashboard/layout.blade.php#L735-L751).
+14. **Perbaikan Permission Upload Jadwal Shift Admin (`syncCurrentScheduleFile`)**
+    - Memperbaiki error `copy(.../jadwal-shift-current.jpg): Failed to open stream: Permission denied` pada `/admin/jadwal` dengan menghapus file tujuan lama (`@unlink`) sebelum menyalin file baru dan menyetel izin `0666`.
+    - File: [AdminScheduleController.php](file:///var/www/laravel_apps/bagus/app/Http/Controllers/Admin/AdminScheduleController.php#L73-L143).
+15. **Tombol & Modal Pop-Up `📅 Lihat Jadwal Shift Terbaru` di Seluruh Titik Akses Karyawan**
+    - Menambahkan pop-up gambar jadwal shift aktif lengkap dengan badge `✨ BARU DIPERBARUI`, tombol zoom, buka tab penuh, dan unduh gambar pada halaman Login, Beranda Presensi, Scan Presensi, serta Sidebar `☰ Menu Operasional` di POS Desktop, Rekap Desktop, dan Serah Terima Desktop.
+    - File: [modal_jadwal_shift.blade.php](file:///var/www/laravel_apps/bagus/resources/views/presensi2/partials/modal_jadwal_shift.blade.php#L1-L138), [login.blade.php](file:///var/www/laravel_apps/bagus/resources/views/presensi2/login.blade.php#L1155-L1166), [index.blade.php](file:///var/www/laravel_apps/bagus/resources/views/presensi2/index.blade.php#L85-L98), [scan.blade.php](file:///var/www/laravel_apps/bagus/resources/views/presensi2/scan.blade.php#L87-L94), [pos_desktop.blade.php](file:///var/www/laravel_apps/bagus/resources/views/presensi2/pos_desktop.blade.php#L3198-L3208), [rekap_desktop.blade.php](file:///var/www/laravel_apps/bagus/resources/views/presensi2/rekap_desktop.blade.php#L1643-L1653), [serah_terima_desktop.blade.php](file:///var/www/laravel_apps/bagus/resources/views/presensi2/serah_terima_desktop.blade.php#L1973-L1983).
+16. **Dokumentasi Harian & Blueprint Master v3.0 (Complete Edition)**
+    - Pembuatan dan kelengkapan 11 pilar arsitektur pada [BLUEPRINT_MASTER_ERP_POS_PRESENSI_V3.md](file:///var/www/laravel_apps/bagus/docs/2026-11/2026-11-21/blueprint/BLUEPRINT_MASTER_ERP_POS_PRESENSI_V3.md), [ringkasan_percakapan.md](file:///var/www/laravel_apps/bagus/docs/2026-11/2026-11-21/ringkasan_percakapan.md), dan [list_pekerjaan.md](file:///var/www/laravel_apps/bagus/docs/2026-11/2026-11-21/list_pekerjaan.md).

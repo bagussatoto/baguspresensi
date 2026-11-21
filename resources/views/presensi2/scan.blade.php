@@ -83,6 +83,15 @@
                 {{ $displayShift->name ?? 'Shift' }} ({{ substr($displayShift->start_time ?? '00:00', 0, 5) }} - {{ substr($displayShift->end_time ?? '00:00', 0, 5) }})
             </strong>
         </div>
+
+        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-glass); display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <span style="font-size: 11.5px; color: var(--text-sub);">Ingin memastikan jadwal giliran shift?</span>
+            <button type="button"
+                    onclick="openJadwalShiftModal()"
+                    style="background: rgba(14, 165, 233, 0.18); border: 1px solid rgba(56, 189, 248, 0.4); color: #7dd3fc; font-size: 11.5px; font-weight: 700; padding: 5px 11px; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;">
+                <span>📅</span> Lihat Jadwal Shift Terbaru
+            </button>
+        </div>
     </div>
 
     {{-- CLOCK DISPLAY --}}

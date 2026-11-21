@@ -156,6 +156,42 @@
 
 ---
 
-### 11. 📐 Pembuatan Folder & Dokumen Blueprint Master v3.0 (21 November 2026)
+### 11. 📐 Pembuatan Folder & Dokumen Blueprint Master v3.0 (Complete Edition - 21 November 2026)
 - **File Blueprint Baru:**  
   `docs/2026-11/2026-11-21/blueprint/BLUEPRINT_MASTER_ERP_POS_PRESENSI_V3.md`
+- **Cakupan Lengkap (11 Pilar Utama):**  
+  1. Arsitektur Topologi Sistem & Stack Teknologi (Laravel 12, PostgreSQL, 6 Domain Modules).  
+  2. Pilar 1 — SDM, Presensi v2, Aturan Shift & Keamanan Sesi.  
+  3. Pilar 2 — POS Kasir Desktop, Billing Warnet, Print & Lock System.  
+  4. Pilar 3 — Siklus Tutup Shift, Z-Report, Serah Terima Kas & Settlement 4 Shift.  
+  5. Pilar 4 — Manajemen Stok, Gudang (DC), ROP & Checklist Shift.  
+  6. Pilar 5 — Akuntansi SAK EMKM / ETAP, Jurnal Otomatis, CoA & Tutup Buku.  
+  7. Pilar 6 — Pusat Kendali ERP (`/admin/ERP`), Penggajian, Piutang & Kontrol Internal.  
+  8. Pilar 7 — Skema Database Inti & Relasi Tabel Utama.  
+  9. Pilar 8 — Peta Rute & Endpoint Utama (Web & API).  
+  10. Pilar 9 — Matriks Hak Akses (RBAC) & Keamanan Audit Log.  
+  11. Pilar 10 — Otomasi Terjadwal (Cron Jobs) & Pengujian Otomatis (PHPUnit).
+
+---
+
+### 12. 🧾 Perapian Bar Sub-Navigasi Akuntansi (`/admin/akuntansi/jurnal`)
+- **Konteks & Kebutuhan:**  
+  Deretan 9 tombol sub-navigasi Akuntansi (*Jurnal Umum*, *Buku Besar*, *Neraca Saldo*, *Laporan Laba Rugi*, *Neraca Keuangan*, *Arus Kas*, *CaLK & Paket Cetak*, *Pivot Analisis Transaksi SAK*, *Tutup Buku*, *Kelola COA*) memanjang dalam satu baris. Diubah agar otomatis turun ke baris di bawahnya (`flex-wrap: wrap`) bila tidak muat.
+- **File Terkait:**
+  - `resources/views/admin/accounting/nav.blade.php`
+  - `resources/views/admin/dashboard/layout.blade.php`
+
+---
+
+### 13. 🛠️ Perbaikan Error `copy(.../jadwal-shift-current.jpg): Permission denied` & Pop-Up `📅 Lihat Jadwal Shift Terbaru`
+- **Konteks & Kebutuhan:**  
+  1. Mengatasi error *Permission denied* saat Admin mengunggah atau mengaktifkan gambar jadwal shift di `/admin/jadwal`.
+  2. Menempatkan tombol dan pop-up modal **`📅 Lihat Jadwal Shift Terbaru`** di lokasi strategis agar karyawan langsung mengetahui jadwal terbaru.
+- **Implementasi:**
+  1. Menambahkan helper `syncCurrentScheduleFile()` pada `AdminScheduleController.php` yang menghapus file target lama (`@unlink`) sebelum menyalin file jadwal aktif baru (`@copy` + `@chmod(..., 0666)`).
+  2. Membuat partial modal terpusat `resources/views/presensi2/partials/modal_jadwal_shift.blade.php` dengan badge **`✨ BARU DIPERBARUI`**, fitur **🔍 Perbesar (Zoom)**, **↗ Buka Tab Penuh**, dan **⬇️ Simpan Gambar**.
+  3. Menambahkan tombol **`📅 Lihat Jadwal Shift Terbaru`** di:
+     - Halaman Login Presensi & Kasir (`login.blade.php`)
+     - Halaman Beranda Presensi Karyawan (`index.blade.php`)
+     - Halaman Scan Presensi Masuk/Pulang (`scan.blade.php`)
+     - Sidebar `☰ Menu Operasional` pada POS Desktop (`pos_desktop.blade.php`), Rekap Desktop (`rekap_desktop.blade.php`), dan Serah Terima Desktop (`serah_terima_desktop.blade.php`).

@@ -1151,6 +1151,19 @@
                 <span id="btn-text">Masuk ke Sistem</span>
             </button>
         </form>
+
+        <!-- Tombol Lihat Jadwal Shift Terbaru (Tanpa Harus Login Dulu) -->
+        <div style="margin-top: 12px;">
+            <button type="button"
+                    onclick="openJadwalShiftModal()"
+                    style="width: 100%; padding: 11px 14px; border-radius: 12px; background: rgba(14, 165, 233, 0.14); border: 1px solid rgba(56, 189, 248, 0.4); color: #e0f2fe; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s ease;">
+                <span>📅</span>
+                <span>Lihat Jadwal Shift Terbaru</span>
+                <span style="background: rgba(250, 204, 21, 0.2); border: 1px solid rgba(250, 204, 21, 0.45); color: #fde047; font-size: 10px; font-weight: 800; padding: 1px 7px; border-radius: 999px;">
+                    ✨ INFO SHIFT
+                </span>
+            </button>
+        </div>
         <!-- Quick Action Buttons: GC, Meeting, Presnesi BO/Training, AMBIL STOK -->
         <!-- <div class="quick-services-divider">
             <div class="line"></div>

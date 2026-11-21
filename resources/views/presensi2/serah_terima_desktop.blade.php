@@ -1969,6 +1969,18 @@
                 </div>
                 <span style="color: #94a3b8; font-size: 14px;">➔</span>
             </a>
+
+            <!-- 7. Lihat Jadwal Shift Terbaru -->
+            <button type="button" onclick="closePosShiftDrawer(); openJadwalShiftModal();" class="drawer-action-btn" style="color: #0369a1; border-left: 4px solid #0ea5e9; background: #f0f9ff;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 18px;">📅</span>
+                    <div>
+                        <div>Jadwal Shift Terbaru</div>
+                        <div style="font-size: 11px; font-weight: normal; color: #0369a1;">Lihat gambar jadwal shift aktif dari Admin</div>
+                    </div>
+                </div>
+                <span style="color: #0284c7; font-size: 14px;">➔</span>
+            </button>
         </div>
     </aside>
 

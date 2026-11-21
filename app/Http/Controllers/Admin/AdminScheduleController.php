@@ -68,10 +68,11 @@ class AdminScheduleController extends Controller
         }
 
         $file->move($destinationPath, $filename);
+        @chmod($destinationPath.'/'.$filename, 0666);
         $relativePath = 'uploads/jadwal/'.$filename;
 
-        // Salin juga sebagai gambar aktif standar
-        copy($destinationPath.'/'.$filename, $destinationPath.'/jadwal-shift-current.jpg');
+        // Salin juga sebagai gambar aktif standar (unlink dulu agar tidak terkena Permission denied jika owner berbeda)
+        $this->syncCurrentScheduleFile($destinationPath.'/'.$filename, $destinationPath.'/jadwal-shift-current.jpg');
 
         // Nonaktifkan jadwal sebelumnya jika ada
         ShiftScheduleImage::where('is_active', true)->update(['is_active' => false]);
@@ -115,16 +116,27 @@ class AdminScheduleController extends Controller
 
         $file = $request->file('image');
         $filename = 'jadwal-shift-current.jpg';
+        $targetFile = $destinationPath.'/'.$filename;
+
+        if (file_exists($targetFile)) {
+            @unlink($targetFile);
+        }
 
         $file->move($destinationPath, $filename);
+        @chmod($targetFile, 0666);
 
         $meta = [
             'updated_at' => date('Y-m-d H:i:s'),
             'updated_at_formatted' => date('d M Y, H:i').' WIB',
-            'filesize_kb' => round(filesize($destinationPath.'/'.$filename) / 1024, 1),
+            'filesize_kb' => round(filesize($targetFile) / 1024, 1),
             'filename' => $filename,
         ];
-        file_put_contents($destinationPath.'/info.json', json_encode($meta, JSON_PRETTY_PRINT));
+        $infoFile = $destinationPath.'/info.json';
+        if (file_exists($infoFile)) {
+            @unlink($infoFile);
+        }
+        @file_put_contents($infoFile, json_encode($meta, JSON_PRETTY_PRINT));
+        @chmod($infoFile, 0666);
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -149,9 +161,7 @@ class AdminScheduleController extends Controller
         $sourceFile = public_path($schedule->image_path);
         $currentFile = public_path('uploads/jadwal/jadwal-shift-current.jpg');
 
-        if (file_exists($sourceFile)) {
-            copy($sourceFile, $currentFile);
-        }
+        $this->syncCurrentScheduleFile($sourceFile, $currentFile);
 
         if (request()->wantsJson()) {
             return response()->json([
@@ -181,9 +191,10 @@ class AdminScheduleController extends Controller
             $latest = ShiftScheduleImage::latest()->first();
             if ($latest) {
                 $latest->update(['is_active' => true]);
-                if (file_exists(public_path($latest->image_path))) {
-                    copy(public_path($latest->image_path), public_path('uploads/jadwal/jadwal-shift-current.jpg'));
-                }
+                $this->syncCurrentScheduleFile(
+                    public_path($latest->image_path),
+                    public_path('uploads/jadwal/jadwal-shift-current.jpg')
+                );
             }
         }
 
@@ -195,5 +206,29 @@ class AdminScheduleController extends Controller
         }
 
         return redirect()->route('admin.jadwal')->with('success', 'Gambar jadwal shift berhasil dihapus.');
+    }
+
+    /**
+     * Salin file jadwal aktif dengan menghapus file target lama terlebih dahulu
+     * untuk mencegah error Permission Denied ketika file lama dimiliki user Linux yang berbeda.
+     */
+    private function syncCurrentScheduleFile(string $sourceFile, string $currentFile): void
+    {
+        if (! file_exists($sourceFile)) {
+            return;
+        }
+
+        if (file_exists($currentFile) && ! is_writable($currentFile)) {
+            @unlink($currentFile);
+        }
+
+        if (@copy($sourceFile, $currentFile)) {
+            @chmod($currentFile, 0666);
+        } elseif (file_exists($currentFile)) {
+            @unlink($currentFile);
+            if (@copy($sourceFile, $currentFile)) {
+                @chmod($currentFile, 0666);
+            }
+        }
     }
 }

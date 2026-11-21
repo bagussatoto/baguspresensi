@@ -732,6 +732,7 @@
             });
         });
     </script>
+    @include('presensi2.partials.modal_jadwal_shift')
     @stack('scripts')
 </body>
 </html>

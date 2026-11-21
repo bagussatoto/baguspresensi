@@ -380,4 +380,6 @@ function closeDailySettlementModal() {
     if (m) m.style.display = 'none';
 }
 </script>
+@include('presensi2.partials.modal_jadwal_shift')
+
 
