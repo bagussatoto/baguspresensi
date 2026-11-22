@@ -98,5 +98,10 @@ admin
 6. Menambahkan Badge Shift & Filter Shift 1 / Shift 2 / Shift 3 / Shift 4 pada History Penjualan POS			seelsai
 7. Menambahkan Jam Digital Live & Badge Shift Aktif pada header POS												selesai
 8. Menambahkan tombol Lihat Jadwal Shift Terbaru																selesai
+9. 
 
 
+-----------------------------------
+22/11/26
+
+1. Pencegahan Race Condition Auto-Lock: Menambahkan validasi konfirmasi pada Cek Stok bahwa shift sebelumnya sudah benar-benar menyelesaikan transaksi 

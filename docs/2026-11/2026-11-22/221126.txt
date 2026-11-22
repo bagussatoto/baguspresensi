@@ -1,0 +1,18 @@
+================================================================================
+RENCANA & DAFTAR PENGERJAAN HARIAN - 22 NOVEMBER 2026
+================================================================================
+STATUS: DALAM PROGRES (2 Tugas Akuntansi SAK Berhasil Dikerjakan & Terverifikasi)
+WAKTU UPDATE: 22-11-2026 11:35 WIB
+================================================================================
+
+[SELESAI]
+1. Perbaikan Typo HPP ($item->qty & $variant->cost_price) dan Routing Pembayaran Non-Tunai QRIS ke Rekening Bank BCA (1-11001) melalui Service Extension AppAutoJournalService & Service Container Binding.
+2. Penjurnalan Otomatis Selisih Kas Fisik Laci (Blind Count Discrepancy) melalui ShiftSalesSummaryObserver: Defisit kas ke Beban Kerugian Selisih Kasir (6-10007) / Piutang Kasir (1-12002) & Surplus ke Pendapatan Selisih Lebih (4-20002).
+
+[PENDING / ANTRIAN]
+1. Mekanisme Emergency Shift Override Lembur (Tertunda: menunggu chmod server Linux)
+2. Pencegahan Race Condition Auto-Lock Pergantian Shift (Validasi Transaksi Terakhir)
+3. Penanganan & Rekoneksi WhatsApp Gateway (Atasi "request invalid on disconnected device")
+4. Konfigurasi SSH Key Client-ke-Server & Akses CLI Artisan (User bagus@192.168.5.10)
+5. Uji End-to-End Persetujuan Void Transaksi oleh Admin ERP (Pembalik Kas & Stok)
+6. Sinkronisasi Git Commit ke GitHub Remote (Push 6 Commit Tertahan ke origin/main)

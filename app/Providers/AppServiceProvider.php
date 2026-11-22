@@ -19,7 +19,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(
+            \Modules\Kas\Domain\Services\AutoJournalService::class,
+            \App\Accounting\Services\AppAutoJournalService::class
+        );
     }
 
     /**
@@ -27,6 +30,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        \App\Models\ShiftSalesSummary::observe(\App\Accounting\Observers\ShiftSalesSummaryObserver::class);
+
         RateLimiter::for('api', function (Request $request) {
             $limit = (int) app(AttendanceSettingService::class)
                 ->get('api.rate_limit_per_minute', 60);
@@ -35,7 +40,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         View::composer('admin.dashboard.layout', function ($view) {
-            if (! array_key_exists('profileData', $view->getData())) {
+            if (!array_key_exists('profileData', $view->getData())) {
                 $view->with('profileData', AdminDashboardController::getProfileData(request()));
             }
         });
