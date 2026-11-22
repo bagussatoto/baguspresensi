@@ -23,6 +23,11 @@ class AppServiceProvider extends ServiceProvider
             \Modules\Kas\Domain\Services\AutoJournalService::class,
             \App\Accounting\Services\AppAutoJournalService::class
         );
+
+        $this->app->bind(
+            \App\Http\Controllers\Admin\AdminAccountingController::class,
+            \App\Accounting\Controllers\AppAdminAccountingController::class
+        );
     }
 
     /**
